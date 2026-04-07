@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "ARMEN",
+    "slug": "armen",
+    "scheme": "armen",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "platforms": ["ios", "android"],
+    "ios": {
+      "bundleIdentifier": "com.armen.app",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "ARMEN reads your health data to analyze fitness performance",
+        "NSHealthUpdateUsageDescription": "ARMEN uses HealthKit data for performance analysis"
+      }
+    },
+    "android": {
+      "package": "com.armen.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0A0F"
+      }
+    },
+    "plugins": ["expo-router", "expo-health"],
+    "experiments": {
+      "tsconfigPaths": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "your-eas-project-id"
+      }
+    }
+  }
+}
