@@ -1,36 +1,44 @@
 {
   "expo": {
-    "name": "ARMEN",
-    "slug": "armen",
-    "scheme": "armen",
+    "name": "ORYX",
+    "slug": "oryx",
+    "scheme": "oryx",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "platforms": ["ios", "android"],
     "ios": {
-      "bundleIdentifier": "com.armen.app",
+      "bundleIdentifier": "com.oryx.app",
       "supportsTablet": false,
       "infoPlist": {
-        "NSHealthShareUsageDescription": "ARMEN reads your health data to analyze fitness performance",
-        "NSHealthUpdateUsageDescription": "ARMEN uses HealthKit data for performance analysis"
+        "NSHealthShareUsageDescription": "ORYX reads your health data to analyze fitness performance",
+        "NSHealthUpdateUsageDescription": "ORYX uses HealthKit data for performance analysis",
+        "NSCameraUsageDescription": "ORYX uses the camera to scan food photos for nutrition tracking",
+        "NSPhotoLibraryUsageDescription": "ORYX accesses your photo library to analyze food photos for nutrition tracking"
       }
     },
     "android": {
-      "package": "com.armen.app",
+      "package": "com.oryx.app",
       "adaptiveIcon": {
-        "backgroundColor": "#0A0A0F"
+        "backgroundColor": "#0a0a0a"
       }
     },
-    "plugins": ["expo-router", "expo-health"],
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ORYX accesses your photo library to analyze food photos.",
+          "cameraPermission": "ORYX uses the camera to scan food photos for nutrition tracking."
+        }
+      ]
+    ],
     "experiments": {
       "tsconfigPaths": true
     },
     "extra": {
       "router": {
         "origin": false
-      },
-      "eas": {
-        "projectId": "your-eas-project-id"
       }
     }
   }

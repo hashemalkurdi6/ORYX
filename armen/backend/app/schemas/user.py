@@ -1,3 +1,4 @@
+# ORYX
 from datetime import datetime
 from uuid import UUID
 
@@ -7,6 +8,10 @@ from pydantic import BaseModel, EmailStr, field_validator, model_validator
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
+    username: str | None = None
+    full_name: str | None = None
+    sports: list[str] | None = None
+    weight_kg: float | None = None
 
 
 class UserLogin(BaseModel):
@@ -17,19 +22,28 @@ class UserLogin(BaseModel):
 class UserOut(BaseModel):
     id: UUID
     email: str
+    username: str | None
+    full_name: str | None
+    bio: str | None
+    location: str | None
+    sports: list[str] | None
+    followers_count: int
+    following_count: int
     strava_connected: bool
+    whoop_connected: bool
+    oura_connected: bool
+    hevy_connected: bool
+    weight_kg: float | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
     @model_validator(mode="before")
     @classmethod
-    def compute_strava_connected(cls, values):
+    def compute_connected_flags(cls, values):
         # Works both with ORM objects and dicts
         if hasattr(values, "strava_athlete_id"):
             strava_connected = values.strava_athlete_id is not None
-            # Inject computed field by creating a proxy dict approach
-            # We use __dict__ manipulation safely via model_validator
             object.__setattr__(values, "_strava_connected_computed", strava_connected)
         return values
 
@@ -38,12 +52,34 @@ class UserOut(BaseModel):
     def set_strava_connected(cls, v, info):
         return v
 
+    @field_validator("whoop_connected", mode="before")
+    @classmethod
+    def set_whoop_connected(cls, v, info):
+        return v
+
+    @field_validator("oura_connected", mode="before")
+    @classmethod
+    def set_oura_connected(cls, v, info):
+        return v
+
 
 class UserOutInternal(BaseModel):
-    """Used internally to carry strava_athlete_id for computing strava_connected."""
+    """Used internally to carry token/athlete fields for computing connected flags."""
     id: UUID
     email: str
+    username: str | None = None
+    full_name: str | None = None
+    bio: str | None = None
+    location: str | None = None
+    sports: list[str] | None = None
+    followers_count: int = 0
+    following_count: int = 0
     strava_athlete_id: int | None = None
+    whoop_user_id: str | None = None
+    whoop_access_token: str | None = None
+    oura_access_token: str | None = None
+    hevy_api_key: str | None = None
+    weight_kg: float | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -52,9 +88,29 @@ class UserOutInternal(BaseModel):
         return UserOut(
             id=self.id,
             email=self.email,
+            username=self.username,
+            full_name=self.full_name,
+            bio=self.bio,
+            location=self.location,
+            sports=self.sports,
+            followers_count=self.followers_count,
+            following_count=self.following_count,
             strava_connected=self.strava_athlete_id is not None,
+            whoop_connected=self.whoop_access_token is not None,
+            oura_connected=self.oura_access_token is not None,
+            hevy_connected=self.hevy_api_key is not None,
+            weight_kg=self.weight_kg,
             created_at=self.created_at,
         )
+
+
+class UserProfileUpdate(BaseModel):
+    username: str | None = None
+    full_name: str | None = None
+    bio: str | None = None
+    location: str | None = None
+    sports: list[str] | None = None
+    weight_kg: float | None = None
 
 
 class Token(BaseModel):

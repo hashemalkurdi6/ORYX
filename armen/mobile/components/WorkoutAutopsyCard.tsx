@@ -5,7 +5,7 @@ import { Activity } from '@/services/api';
 
 interface WorkoutAutopsyCardProps {
   activity: Activity;
-  autopsy: string | null;
+  autopsy: string | null | undefined;
   loading: boolean;
 }
 
@@ -76,7 +76,7 @@ export default function WorkoutAutopsyCard({
       {/* Header row */}
       <View style={styles.header}>
         <View style={styles.iconContainer}>
-          <Ionicons name={icon} size={20} color="#6C63FF" />
+          <Ionicons name={icon} size={20} color="#FFFFFF" />
         </View>
         <View style={styles.titleBlock}>
           <Text style={styles.activityName} numberOfLines={1}>
@@ -101,11 +101,14 @@ export default function WorkoutAutopsyCard({
         </View>
       )}
 
+      {/* Divider */}
+      <View style={styles.divider} />
+
       {/* Autopsy text */}
       <View style={styles.autopsyContainer}>
         {loading ? (
           <View style={styles.generatingRow}>
-            <ActivityIndicator size="small" color="#6C63FF" />
+            <ActivityIndicator size="small" color="#FFFFFF" />
             <Text style={styles.generatingText}>Generating analysis…</Text>
           </View>
         ) : autopsy ? (
@@ -120,12 +123,12 @@ export default function WorkoutAutopsyCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#1A1A2E',
-    borderRadius: 14,
+    backgroundColor: '#111111',
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#2A2A4A',
+    borderColor: '#1a1a1a',
   },
   header: {
     flexDirection: 'row',
@@ -137,7 +140,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: 'rgba(108, 99, 255, 0.15)',
+    backgroundColor: 'rgba(224,224,224,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -148,33 +151,30 @@ const styles = StyleSheet.create({
   },
   activityName: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: '700',
+    color: '#f0f0f0',
   },
   activityDate: {
     fontSize: 12,
-    color: '#666',
+    color: '#555555',
   },
   sportBadge: {
-    backgroundColor: '#0D0D1A',
+    backgroundColor: '#0a0a0a',
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderWidth: 1,
-    borderColor: '#2A2A4A',
+    borderColor: '#1a1a1a',
   },
   sportBadgeText: {
     fontSize: 11,
-    color: '#888',
+    color: '#555555',
     fontWeight: '500',
   },
   statsRow: {
     flexDirection: 'row',
     gap: 20,
-    marginBottom: 14,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1F1F35',
+    marginBottom: 12,
   },
   statItem: {
     gap: 2,
@@ -182,13 +182,18 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#E0E0E0',
+    color: '#f0f0f0',
   },
   statLabel: {
     fontSize: 11,
-    color: '#666',
+    color: '#555555',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#1a1a1a',
+    marginBottom: 12,
   },
   autopsyContainer: {
     minHeight: 36,
@@ -200,18 +205,18 @@ const styles = StyleSheet.create({
   },
   generatingText: {
     fontSize: 13,
-    color: '#666',
+    color: '#555555',
     fontStyle: 'italic',
   },
   autopsyText: {
     fontSize: 14,
-    color: '#AAAAAA',
+    color: '#888888',
     lineHeight: 21,
     fontStyle: 'italic',
   },
   noAutopsyText: {
     fontSize: 13,
-    color: '#555',
+    color: '#555555',
     fontStyle: 'italic',
   },
 });

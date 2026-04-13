@@ -8,6 +8,17 @@ export interface User {
   id: string;
   email: string;
   strava_connected: boolean;
+  whoop_connected: boolean;
+  oura_connected: boolean;
+  hevy_connected?: boolean;
+  username: string | null;
+  full_name: string | null;
+  bio: string | null;
+  location: string | null;
+  sports: string[] | null;
+  weight_kg?: number | null;
+  followers_count: number;
+  following_count: number;
   created_at: string;
 }
 
@@ -72,10 +83,108 @@ export interface ActivityListResponse {
   total: number;
 }
 
+export interface WhoopData {
+  id: string;
+  user_id: string;
+  date: string;
+  recovery_score: number | null;
+  hrv_rmssd: number | null;
+  resting_heart_rate: number | null;
+  sleep_performance_pct: number | null;
+  strain_score: number | null;
+  created_at: string;
+}
+
+export interface OuraData {
+  id: string;
+  user_id: string;
+  date: string;
+  readiness_score: number | null;
+  sleep_score: number | null;
+  hrv_average: number | null;
+  rem_sleep_minutes: number | null;
+  deep_sleep_minutes: number | null;
+  light_sleep_minutes: number | null;
+  sleep_efficiency: number | null;
+  created_at: string;
+}
+
+export interface WellnessCheckin {
+  id: string;
+  user_id: string;
+  date: string;
+  mood: number;
+  energy: number;
+  soreness: number;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface WellnessCheckinIn {
+  date: string;
+  mood: number;
+  energy: number;
+  soreness: number;
+  notes?: string;
+}
+
+export interface NutritionLog {
+  id: string;
+  user_id: string;
+  logged_at: string;
+  meal_name: string;
+  description: string | null;
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  fibre_g: number | null;
+  meal_type: string | null;
+  source: string | null;
+  photo_url: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface NutritionLogIn {
+  meal_name: string;
+  description?: string;
+  calories?: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fat_g?: number;
+  fibre_g?: number;
+  meal_type?: string;
+  source?: string;
+  notes?: string;
+}
+
+export interface FoodScanResult {
+  food_name: string;
+  description: string;
+  serving_estimate: string;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fibre_g: number;
+  confidence: 'low' | 'medium' | 'high';
+  low_confidence: boolean;
+}
+
+export interface UserProfileUpdate {
+  username?: string;
+  full_name?: string;
+  bio?: string;
+  location?: string;
+  sports?: string[];
+  weight_kg?: number;
+}
+
 // ── Axios Instance ─────────────────────────────────────────────────────────
 
 const apiClient: AxiosInstance = axios.create({
-  baseURL: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000',
+  baseURL: process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.160:8000',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
@@ -123,6 +232,23 @@ export async function signup(
   return response.data;
 }
 
+export async function signupWithProfile(
+  email: string,
+  password: string,
+  username?: string,
+  full_name?: string,
+  sports?: string[]
+): Promise<AuthResponse> {
+  const response = await apiClient.post<AuthResponse>('/auth/signup', {
+    email,
+    password,
+    username,
+    full_name,
+    sports,
+  });
+  return response.data;
+}
+
 export async function login(
   email: string,
   password: string
@@ -136,6 +262,11 @@ export async function login(
 
 export async function getMe(): Promise<User> {
   const response = await apiClient.get<User>('/auth/me');
+  return response.data;
+}
+
+export async function updateProfile(data: UserProfileUpdate): Promise<User> {
+  const response = await apiClient.put<User>('/auth/profile', data);
   return response.data;
 }
 
@@ -194,6 +325,219 @@ export async function getWorkoutAutopsy(
   const response = await apiClient.post<{ autopsy: string }>(
     `/diagnosis/autopsy/${activityId}`
   );
+  return response.data;
+}
+
+// ── WHOOP ──────────────────────────────────────────────────────────────────
+
+export async function getWhoopAuthUrl(): Promise<{ url: string; state: string }> {
+  const response = await apiClient.get<{ url: string; state: string }>(
+    '/whoop/auth-url'
+  );
+  return response.data;
+}
+
+export async function syncWhoop(): Promise<{ synced: number }> {
+  const response = await apiClient.post<{ synced: number }>('/whoop/sync');
+  return response.data;
+}
+
+export async function getWhoopData(days = 7): Promise<WhoopData[]> {
+  const response = await apiClient.get<WhoopData[]>('/whoop/data', {
+    params: { days },
+  });
+  return response.data;
+}
+
+// ── Oura ───────────────────────────────────────────────────────────────────
+
+export async function getOuraAuthUrl(): Promise<{ url: string; state: string }> {
+  const response = await apiClient.get<{ url: string; state: string }>(
+    '/oura/auth-url'
+  );
+  return response.data;
+}
+
+export async function syncOura(): Promise<{ synced: number }> {
+  const response = await apiClient.post<{ synced: number }>('/oura/sync');
+  return response.data;
+}
+
+export async function getOuraData(days = 7): Promise<OuraData[]> {
+  const response = await apiClient.get<OuraData[]>('/oura/data', {
+    params: { days },
+  });
+  return response.data;
+}
+
+// ── Wellness ───────────────────────────────────────────────────────────────
+
+export async function submitWellnessCheckin(
+  data: WellnessCheckinIn
+): Promise<WellnessCheckin> {
+  const response = await apiClient.post<WellnessCheckin>(
+    '/wellness/checkin',
+    data
+  );
+  return response.data;
+}
+
+export async function getWellnessCheckins(
+  days = 7
+): Promise<WellnessCheckin[]> {
+  const response = await apiClient.get<WellnessCheckin[]>(
+    '/wellness/checkins',
+    { params: { days } }
+  );
+  return response.data;
+}
+
+// ── Nutrition ──────────────────────────────────────────────────────────────
+
+export async function logNutrition(data: NutritionLogIn): Promise<NutritionLog> {
+  const response = await apiClient.post<NutritionLog>('/nutrition/log', data);
+  return response.data;
+}
+
+export async function getTodayNutrition(): Promise<NutritionLog[]> {
+  const response = await apiClient.get<NutritionLog[]>('/nutrition/today');
+  return response.data;
+}
+
+export async function deleteNutritionLog(id: string): Promise<void> {
+  await apiClient.delete(`/nutrition/log/${id}`);
+}
+
+export async function scanFoodPhoto(
+  base64Image: string,
+  mediaType = 'image/jpeg'
+): Promise<FoodScanResult> {
+  const response = await apiClient.post<FoodScanResult>('/nutrition/scan', {
+    image: base64Image,
+    media_type: mediaType,
+  });
+  return response.data;
+}
+
+// ── Activity Logging ───────────────────────────────────────────────────────
+
+export interface UserActivity {
+  id: string;
+  user_id: string;
+  activity_type: string;
+  duration_minutes: number;
+  intensity: 'Easy' | 'Moderate' | 'Hard' | 'Max';
+  notes: string | null;
+  calories_burned: number | null;
+  autopsy_text: string | null;
+  exercise_data: Array<{ name: string; muscleGroup: string; muscles: string[]; sets: Array<{ type: string; weight: string; reps: string; rpe: string; completed: boolean }> }> | null;
+  distance_meters: number | null;
+  sport_category: string | null;
+  muscle_groups: string[] | null;
+  logged_at: string;
+  created_at: string;
+}
+
+export interface UserActivityIn {
+  activity_type: string;
+  duration_minutes: number;
+  intensity: string;
+  notes?: string;
+  exercise_data?: Array<Record<string, unknown>>;
+  distance_meters?: number;
+  sport_category?: string;
+  muscle_groups?: string[];
+}
+
+export interface ActivityStats {
+  total_workouts: number;
+  total_hours: number;
+  current_streak: number;
+  longest_streak: number;
+}
+
+export interface HeatmapEntry {
+  date: string;
+  count: number;
+  total_minutes: number;
+}
+
+export interface DailySteps {
+  id: string;
+  user_id: string;
+  date: string;
+  steps: number;
+  created_at: string;
+}
+
+export interface HevyWorkout {
+  id: string;
+  hevy_workout_id: string;
+  title: string;
+  started_at: string;
+  duration_seconds: number | null;
+  exercises: Array<{ title: string; sets: Array<{ reps: number; weight_kg: number }> }>;
+  volume_kg: number | null;
+  autopsy_text: string | null;
+  created_at: string;
+}
+
+export async function logActivity(data: UserActivityIn): Promise<UserActivity> {
+  const response = await apiClient.post<UserActivity>('/activities/', data);
+  return response.data;
+}
+
+export async function getMyActivities(): Promise<UserActivity[]> {
+  const response = await apiClient.get<UserActivity[]>('/activities/');
+  return response.data;
+}
+
+export async function deleteActivity(id: string): Promise<void> {
+  await apiClient.delete(`/activities/${id}`);
+}
+
+// ── Steps ──────────────────────────────────────────────────────────────────
+
+export async function upsertDailySteps(date: string, steps: number): Promise<DailySteps> {
+  const response = await apiClient.post<DailySteps>('/steps/', { date, steps });
+  return response.data;
+}
+
+export async function getWeeklySteps(): Promise<DailySteps[]> {
+  const response = await apiClient.get<DailySteps[]>('/steps/weekly');
+  return response.data;
+}
+
+// ── Hevy ───────────────────────────────────────────────────────────────────
+
+export async function connectHevy(apiKey: string): Promise<{ connected: boolean }> {
+  const response = await apiClient.post<{ connected: boolean }>('/hevy/connect', { api_key: apiKey });
+  return response.data;
+}
+
+export async function syncHevy(): Promise<{ synced: number; total: number }> {
+  const response = await apiClient.post<{ synced: number; total: number }>('/hevy/sync');
+  return response.data;
+}
+
+export async function getHevyWorkouts(): Promise<HevyWorkout[]> {
+  const response = await apiClient.get<HevyWorkout[]>('/hevy/workouts');
+  return response.data;
+}
+
+export async function disconnectHevy(): Promise<void> {
+  await apiClient.delete('/hevy/disconnect');
+}
+
+// ── Activity Stats & Heatmap ───────────────────────────────────────────────
+
+export async function getActivityStats(): Promise<ActivityStats> {
+  const response = await apiClient.get<ActivityStats>('/activities/stats');
+  return response.data;
+}
+
+export async function getActivityHeatmap(days = 84): Promise<HeatmapEntry[]> {
+  const response = await apiClient.get<HeatmapEntry[]>('/activities/heatmap', { params: { days } });
   return response.data;
 }
 

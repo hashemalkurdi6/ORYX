@@ -6,6 +6,18 @@ export interface User {
   id: string;
   email: string;
   strava_connected: boolean;
+  whoop_connected: boolean;
+  oura_connected: boolean;
+  hevy_connected?: boolean;
+  username: string | null;
+  full_name: string | null;
+  bio: string | null;
+  location: string | null;
+  sports: string[] | null;
+  weight_kg?: number | null;
+  followers_count: number;
+  following_count: number;
+  created_at: string;
 }
 
 interface AuthState {
@@ -24,7 +36,7 @@ export const useAuthStore = create<AuthState>()(
       clearAuth: () => set({ token: null, user: null }),
     }),
     {
-      name: 'armen-auth-storage',
+      name: 'oryx-auth-storage',
       storage: createJSONStorage(() => AsyncStorage),
     }
   )

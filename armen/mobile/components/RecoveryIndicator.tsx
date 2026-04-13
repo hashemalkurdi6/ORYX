@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface RecoveryIndicatorProps {
   score: number;
@@ -9,13 +10,13 @@ interface RecoveryIndicatorProps {
 }
 
 const COLOR_MAP: Record<'green' | 'yellow' | 'red', string> = {
-  green: '#4CAF50',
-  yellow: '#FFC107',
-  red: '#F44336',
+  green: '#27ae60',
+  yellow: '#888888',
+  red: '#c0392b',
 };
 
-const SIZE = 150;
-const STROKE_WIDTH = 12;
+const SIZE = 160;
+const STROKE_WIDTH = 14;
 const RADIUS = (SIZE - STROKE_WIDTH) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
@@ -24,75 +25,59 @@ export default function RecoveryIndicator({
   color,
   loading,
 }: RecoveryIndicatorProps) {
+  const { theme } = useTheme();
   const clampedScore = Math.min(100, Math.max(0, score));
   const strokeDashoffset = CIRCUMFERENCE * (1 - clampedScore / 100);
   const accentColor = COLOR_MAP[color];
 
-  return (
-    <View style={styles.wrapper}>
-      <View style={styles.container}>
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#6C63FF" />
-          </View>
-        ) : (
-          <View style={styles.svgWrapper}>
-            <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
-              <G rotation="-90" origin={`${SIZE / 2}, ${SIZE / 2}`}>
-                {/* Background ring */}
-                <Circle
-                  cx={SIZE / 2}
-                  cy={SIZE / 2}
-                  r={RADIUS}
-                  stroke="#2A2A3A"
-                  strokeWidth={STROKE_WIDTH}
-                  fill="none"
-                />
-                {/* Colored progress arc */}
-                <Circle
-                  cx={SIZE / 2}
-                  cy={SIZE / 2}
-                  r={RADIUS}
-                  stroke={accentColor}
-                  strokeWidth={STROKE_WIDTH}
-                  fill="none"
-                  strokeDasharray={CIRCUMFERENCE}
-                  strokeDashoffset={strokeDashoffset}
-                  strokeLinecap="round"
-                />
-              </G>
-            </Svg>
-            {/* Score in center */}
-            <View style={styles.scoreOverlay}>
-              <Text style={[styles.scoreText, { color: accentColor }]}>
-                {clampedScore}
-              </Text>
-            </View>
-          </View>
-        )}
+  if (loading) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: theme.bg.elevated }]}>
+        <ActivityIndicator size="large" color={theme.text.primary} />
       </View>
-      <Text style={styles.label}>Recovery Score</Text>
+    );
+  }
+
+  return (
+    <View style={styles.svgWrapper}>
+      <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
+        <G transform={`rotate(-90, ${SIZE / 2}, ${SIZE / 2})`}>
+          <Circle
+            cx={SIZE / 2}
+            cy={SIZE / 2}
+            r={RADIUS}
+            stroke={theme.border}
+            strokeWidth={STROKE_WIDTH}
+            fill="none"
+          />
+          <Circle
+            cx={SIZE / 2}
+            cy={SIZE / 2}
+            r={RADIUS}
+            stroke={accentColor}
+            strokeWidth={STROKE_WIDTH}
+            fill="none"
+            strokeDasharray={CIRCUMFERENCE}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+          />
+        </G>
+      </Svg>
+      <View style={styles.scoreOverlay}>
+        <Text style={[styles.scoreText, { color: accentColor }]}>
+          {clampedScore}
+        </Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  container: {
-    width: SIZE,
-    height: SIZE,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   loadingContainer: {
     width: SIZE,
     height: SIZE,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1A1A2E',
     borderRadius: SIZE / 2,
   },
   svgWrapper: {
@@ -108,15 +93,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scoreText: {
-    fontSize: 42,
+    fontSize: 48,
     fontWeight: '900',
-    letterSpacing: -1,
-  },
-  label: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#888',
-    fontWeight: '500',
-    letterSpacing: 0.5,
+    letterSpacing: -2,
   },
 });

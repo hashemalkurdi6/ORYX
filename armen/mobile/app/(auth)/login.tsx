@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,49 +10,56 @@ import {
   Platform,
   ScrollView,
   Alert,
+  Animated,
 } from 'react-native';
 import { Link, router } from 'expo-router';
 import { login, getMe } from '@/services/api';
 import { useAuthStore } from '@/services/authStore';
+import { useTheme } from '@/contexts/ThemeContext';
+import { ThemeColors } from '@/services/theme';
 
 export default function LoginScreen() {
+  const { theme } = useTheme();
+  const s = createStyles(theme);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passFocused, setPassFocused] = useState(false);
 
+  const btnScale = useRef(new Animated.Value(1)).current;
   const setAuth = useAuthStore((state) => state.setAuth);
+
+  const onPressIn = () =>
+    Animated.spring(btnScale, { toValue: 0.97, useNativeDriver: true, speed: 40 }).start();
+  const onPressOut = () =>
+    Animated.spring(btnScale, { toValue: 1, useNativeDriver: true, speed: 40 }).start();
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
       setError('Please enter your email and password.');
       return;
     }
-
     setError(null);
     setLoading(true);
-
     try {
       const tokenResponse = await login(email.trim().toLowerCase(), password);
       const token = tokenResponse.access_token;
-
-      // Fetch user profile
-      // Temporarily set the token so the interceptor can use it
       useAuthStore.setState({ token });
       const user = await getMe();
-
-      setAuth(token, {
-        id: user.id,
-        email: user.email,
-        strava_connected: user.strava_connected,
-      });
-
-      router.replace('/(tabs)/dashboard');
+      setAuth(token, user);
+      router.replace('/(tabs)/');
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
+      const axiosError = err as { response?: { data?: { detail?: unknown } } };
+      const detail = axiosError?.response?.data?.detail;
       const message =
-        axiosError?.response?.data?.detail ||
-        'Login failed. Please check your credentials.';
+        typeof detail === 'string'
+          ? detail
+          : Array.isArray(detail)
+          ? (detail[0] as { msg?: string })?.msg || 'Login failed.'
+          : 'Login failed. Check your credentials.';
       setError(message);
     } finally {
       setLoading(false);
@@ -60,194 +67,135 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.header}>
-          <Text style={styles.logo}>ARMEN</Text>
-          <Text style={styles.tagline}>Your Fitness Intelligence</Text>
+    <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+
+        <View style={s.wordmarkSection}>
+          <Text style={s.wordmark}>ORYX</Text>
+          <Text style={s.tagline}>Know your body.</Text>
         </View>
 
-        <View style={styles.form}>
-          <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Sign in to your account</Text>
-
-          {error ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              placeholderTextColor="#555"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="email"
-              returnKeyType="next"
-            />
+        {error ? (
+          <View style={s.errorBox}>
+            <Text style={s.errorText}>{error}</Text>
           </View>
+        ) : null}
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Your password"
-              placeholderTextColor="#555"
-              secureTextEntry
-              autoComplete="password"
-              returnKeyType="done"
-              onSubmitEditing={handleLogin}
-            />
+        <View style={s.inputGroup}>
+          <Text style={s.label}>Email</Text>
+          <TextInput
+            style={[s.input, emailFocused && s.inputFocused]}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="you@example.com"
+            placeholderTextColor={theme.text.muted}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="email"
+            returnKeyType="next"
+            onFocus={() => setEmailFocused(true)}
+            onBlur={() => setEmailFocused(false)}
+          />
+        </View>
+
+        <View style={s.inputGroup}>
+          <View style={s.passwordLabelRow}>
+            <Text style={s.label}>Password</Text>
+            <TouchableOpacity onPress={() => Alert.alert('Coming Soon', 'Password reset is coming soon.')} activeOpacity={0.7}>
+              <Text style={s.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
           </View>
+          <TextInput
+            style={[s.input, passFocused && s.inputFocused]}
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Your password"
+            placeholderTextColor={theme.text.muted}
+            secureTextEntry
+            autoComplete="password"
+            returnKeyType="done"
+            onSubmitEditing={handleLogin}
+            onFocus={() => setPassFocused(true)}
+            onBlur={() => setPassFocused(false)}
+          />
+        </View>
 
+        <Animated.View style={{ transform: [{ scale: btnScale }], marginTop: 8 }}>
           <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
+            style={[s.button, loading && s.buttonDisabled]}
             onPress={handleLogin}
+            onPressIn={onPressIn}
+            onPressOut={onPressOut}
             disabled={loading}
-            activeOpacity={0.8}
+            activeOpacity={1}
           >
             {loading ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <ActivityIndicator color={theme.bg.primary} size="small" />
             ) : (
-              <Text style={styles.buttonText}>Log In</Text>
+              <Text style={s.buttonText}>Log In</Text>
             )}
           </TouchableOpacity>
+        </Animated.View>
 
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Don't have an account? </Text>
-            <Link href="/(auth)/signup" asChild>
-              <TouchableOpacity>
-                <Text style={styles.linkText}>Sign up</Text>
-              </TouchableOpacity>
-            </Link>
-          </View>
+        <View style={s.footer}>
+          <Text style={s.footerText}>Don't have an account? </Text>
+          <Link href="/(auth)/signup" asChild>
+            <TouchableOpacity>
+              <Text style={s.linkText}>Sign up</Text>
+            </TouchableOpacity>
+          </Link>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0A0A0F',
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 40,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 48,
-  },
-  logo: {
-    fontSize: 42,
-    fontWeight: '900',
-    color: '#6C63FF',
-    letterSpacing: 6,
-  },
-  tagline: {
-    fontSize: 14,
-    color: '#888',
-    marginTop: 6,
-    letterSpacing: 1,
-  },
-  form: {
-    width: '100%',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 6,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: '#888',
-    marginBottom: 28,
-  },
-  errorBox: {
-    backgroundColor: '#2D1515',
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 18,
-    borderLeftWidth: 3,
-    borderLeftColor: '#F44336',
-  },
-  errorText: {
-    color: '#FF6B6B',
-    fontSize: 14,
-  },
-  inputGroup: {
-    marginBottom: 18,
-  },
-  label: {
-    fontSize: 13,
-    color: '#AAAAAA',
-    marginBottom: 8,
-    fontWeight: '500',
-    letterSpacing: 0.5,
-  },
-  input: {
-    backgroundColor: '#1A1A2E',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#2A2A4A',
-  },
-  button: {
-    backgroundColor: '#6C63FF',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 8,
-    shadowColor: '#6C63FF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  footerText: {
-    color: '#888',
-    fontSize: 14,
-  },
-  linkText: {
-    color: '#6C63FF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-});
+function createStyles(t: ThemeColors) {
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: t.bg.primary },
+    scroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 26, paddingVertical: 60 },
+    wordmarkSection: { alignItems: 'center', marginBottom: 52 },
+    wordmark: { fontSize: 32, fontWeight: '900', color: t.text.primary, letterSpacing: 6 },
+    tagline: { fontSize: 14, color: t.text.muted, marginTop: 8, letterSpacing: 0.5 },
+    errorBox: {
+      backgroundColor: 'rgba(192,57,43,0.12)',
+      borderLeftWidth: 3,
+      borderLeftColor: t.status.danger,
+      borderRadius: 10,
+      padding: 14,
+      marginBottom: 20,
+    },
+    errorText: { color: t.status.danger, fontSize: 14, lineHeight: 20 },
+    inputGroup: { marginBottom: 16 },
+    label: { fontSize: 13, color: t.text.secondary, marginBottom: 8, fontWeight: '500', letterSpacing: 0.3 },
+    passwordLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+    forgotText: { fontSize: 13, color: t.text.muted, textDecorationLine: 'underline' },
+    input: {
+      backgroundColor: t.bg.elevated,
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      fontSize: 16,
+      color: t.text.primary,
+      borderWidth: 1,
+      borderColor: t.border,
+    },
+    inputFocused: { borderColor: t.accent },
+    button: {
+      backgroundColor: t.text.primary,
+      borderRadius: 12,
+      paddingVertical: 16,
+      alignItems: 'center',
+    },
+    buttonDisabled: { opacity: 0.5 },
+    buttonText: {
+      color: t.bg.primary,
+      fontSize: 16,
+      fontWeight: '700',
+    },
+    footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 28 },
+    footerText: { color: t.text.muted, fontSize: 14 },
+    linkText: { color: t.text.primary, fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
+  });
+}

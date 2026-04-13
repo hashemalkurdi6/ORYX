@@ -1,6 +1,35 @@
-node_modules/
-.env
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
 dist/
 build/
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Environment files
+.env
+*.env
+
+# Node
+node_modules/
+
+# Expo
 .expo/
-.expo-shared/
+web-build/
+expo-env.d.ts
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*

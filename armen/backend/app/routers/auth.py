@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserLogin, UserOut, UserOutInternal, Token, TokenData
+from app.schemas.user import UserCreate, UserLogin, UserOut, UserOutInternal, Token, TokenData, UserProfileUpdate
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -74,9 +74,21 @@ async def signup(payload: UserCreate, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered",
         )
+
+    if payload.username:
+        username_result = await db.execute(select(User).where(User.username == payload.username))
+        if username_result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already taken",
+            )
+
     user = User(
         email=payload.email,
         hashed_password=hash_password(payload.password),
+        username=payload.username,
+        full_name=payload.full_name,
+        sports=payload.sports,
     )
     db.add(user)
     await db.flush()
@@ -100,5 +112,35 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)):
 
 @router.get("/me", response_model=UserOut)
 async def get_me(current_user: User = Depends(get_current_user)):
+    internal = UserOutInternal.model_validate(current_user)
+    return internal.to_user_out()
+
+
+@router.put("/profile", response_model=UserOut)
+async def update_profile(
+    payload: UserProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update current user's profile fields."""
+    # If username being changed, check uniqueness (skip if same as current)
+    if payload.username and payload.username != current_user.username:
+        existing = await db.execute(select(User).where(User.username == payload.username))
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Username already taken")
+
+    if payload.username is not None:
+        current_user.username = payload.username
+    if payload.full_name is not None:
+        current_user.full_name = payload.full_name
+    if payload.bio is not None:
+        current_user.bio = payload.bio
+    if payload.location is not None:
+        current_user.location = payload.location
+    if payload.sports is not None:
+        current_user.sports = payload.sports
+
+    await db.flush()
+    await db.refresh(current_user)
     internal = UserOutInternal.model_validate(current_user)
     return internal.to_user_out()
