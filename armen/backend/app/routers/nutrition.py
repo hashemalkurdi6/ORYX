@@ -1,9 +1,12 @@
 # ORYX
+import logging
 import uuid
 from datetime import datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+
+logger = logging.getLogger(__name__)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,8 +26,19 @@ async def scan_food(
     current_user: User = Depends(get_current_user),
 ):
     """Analyze a food photo using Claude vision and return estimated nutrition data."""
-    result = await scan_food_image(payload.image, payload.media_type)
-    return result
+    logger.info(
+        "POST /nutrition/scan user=%s image_len=%d media_type=%s",
+        current_user.id,
+        len(payload.image),
+        payload.media_type,
+    )
+    try:
+        result = await scan_food_image(payload.image, payload.media_type)
+        logger.info("POST /nutrition/scan result: food_name=%r calories=%s", result.get("food_name"), result.get("calories"))
+        return result
+    except Exception as exc:
+        logger.exception("POST /nutrition/scan failed: %s", exc)
+        raise
 
 
 @router.post("/log", response_model=NutritionLogOut, status_code=status.HTTP_201_CREATED)

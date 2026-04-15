@@ -22,10 +22,13 @@ import {
   uploadHealthSnapshots,
   getTodayNutrition,
   upsertDailySteps,
+  getDeloadStatus,
   DiagnosisResult,
   WellnessCheckin,
   NutritionLog,
+  DeloadRecommendation,
 } from '@/services/api';
+import DeloadCard from '@/components/DeloadCard';
 import { Pedometer } from 'expo-sensors';
 import { useAuthStore } from '@/services/authStore';
 import { fetchLast7DaysHealthData } from '@/services/healthKit';
@@ -103,6 +106,8 @@ export default function HomeScreen() {
 
   const [diagnosis, setDiagnosis] = useState<DiagnosisResult | null>(null);
   const [diagnosisLoading, setDiagnosisLoading] = useState(true);
+  const [deloadRec, setDeloadRec] = useState<DeloadRecommendation | null>(null);
+  const [deloadDismissed, setDeloadDismissed] = useState(false);
   const [todayCheckin, setTodayCheckin] = useState<WellnessCheckin | null>(null);
   const [todayNutrition, setTodayNutrition] = useState<NutritionLog[]>([]);
   const [showWellnessModal, setShowWellnessModal] = useState(false);
@@ -134,10 +139,11 @@ export default function HomeScreen() {
         }
       }
 
-      const [diagnosisResult, wellnessResult, nutritionResult] = await Promise.allSettled([
+      const [diagnosisResult, wellnessResult, nutritionResult, deloadResult] = await Promise.allSettled([
         getDailyDiagnosis(),
         getWellnessCheckins(1),
         getTodayNutrition(),
+        getDeloadStatus(),
       ]);
 
       if (diagnosisResult.status === 'fulfilled') {
@@ -154,6 +160,11 @@ export default function HomeScreen() {
 
       if (nutritionResult.status === 'fulfilled') {
         setTodayNutrition(nutritionResult.value);
+      }
+
+      if (deloadResult.status === 'fulfilled') {
+        setDeloadRec(deloadResult.value);
+        setDeloadDismissed(false);
       }
     } catch {
       setError('Failed to load data. Pull down to retry.');
@@ -353,6 +364,15 @@ export default function HomeScreen() {
             </View>
           </View>
         </View>
+
+        {/* Deload Detector card — only visible when a recommendation is active */}
+        {!deloadDismissed && (
+          <DeloadCard
+            recommendation={deloadRec}
+            loading={diagnosisLoading}
+            onDismiss={() => setDeloadDismissed(true)}
+          />
+        )}
 
         {/* Section header: Today's Intelligence */}
         <Text style={s.sectionHeader}>TODAY'S INTELLIGENCE</Text>

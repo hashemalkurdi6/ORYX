@@ -12,6 +12,18 @@ class UserCreate(BaseModel):
     full_name: str | None = None
     sports: list[str] | None = None
     weight_kg: float | None = None
+    # Onboarding fields — all optional, set onboarding_complete=True on signup
+    display_name: str | None = None
+    sport_tags: list[str] | None = None
+    primary_goal: str | None = None
+    fitness_level: str | None = None
+    weekly_training_days: str | None = None
+    age: int | None = None
+    date_of_birth: str | None = None
+    height_cm: float | None = None
+    biological_sex: str | None = None
+    daily_calorie_target: int | None = None
+    preferred_training_time: str | None = None
 
 
 class UserLogin(BaseModel):
@@ -35,6 +47,20 @@ class UserOut(BaseModel):
     hevy_connected: bool
     weight_kg: float | None
     created_at: datetime
+    # Onboarding fields
+    display_name: str | None = None
+    sport_tags: list[str] | None = None
+    primary_goal: str | None = None
+    fitness_level: str | None = None
+    weekly_training_days: str | None = None
+    age: int | None = None
+    date_of_birth: str | None = None
+    height_cm: float | None = None
+    biological_sex: str | None = None
+    daily_calorie_target: int | None = None
+    preferred_training_time: str | None = None
+    onboarding_complete: bool = False
+    current_onboarding_step: int = 1
 
     model_config = {"from_attributes": True}
 
@@ -81,6 +107,20 @@ class UserOutInternal(BaseModel):
     hevy_api_key: str | None = None
     weight_kg: float | None = None
     created_at: datetime
+    # Onboarding fields
+    display_name: str | None = None
+    sport_tags: list[str] | None = None
+    primary_goal: str | None = None
+    fitness_level: str | None = None
+    weekly_training_days: str | None = None
+    age: int | None = None
+    date_of_birth: str | None = None
+    height_cm: float | None = None
+    biological_sex: str | None = None
+    daily_calorie_target: int | None = None
+    preferred_training_time: str | None = None
+    onboarding_complete: bool = False
+    current_onboarding_step: int = 1
 
     model_config = {"from_attributes": True}
 
@@ -101,6 +141,19 @@ class UserOutInternal(BaseModel):
             hevy_connected=self.hevy_api_key is not None,
             weight_kg=self.weight_kg,
             created_at=self.created_at,
+            display_name=self.display_name,
+            sport_tags=self.sport_tags,
+            primary_goal=self.primary_goal,
+            fitness_level=self.fitness_level,
+            weekly_training_days=self.weekly_training_days,
+            age=self.age,
+            date_of_birth=self.date_of_birth,
+            height_cm=self.height_cm,
+            biological_sex=self.biological_sex,
+            daily_calorie_target=self.daily_calorie_target,
+            preferred_training_time=self.preferred_training_time,
+            onboarding_complete=self.onboarding_complete,
+            current_onboarding_step=self.current_onboarding_step,
         )
 
 
@@ -111,6 +164,23 @@ class UserProfileUpdate(BaseModel):
     location: str | None = None
     sports: list[str] | None = None
     weight_kg: float | None = None
+
+
+class OnboardingUpdate(BaseModel):
+    display_name: str | None = None
+    sport_tags: list[str] | None = None
+    primary_goal: str | None = None
+    fitness_level: str | None = None
+    weekly_training_days: str | None = None
+    age: int | None = None
+    date_of_birth: str | None = None
+    weight_kg: float | None = None
+    height_cm: float | None = None
+    biological_sex: str | None = None
+    daily_calorie_target: int | None = None
+    preferred_training_time: str | None = None
+    onboarding_complete: bool | None = None
+    current_onboarding_step: int | None = None
 
 
 class Token(BaseModel):

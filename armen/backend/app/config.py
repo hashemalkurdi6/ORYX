@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     STRAVA_CLIENT_SECRET: str = ""
     STRAVA_REDIRECT_URI: str = "http://localhost:8000/strava/callback"
     ANTHROPIC_API_KEY: str = ""
+    OPENAI_API_KEY: str = ""
+    USDA_API_KEY: str = ""   # optional — get free key at https://fdc.nal.usda.gov/
+
+    @property
+    def usda_api_key(self) -> str:
+        return self.USDA_API_KEY
     FRONTEND_URL: str = "exp://localhost:8081"
     WHOOP_CLIENT_ID: str = ""
     WHOOP_CLIENT_SECRET: str = ""

@@ -1,6 +1,6 @@
-# ARMEN — Fitness Intelligence App
+# ORYX — Fitness Intelligence App
 
-ARMEN is a mobile fitness intelligence platform that combines Strava workout data, Apple HealthKit biometrics, and Claude AI to deliver daily performance diagnoses and workout autopsies.
+ORYX is a mobile fitness intelligence platform that combines Strava workout data, Apple HealthKit biometrics, and Claude AI to deliver daily performance diagnoses and workout autopsies.
 
 ---
 
@@ -20,7 +20,7 @@ ARMEN is a mobile fitness intelligence platform that combines Strava workout dat
 
 ```bash
 git clone <repo-url>
-cd armen
+cd oryx
 ```
 
 ---
@@ -45,9 +45,9 @@ pip install -r requirements.txt
 ### 2c. Create the database
 
 ```bash
-createdb armen
+createdb oryx
 # or via psql:
-# psql -U postgres -c "CREATE DATABASE armen;"
+# psql -U postgres -c "CREATE DATABASE oryx;"
 ```
 
 ### 2d. Configure environment variables
@@ -103,7 +103,7 @@ npx expo start
 
 1. Go to [https://www.strava.com/settings/api](https://www.strava.com/settings/api)
 2. Create a new application:
-   - **Application Name**: ARMEN
+   - **Application Name**: ORYX
    - **Category**: Training
    - **Club**: (leave blank)
    - **Website**: `http://localhost:8000`
@@ -114,7 +114,7 @@ npx expo start
 The OAuth flow:
 1. Mobile app calls `GET /strava/auth-url` to get the authorization URL
 2. Opens URL in an in-app browser
-3. User authorizes ARMEN on Strava
+3. User authorizes ORYX on Strava
 4. Strava redirects to `STRAVA_REDIRECT_URI` with an authorization code
 5. Backend exchanges the code for tokens, saves them, and fetches recent activities
 
@@ -126,7 +126,7 @@ The OAuth flow:
 2. Navigate to **API Keys** and create a new key
 3. Set `ANTHROPIC_API_KEY` in your backend `.env`
 
-ARMEN uses `claude-sonnet-4-20250514` for:
+ORYX uses `claude-haiku-4-5-20251001` for:
 - **Daily Diagnosis**: Analyzes 7 days of health + recent workouts → recovery score, diagnosis, recommendation
 - **Workout Autopsy**: Explains a specific session's performance with pre-workout recovery context
 
@@ -135,7 +135,7 @@ ARMEN uses `claude-sonnet-4-20250514` for:
 ## 6. HealthKit Notes
 
 - HealthKit requires a **physical iOS device** or an iOS simulator with simulated health data
-- On first launch, ARMEN will request permission to read: Steps, Heart Rate, HRV (SDNN), Resting Heart Rate, Sleep Analysis, Active Energy Burned
+- On first launch, ORYX will request permission to read: Steps, Heart Rate, HRV (SDNN), Resting Heart Rate, Sleep Analysis, Active Energy Burned
 - On Android and web, HealthKit calls are gracefully skipped and return empty data
 - Health data is uploaded to the backend automatically on each dashboard load
 
@@ -178,7 +178,7 @@ ARMEN uses `claude-sonnet-4-20250514` for:
              ┌───────────────┼───────────────┐
              ▼               ▼               ▼
       PostgreSQL         Strava API      Anthropic API
-      (via asyncpg)    (OAuth + REST)   (claude-sonnet)
+      (via asyncpg)    (OAuth + REST)   (claude-haiku)
 ```
 
 ---
@@ -189,7 +189,7 @@ ARMEN uses `claude-sonnet-4-20250514` for:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string with asyncpg driver | `postgresql+asyncpg://postgres:password@localhost:5432/armen` |
+| `DATABASE_URL` | PostgreSQL connection string with asyncpg driver | `postgresql+asyncpg://postgres:password@localhost:5432/oryx` |
 | `SECRET_KEY` | JWT signing secret — use a long random string in production | `openssl rand -hex 32` |
 | `ALGORITHM` | JWT algorithm (default: HS256) | `HS256` |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Token validity in minutes (default: 10080 = 7 days) | `10080` |
@@ -212,7 +212,7 @@ ARMEN uses `claude-sonnet-4-20250514` for:
 ## 9. Development Tips
 
 - **Hot reload**: Both the FastAPI server (`--reload`) and Expo (`expo start`) support hot reload.
-- **Database inspection**: Use `psql armen` or a GUI like TablePlus / DBeaver.
+- **Database inspection**: Use `psql oryx` or a GUI like TablePlus / DBeaver.
 - **API testing**: The FastAPI Swagger UI at `http://localhost:8000/docs` lets you test all endpoints interactively.
 - **Strava webhook**: For production, consider setting up a Strava webhook so activities sync automatically rather than requiring manual sync.
 - **Production deployment**: Use a proper `SECRET_KEY`, disable `--reload`, use a production ASGI server (gunicorn + uvicorn workers), and store credentials in environment variables rather than a `.env` file.

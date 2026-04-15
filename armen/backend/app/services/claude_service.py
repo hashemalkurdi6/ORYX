@@ -1,11 +1,17 @@
 # ORYX
 import asyncio
 import json
+import logging
 import re
 
 import anthropic
+from openai import OpenAI
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+_openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 MODEL = "claude-sonnet-4-20250514"
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
@@ -553,39 +559,62 @@ If you cannot identify the food return the same structure with all numeric value
 
 
 def _sync_scan_food_image(base64_image: str, media_type: str = "image/jpeg") -> dict:
-    """Synchronous call to Claude Haiku vision API to analyze a food photo."""
-    message = _client.messages.create(
-        model=HAIKU_MODEL,
-        max_tokens=512,
-        system=FOOD_SCAN_SYSTEM_PROMPT,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": base64_image,
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": "Analyze this food photo and return the nutrition JSON.",
-                    },
-                ],
-            }
-        ],
+    """Synchronous call to OpenAI vision API to analyze a food photo."""
+    # Strip data URI prefix if the frontend included it (e.g. "data:image/jpeg;base64,...")
+    if "," in base64_image and base64_image.startswith("data:"):
+        _, base64_image = base64_image.split(",", 1)
+        logger.info("Stripped data URI prefix from image")
+
+    logger.info(
+        "scan_food_image: calling OpenAI gpt-4o-mini, image size=%d bytes (base64), media_type=%s",
+        len(base64_image),
+        media_type,
     )
 
-    raw_text = message.content[0].text.strip()
+    try:
+        response = _openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=512,
+            messages=[
+                {"role": "system", "content": FOOD_SCAN_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{media_type};base64,{base64_image}",
+                                "detail": "low",
+                            },
+                        },
+                        {
+                            "type": "text",
+                            "text": "Analyze this food photo and return the nutrition JSON.",
+                        },
+                    ],
+                },
+            ],
+        )
+    except Exception as exc:
+        logger.exception("scan_food_image: OpenAI API call failed: %s", exc)
+        raise
+
+    raw_text = response.choices[0].message.content.strip()
+    logger.info("scan_food_image: raw OpenAI response: %r", raw_text[:500])
+
     raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
     raw_text = re.sub(r"\s*```$", "", raw_text)
 
     try:
         result = json.loads(raw_text)
-    except json.JSONDecodeError:
+        logger.info(
+            "scan_food_image: parsed result food_name=%r calories=%s confidence=%s",
+            result.get("food_name"),
+            result.get("calories"),
+            result.get("confidence"),
+        )
+    except json.JSONDecodeError as exc:
+        logger.warning("scan_food_image: JSON parse failed (%s), returning fallback. raw=%r", exc, raw_text[:200])
         result = {
             "food_name": "Unknown food",
             "description": "Could not identify the food in this image.",

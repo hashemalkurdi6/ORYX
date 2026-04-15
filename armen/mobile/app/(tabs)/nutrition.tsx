@@ -31,6 +31,7 @@ import {
 } from '@/services/api';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ThemeColors } from '@/services/theme';
+import FoodSearchModal from '@/components/FoodSearchModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - 40;
@@ -177,6 +178,7 @@ export default function NutritionScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showFoodSearchModal, setShowFoodSearchModal] = useState(false);
   const [showExtra, setShowExtra] = useState(false);
   const [nutritionForm, setNutritionForm] = useState({
     meal_name: '', calories: '', protein_g: '', carbs_g: '', fat_g: '', fibre_g: '', notes: '',
@@ -192,6 +194,7 @@ export default function NutritionScreen() {
     meal_name: '', calories: '', protein_g: '', carbs_g: '', fat_g: '', fibre_g: '',
   });
   const [scanSubmitting, setScanSubmitting] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
 
   // ── Data loading ──────────────────────────────────────────────────────────
 
@@ -272,6 +275,7 @@ export default function NutritionScreen() {
     setScanResult(null);
     setScanImageUri(null);
     setScanLoading(false);
+    setScanError(null);
     setScanForm({ meal_name: '', calories: '', protein_g: '', carbs_g: '', fat_g: '', fibre_g: '' });
   };
 
@@ -295,10 +299,14 @@ export default function NutritionScreen() {
     const asset = result.assets[0];
     setScanImageUri(asset.uri);
     setScanLoading(true);
+    setScanError(null);
     setShowScanModal(true);
+
+    console.log('[Scan] Starting food scan, base64 length:', asset.base64!.length);
 
     try {
       const data = await scanFoodPhoto(asset.base64!);
+      console.log('[Scan] Result received:', JSON.stringify(data));
       setScanResult(data);
       setScanForm({
         meal_name: data.food_name,
@@ -308,9 +316,10 @@ export default function NutritionScreen() {
         fat_g: data.fat_g > 0 ? String(data.fat_g) : '',
         fibre_g: data.fibre_g > 0 ? String(data.fibre_g) : '',
       });
-    } catch {
-      resetScan();
-      Alert.alert('Scan Failed', 'Could not analyze the image. Try a clearer photo or use manual entry.');
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || err?.message || 'Unknown error';
+      console.error('[Scan] Failed:', msg, err);
+      setScanError(msg);
     } finally {
       setScanLoading(false);
     }
@@ -412,7 +421,7 @@ export default function NutritionScreen() {
               <Text style={s.pageTitle}>Nutrition</Text>
               <Text style={s.pageSubtitle}>{todayDisplayDate()}</Text>
             </View>
-            <TouchableOpacity style={s.addBtn} onPress={() => setShowAddModal(true)} activeOpacity={0.85}>
+            <TouchableOpacity style={s.addBtn} onPress={() => setShowFoodSearchModal(true)} activeOpacity={0.85}>
               <Ionicons name="add" size={22} color={theme.bg.primary} />
             </TouchableOpacity>
           </View>
@@ -543,7 +552,7 @@ export default function NutritionScreen() {
         {/* ── Meals Section ── */}
         <View style={s.mealsSectionHeader}>
           <Text style={s.sectionLabel}>TODAY'S MEALS</Text>
-          <TouchableOpacity style={s.logMealInlineBtn} onPress={() => setShowAddModal(true)} activeOpacity={0.85}>
+          <TouchableOpacity style={s.logMealInlineBtn} onPress={() => setShowFoodSearchModal(true)} activeOpacity={0.85}>
             <Ionicons name="add" size={16} color={theme.bg.primary} />
             <Text style={s.logMealInlineBtnText}>Log Meal</Text>
           </TouchableOpacity>
@@ -709,6 +718,13 @@ export default function NutritionScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* ── Food Search Modal ── */}
+      <FoodSearchModal
+        visible={showFoodSearchModal}
+        onClose={() => setShowFoodSearchModal(false)}
+        onLogged={(log) => setTodayLogs((prev) => [...prev, log])}
+      />
+
       {/* ── Scan Modal ── */}
       <Modal
         visible={showScanModal}
@@ -721,7 +737,7 @@ export default function NutritionScreen() {
             <View style={s.modalHandle} />
             <View style={s.modalHeaderRow}>
               <Text style={s.modalTitle}>
-                {scanLoading ? 'Analyzing Photo…' : 'Review & Log'}
+                {scanLoading ? 'Analyzing Photo…' : scanError ? 'Scan Failed' : 'Review & Log'}
               </Text>
               <TouchableOpacity onPress={resetScan}>
                 <Ionicons name="close" size={22} color={theme.text.muted} />
@@ -833,6 +849,27 @@ export default function NutritionScreen() {
                   <Text style={s.cancelBtnText}>Enter Manually Instead</Text>
                 </TouchableOpacity>
               </>
+            ) : scanError ? (
+              /* Error state */
+              <View style={s.scanErrorContainer}>
+                {scanImageUri && (
+                  <Image source={{ uri: scanImageUri }} style={s.scanThumbnailLarge} />
+                )}
+                <Ionicons name="alert-circle-outline" size={40} color="#FF6B35" style={{ marginTop: 16 }} />
+                <Text style={s.scanErrorTitle}>Could not analyze this photo</Text>
+                <Text style={s.scanErrorDetail}>{scanError}</Text>
+                <TouchableOpacity style={s.scanRetryBtn} onPress={() => { resetScan(); handleScanPhoto(); }} activeOpacity={0.75}>
+                  <Ionicons name="refresh-outline" size={16} color={theme.text.secondary} />
+                  <Text style={s.scanRetryText}>Try Again</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={s.cancelBtn}
+                  onPress={() => { resetScan(); setShowAddModal(true); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={s.cancelBtnText}>Enter Manually Instead</Text>
+                </TouchableOpacity>
+              </View>
             ) : null}
           </ScrollView>
         </KeyboardAvoidingView>
@@ -1007,5 +1044,8 @@ function createStyles(t: ThemeColors) {
       paddingVertical: 12,
     },
     scanRetryText: { fontSize: 14, color: t.text.secondary },
+    scanErrorContainer: { alignItems: 'center', paddingVertical: 24, gap: 8, paddingHorizontal: 8 },
+    scanErrorTitle: { fontSize: 16, fontWeight: '600', color: t.text.primary, marginTop: 4 },
+    scanErrorDetail: { fontSize: 13, color: t.text.secondary, textAlign: 'center', lineHeight: 18 },
   });
 }

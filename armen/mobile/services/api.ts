@@ -20,6 +20,35 @@ export interface User {
   followers_count: number;
   following_count: number;
   created_at: string;
+  // Onboarding fields
+  display_name?: string | null;
+  sport_tags?: string[] | null;
+  primary_goal?: string | null;
+  fitness_level?: string | null;
+  weekly_training_days?: string | null;
+  age?: number | null;
+  height_cm?: number | null;
+  biological_sex?: string | null;
+  daily_calorie_target?: number | null;
+  preferred_training_time?: string | null;
+  onboarding_complete?: boolean;
+  current_onboarding_step?: number;
+}
+
+export interface OnboardingData {
+  display_name?: string;
+  sport_tags?: string[];
+  primary_goal?: string;
+  fitness_level?: string;
+  weekly_training_days?: string;
+  age?: number;
+  weight_kg?: number;
+  height_cm?: number;
+  biological_sex?: string;
+  daily_calorie_target?: number;
+  preferred_training_time?: string;
+  onboarding_complete?: boolean;
+  current_onboarding_step?: number;
 }
 
 export interface Activity {
@@ -172,6 +201,129 @@ export interface FoodScanResult {
   low_confidence: boolean;
 }
 
+// ── Food Database ──────────────────────────────────────────────────────────
+
+export interface FoodItem {
+  id: string;
+  name: string;
+  brand: string | null;
+  source: 'openfoodfacts' | 'usda' | 'custom';
+  calories_100g: number;
+  protein_100g: number;
+  carbs_100g: number;
+  fat_100g: number;
+  fibre_100g: number;
+  sugar_100g: number;
+  sodium_100g: number;
+  serving_size_g: number | null;
+  serving_unit: string | null;
+}
+
+export interface FoodSearchResponse {
+  query: string;
+  results: FoodItem[];
+  cached: boolean;
+}
+
+export interface RecentFoodItem {
+  meal_name: string;
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  fibre_g: number | null;
+  last_logged: string;
+}
+
+export interface FrequentFoodItem {
+  meal_name: string;
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  fibre_g: number | null;
+  log_count: number;
+}
+
+export interface CustomFoodIn {
+  food_name: string;
+  brand?: string;
+  calories_100g?: number;
+  protein_100g?: number;
+  carbs_100g?: number;
+  fat_100g?: number;
+  fibre_100g?: number;
+  sugar_100g?: number;
+  sodium_100g?: number;
+  serving_size_g?: number;
+  serving_unit?: string;
+}
+
+export interface CustomFoodOut {
+  id: string;
+  user_id: string;
+  food_name: string;
+  brand?: string | null;
+  calories_100g: number;
+  protein_100g: number;
+  carbs_100g: number;
+  fat_100g: number;
+  fibre_100g: number;
+  sugar_100g: number;
+  sodium_100g: number;
+  serving_size_g?: number | null;
+  serving_unit?: string | null;
+  created_at: string;
+}
+
+// ── Deload Detector ────────────────────────────────────────────────────────
+
+export interface SignalScore {
+  score: number;
+  label: string;
+  explanation: string;
+  data_available: boolean;
+}
+
+export interface DeloadRecommendation {
+  overall_score: number;
+  recommendation: 'none' | 'consider' | 'recommended' | 'urgent';
+  confidence: 'low' | 'medium' | 'high';
+  primary_reason: string;
+  signals: SignalScore[];
+  suggested_duration_days: number;
+  data_days: number;
+  analysis_date: string;
+}
+
+// ── Warm-Up Personalizer ───────────────────────────────────────────────────
+
+export interface WarmUpExercise {
+  name: string;
+  detail: string;
+  note?: string;
+}
+
+export interface WarmUpPhase {
+  phase: string;
+  exercises: WarmUpExercise[];
+}
+
+export interface WarmUpProtocol {
+  summary: string;
+  duration_minutes: number;
+  phases: WarmUpPhase[];
+}
+
+export interface WarmUpRequest {
+  muscle_groups: string[];
+  session_type: string;
+  sleep_score?: number;
+  soreness?: number;
+  energy?: number;
+  recent_muscle_work?: Record<string, number>;
+}
+
 export interface UserProfileUpdate {
   username?: string;
   full_name?: string;
@@ -267,6 +419,42 @@ export async function getMe(): Promise<User> {
 
 export async function updateProfile(data: UserProfileUpdate): Promise<User> {
   const response = await apiClient.put<User>('/auth/profile', data);
+  return response.data;
+}
+
+export interface SignupCompletePayload {
+  email: string;
+  password: string;
+  username?: string;
+  full_name?: string;
+  display_name?: string;
+  sport_tags?: string[];
+  primary_goal?: string;
+  fitness_level?: string;
+  weekly_training_days?: string;
+  age?: number;
+  date_of_birth?: string;
+  weight_kg?: number;
+  height_cm?: number;
+  biological_sex?: string;
+  daily_calorie_target?: number;
+  preferred_training_time?: string;
+}
+
+export async function signupComplete(data: SignupCompletePayload): Promise<AuthResponse> {
+  const response = await apiClient.post<AuthResponse>('/auth/signup', data);
+  return response.data;
+}
+
+export async function checkUsername(username: string): Promise<{ available: boolean }> {
+  const response = await apiClient.get<{ available: boolean }>(
+    `/auth/check-username?username=${encodeURIComponent(username)}`
+  );
+  return response.data;
+}
+
+export async function patchOnboarding(data: OnboardingData): Promise<User> {
+  const response = await apiClient.patch<User>('/auth/me/onboarding', data);
   return response.data;
 }
 
@@ -419,6 +607,36 @@ export async function scanFoodPhoto(
   return response.data;
 }
 
+export async function searchFoods(query: string): Promise<FoodSearchResponse> {
+  const response = await apiClient.get<FoodSearchResponse>('/nutrition/search', { params: { q: query } });
+  return response.data;
+}
+
+export async function lookupBarcode(barcode: string): Promise<FoodItem> {
+  const response = await apiClient.get<FoodItem>(`/nutrition/barcode/${barcode}`);
+  return response.data;
+}
+
+export async function getRecentFoods(): Promise<RecentFoodItem[]> {
+  const response = await apiClient.get<RecentFoodItem[]>('/nutrition/recent');
+  return response.data;
+}
+
+export async function getFrequentFoods(): Promise<FrequentFoodItem[]> {
+  const response = await apiClient.get<FrequentFoodItem[]>('/nutrition/frequent');
+  return response.data;
+}
+
+export async function createCustomFood(data: CustomFoodIn): Promise<CustomFoodOut> {
+  const response = await apiClient.post<CustomFoodOut>('/nutrition/foods/custom', data);
+  return response.data;
+}
+
+export async function getCustomFoods(): Promise<CustomFoodOut[]> {
+  const response = await apiClient.get<CustomFoodOut[]>('/nutrition/foods/custom');
+  return response.data;
+}
+
 // ── Activity Logging ───────────────────────────────────────────────────────
 
 export interface UserActivity {
@@ -538,6 +756,20 @@ export async function getActivityStats(): Promise<ActivityStats> {
 
 export async function getActivityHeatmap(days = 84): Promise<HeatmapEntry[]> {
   const response = await apiClient.get<HeatmapEntry[]>('/activities/heatmap', { params: { days } });
+  return response.data;
+}
+
+// ── Deload Detector ────────────────────────────────────────────────────────
+
+export async function getDeloadStatus(): Promise<DeloadRecommendation> {
+  const response = await apiClient.get<DeloadRecommendation>('/deload/status');
+  return response.data;
+}
+
+// ── Warm-Up Personalizer ───────────────────────────────────────────────────
+
+export async function generateWarmUp(data: WarmUpRequest): Promise<WarmUpProtocol> {
+  const response = await apiClient.post<WarmUpProtocol>('/warmup/generate', data);
   return response.data;
 }
 

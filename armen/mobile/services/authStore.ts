@@ -18,6 +18,19 @@ export interface User {
   followers_count: number;
   following_count: number;
   created_at: string;
+  // Onboarding fields
+  display_name?: string | null;
+  sport_tags?: string[] | null;
+  primary_goal?: string | null;
+  fitness_level?: string | null;
+  weekly_training_days?: string | null;
+  age?: number | null;
+  height_cm?: number | null;
+  biological_sex?: string | null;
+  daily_calorie_target?: number | null;
+  preferred_training_time?: string | null;
+  onboarding_complete?: boolean;
+  current_onboarding_step?: number;
 }
 
 interface AuthState {

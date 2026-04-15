@@ -50,7 +50,11 @@ export default function LoginScreen() {
       useAuthStore.setState({ token });
       const user = await getMe();
       setAuth(token, user);
-      router.replace('/(tabs)/');
+      if (!user.onboarding_complete) {
+        router.replace('/onboarding');
+      } else {
+        router.replace('/(tabs)/');
+      }
     } catch (err: unknown) {
       const axiosError = err as { response?: { data?: { detail?: unknown } } };
       const detail = axiosError?.response?.data?.detail;

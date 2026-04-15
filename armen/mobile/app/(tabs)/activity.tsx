@@ -26,13 +26,17 @@ import {
   upsertDailySteps,
   getActivityStats,
   getActivityHeatmap,
+  getWellnessCheckins,
   UserActivity,
   HevyWorkout,
   Activity,
   ActivityStats,
   HeatmapEntry,
+  WellnessCheckin,
 } from '@/services/api';
 import { useAuthStore } from '@/services/authStore';
+import WarmUpModal from '@/components/WarmUpModal';
+import OutdoorTracker, { SavedOutdoorActivity } from '@/components/OutdoorTracker';
 import {
   SPORT_TYPES,
   EXERCISE_LIBRARY,
@@ -1105,6 +1109,13 @@ export default function ActivityScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [completedActivity, setCompletedActivity] = useState<UserActivity | null>(null);
 
+  // Warm-Up Personalizer
+  const [showWarmUpModal, setShowWarmUpModal] = useState(false);
+  const [todayCheckin, setTodayCheckin] = useState<WellnessCheckin | null>(null);
+
+  // Outdoor Tracker
+  const [showOutdoorTracker, setShowOutdoorTracker] = useState(false);
+
   // ── Load Data ────────────────────────────────────────────────────────────────
 
   const loadData = useCallback(async () => {
@@ -1133,6 +1144,16 @@ export default function ActivityScreen() {
 
       if (statsR.status === 'fulfilled') setStats(statsR.value);
       if (hmR.status === 'fulfilled') setHeatmap(hmR.value);
+
+      // Load today's wellness checkin for warm-up personalization
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const checkins = await getWellnessCheckins(1);
+        const todayEntry = checkins.find((c) => c.date === today) ?? null;
+        setTodayCheckin(todayEntry);
+      } catch {
+        // non-fatal
+      }
     } catch {
       // non-fatal
     } finally {
@@ -1140,6 +1161,41 @@ export default function ActivityScreen() {
       setLoading(false);
     }
   }, []);
+
+  const handleOutdoorSave = useCallback(async (activity: SavedOutdoorActivity) => {
+    setShowOutdoorTracker(false);
+    try {
+      await logActivity({
+        activity_type: activity.activityType.charAt(0).toUpperCase() + activity.activityType.slice(1),
+        duration_minutes: Math.max(1, Math.round(activity.durationS / 60)),
+        intensity: activity.summary.avgSpeedKmh > 10 ? 'Hard' : activity.summary.avgSpeedKmh > 6 ? 'Moderate' : 'Easy',
+        distance_meters: activity.distanceM,
+        sport_category: 'cardio',
+        muscle_groups: activity.activityType === 'cycling'
+          ? ['quads', 'hamstrings', 'calves']
+          : ['calves', 'hamstrings', 'glutes'],
+        exercise_data: [{
+          _outdoor: true,
+          route_points: activity.routePoints.map(p => ({
+            lat: p.latitude,
+            lon: p.longitude,
+            alt: p.altitude ?? null,
+            ts: p.timestamp ?? null,
+          })),
+          splits: activity.summary.splits,
+          elevation_gain_m: activity.summary.elevationGainM,
+          elevation_loss_m: activity.summary.elevationLossM,
+          avg_speed_kmh: activity.summary.avgSpeedKmh,
+          max_speed_kmh: activity.summary.maxSpeedKmh,
+          avg_pace_sec_per_km: activity.summary.avgPaceSecPerKm,
+        }],
+        notes: `${(activity.distanceM / 1000).toFixed(2)} km · Elev +${Math.round(activity.summary.elevationGainM)}m`,
+      });
+      loadData();
+    } catch {
+      Alert.alert('Error', 'Failed to save activity. Please try again.');
+    }
+  }, [loadData]);
 
   // Steps
   useEffect(() => {
@@ -1384,10 +1440,26 @@ export default function ActivityScreen() {
       {/* Title Bar */}
       <View style={styles.titleBar}>
         <Text style={styles.screenTitle}>Activity</Text>
-        <TouchableOpacity style={styles.addFab} onPress={openLogModal}>
-          <Ionicons name="add" size={22} color="#f0f0f0" />
-          <Text style={styles.addFabText}>Log</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity
+            style={[styles.addFab, { backgroundColor: '#1a1a1a', borderWidth: 1, borderColor: '#2a2a2a' }]}
+            onPress={() => setShowWarmUpModal(true)}
+          >
+            <Ionicons name="flash-outline" size={18} color="#888888" />
+            <Text style={[styles.addFabText, { color: '#888888' }]}>Warm-Up</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.addFab, { backgroundColor: '#0f2010', borderWidth: 1, borderColor: '#27ae60' }]}
+            onPress={() => setShowOutdoorTracker(true)}
+          >
+            <Ionicons name="navigate-outline" size={18} color="#27ae60" />
+            <Text style={[styles.addFabText, { color: '#27ae60' }]}>Track</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.addFab} onPress={openLogModal}>
+            <Ionicons name="add" size={22} color="#f0f0f0" />
+            <Text style={styles.addFabText}>Log</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Steps Card */}
@@ -1568,6 +1640,21 @@ export default function ActivityScreen() {
 
       {/* Expanded Modal */}
       <ExpandedModal item={expandedItem} onClose={() => setExpandedItem(null)} />
+
+      {/* Warm-Up Personalizer Modal */}
+      <WarmUpModal
+        visible={showWarmUpModal}
+        onClose={() => setShowWarmUpModal(false)}
+        soreness={todayCheckin?.soreness}
+        energy={todayCheckin?.energy}
+      />
+
+      {/* Outdoor Activity Tracker */}
+      <OutdoorTracker
+        visible={showOutdoorTracker}
+        onClose={() => setShowOutdoorTracker(false)}
+        onSave={handleOutdoorSave}
+      />
 
       {/* Log Activity Modal */}
       <Modal visible={showLogModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={closeLogModal}>

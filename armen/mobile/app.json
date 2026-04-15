@@ -14,22 +14,41 @@
         "NSHealthShareUsageDescription": "ORYX reads your health data to analyze fitness performance",
         "NSHealthUpdateUsageDescription": "ORYX uses HealthKit data for performance analysis",
         "NSCameraUsageDescription": "ORYX uses the camera to scan food photos for nutrition tracking",
-        "NSPhotoLibraryUsageDescription": "ORYX accesses your photo library to analyze food photos for nutrition tracking"
+        "NSPhotoLibraryUsageDescription": "ORYX accesses your photo library to analyze food photos for nutrition tracking",
+        "NSLocationWhenInUseUsageDescription": "ORYX uses your location to track outdoor activities like running, cycling, and hiking.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "ORYX uses your location to track outdoor activities like running, cycling, and hiking."
       }
     },
     "android": {
       "package": "com.oryx.app",
       "adaptiveIcon": {
         "backgroundColor": "#0a0a0a"
-      }
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA"
+      ]
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "ORYX uses your location to track outdoor activities like running, cycling, and hiking."
+        }
+      ],
       [
         "expo-image-picker",
         {
           "photosPermission": "ORYX accesses your photo library to analyze food photos.",
           "cameraPermission": "ORYX uses the camera to scan food photos for nutrition tracking."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "ORYX uses the camera to scan food barcodes and log nutrition."
         }
       ]
     ],
