@@ -27,6 +27,7 @@ import {
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeColors } from '@/services/theme';
 import {
   createTracker,
@@ -192,6 +193,7 @@ function buildLeafletHtml(points: LatLng[], liveMode: boolean): string {
 export default function OutdoorTracker({ visible, onClose, onSave }: Props) {
   const { theme: t } = useTheme();
   const s = styles(t);
+  const insets = useSafeAreaInsets();
 
   const [screen, setScreen]             = useState<TrackingScreen>('permission_check');
   const [selectedType, setSelectedType] = useState<OutdoorActivityType>(OUTDOOR_TYPES[0]);
@@ -398,7 +400,7 @@ export default function OutdoorTracker({ visible, onClose, onSave }: Props) {
 
         {/* ── Permission Screen ── */}
         {screen === 'permission_check' && (
-          <View style={s.centeredScreen}>
+          <View style={[s.centeredScreen, { paddingTop: insets.top + 28 }]}>
             <Ionicons name="location-outline" size={64} color="#27ae60" style={{ marginBottom: 24 }} />
             <Text style={s.permTitle}>Location Access Needed</Text>
             <Text style={s.permBody}>
@@ -415,7 +417,7 @@ export default function OutdoorTracker({ visible, onClose, onSave }: Props) {
 
         {/* ── Type Select Screen ── */}
         {screen === 'type_select' && (
-          <View style={s.centeredScreen}>
+          <View style={[s.centeredScreen, { paddingTop: insets.top + 28 }]}>
             <View style={s.topBarRow}>
               <Text style={s.screenTitle}>Track Activity</Text>
               <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -453,7 +455,7 @@ export default function OutdoorTracker({ visible, onClose, onSave }: Props) {
 
         {/* ── Ready Screen ── */}
         {screen === 'ready' && (
-          <View style={s.centeredScreen}>
+          <View style={[s.centeredScreen, { paddingTop: insets.top + 28 }]}>
             <View style={s.topBarRow}>
               <TouchableOpacity onPress={() => setScreen('type_select')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Ionicons name="chevron-back" size={24} color={t.text.secondary} />
@@ -523,7 +525,7 @@ export default function OutdoorTracker({ visible, onClose, onSave }: Props) {
             )}
 
             {/* HUD */}
-            <View style={s.hud}>
+            <View style={[s.hud, { paddingBottom: insets.bottom + 20 }]}>
               <View style={s.timerRow}>
                 <Text style={s.timerText}>{formatDuration(elapsedS)}</Text>
                 <View style={[s.statusDot, {
@@ -569,7 +571,7 @@ export default function OutdoorTracker({ visible, onClose, onSave }: Props) {
 
         {/* ── Summary Screen ── */}
         {screen === 'summary' && summary && (
-          <ScrollView style={s.summaryScroll} contentContainerStyle={s.summaryContent}>
+          <ScrollView style={s.summaryScroll} contentContainerStyle={[s.summaryContent, { paddingBottom: insets.bottom + 24 }]}>
 
             {/* Route map */}
             {routePoints.length > 0 && (

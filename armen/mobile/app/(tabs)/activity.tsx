@@ -14,7 +14,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Pedometer } from 'expo-sensors';
 import { BarChart } from 'react-native-chart-kit';
@@ -368,6 +368,8 @@ const StrengthBuilder = ({
   onComplete: () => void;
   onBack: () => void;
 }) => {
+  const insets = useSafeAreaInsets();
+
   const updateExercise = (idx: number, updated: ExerciseEntry) => {
     const next = exercises.map((ex, i) => (i === idx ? updated : ex));
     onExercisesChange(next);
@@ -408,7 +410,7 @@ const StrengthBuilder = ({
   return (
     <View style={{ flex: 1 }}>
       {/* Header */}
-      <View style={styles.strengthHeader}>
+      <View style={[styles.strengthHeader, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={onBack}>
           <Ionicons name="chevron-back" size={24} color="#f0f0f0" />
         </TouchableOpacity>
@@ -532,12 +534,13 @@ const CardioLogger = ({
   onBack: () => void;
   submitting: boolean;
 }) => {
+  const insets = useSafeAreaInsets();
   const durationNum = parseInt(duration) || 0;
   const cals = estimateCals(sport, intensity, durationNum, userWeight);
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-      <View style={styles.cardioHeader}>
+      <View style={[styles.cardioHeader, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={onBack}>
           <Ionicons name="chevron-back" size={24} color="#f0f0f0" />
         </TouchableOpacity>
@@ -548,7 +551,7 @@ const CardioLogger = ({
         <View style={{ width: 32 }} />
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.cardioScrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.cardioScrollContent, { paddingBottom: insets.bottom + 40 }]} keyboardShouldPersistTaps="handled">
         <TextInput
           style={styles.workoutNameInput}
           placeholder={`${sport.label} session`}
@@ -641,13 +644,14 @@ const CardioLogger = ({
 // ── Sport Selector ─────────────────────────────────────────────────────────────
 
 const SportSelector = ({ onSelect, onClose }: { onSelect: (s: SportType) => void; onClose: () => void }) => {
+  const insets = useSafeAreaInsets();
   const [catFilter, setCatFilter] = useState<string>('All');
   const cats = ['All', 'strength', 'cardio', 'combat', 'sport', 'mindBody', 'other'];
   const filtered = catFilter === 'All' ? SPORT_TYPES : SPORT_TYPES.filter(s => s.category === catFilter);
 
   return (
     <View style={{ flex: 1 }}>
-      <View style={styles.sportSelectorHeader}>
+      <View style={[styles.sportSelectorHeader, { paddingTop: insets.top + 16 }]}>
         <Text style={styles.sportSelectorTitle}>Select Activity</Text>
         <TouchableOpacity onPress={onClose}>
           <Ionicons name="close" size={24} color="#f0f0f0" />
@@ -699,6 +703,7 @@ const PostSessionView = ({
   exercises: ExerciseEntry[];
   onDone: () => void;
 }) => {
+  const insets = useSafeAreaInsets();
   const muscles = exercises.length > 0 ? uniqueMuscles(exercises) : cardioMuscles(sport?.id ?? '');
   const totalSets = exercises.reduce((sum, ex) => sum + ex.sets.filter(s => s.completed).length, 0);
   const totalVolume = exercises.reduce((sum, ex) =>
@@ -740,7 +745,7 @@ const PostSessionView = ({
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.reviewScroll}>
+    <ScrollView contentContainerStyle={[styles.reviewScroll, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }]}>
       <View style={styles.reviewCheckCircle}>
         <Ionicons name="checkmark-circle" size={64} color="#27ae60" />
       </View>
@@ -1118,6 +1123,7 @@ const ActivityHeatmap = ({ data }: { data: HeatmapEntry[] }) => {
 
 export default function ActivityScreen() {
   const user = useAuthStore(s => s.user);
+  const insets = useSafeAreaInsets();
 
   // Data
   const [feed, setFeed] = useState<FeedItem[]>([]);
@@ -1720,7 +1726,7 @@ export default function ActivityScreen() {
           onPress={() => setShowActionMenu(false)}
           activeOpacity={1}
         >
-          <View style={styles.menuSheet}>
+          <View style={[styles.menuSheet, { paddingBottom: insets.bottom + 40 }]}>
             <View style={styles.menuHandle} />
             {([
               { icon: 'barbell-outline', label: 'Log Workout', onPress: () => { setShowActionMenu(false); openStrengthModal(); } },
@@ -1748,7 +1754,7 @@ export default function ActivityScreen() {
 
       {/* Log Activity Modal */}
       <Modal visible={showLogModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={closeLogModal}>
-        <SafeAreaView style={styles.logModalContainer}>
+        <View style={styles.logModalContainer}>
           {logStep === 'sport' && (
             <SportSelector onSelect={handleSportSelect} onClose={closeLogModal} />
           )}
@@ -1808,7 +1814,7 @@ export default function ActivityScreen() {
               />
             ) : null
           )}
-        </SafeAreaView>
+        </View>
       </Modal>
     </SafeAreaView>
   );
