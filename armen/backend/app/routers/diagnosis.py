@@ -104,7 +104,6 @@ def _nutrition_to_dict(n: NutritionLog) -> dict:
 
 @router.get("/daily")
 async def daily_diagnosis(
-    _: None = Depends(_require_anthropic_key),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -210,7 +209,6 @@ async def daily_diagnosis(
 @router.post("/autopsy/{activity_id}")
 async def workout_autopsy(
     activity_id: UUID = Path(...),
-    _: None = Depends(_require_anthropic_key),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

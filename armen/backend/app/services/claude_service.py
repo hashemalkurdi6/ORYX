@@ -225,13 +225,14 @@ Respond in JSON with exactly these keys:
 
 Return only valid JSON, no markdown fences."""
 
-    message = _client.messages.create(
-        model=MODEL,
+    logger.info("[Diagnosis] Calling OpenAI gpt-4o-mini for daily diagnosis")
+    response = _openai_client.chat.completions.create(
+        model="gpt-4o-mini",
         max_tokens=1024,
         messages=[{"role": "user", "content": prompt}],
     )
 
-    raw_text = message.content[0].text.strip()
+    raw_text = response.choices[0].message.content.strip()
 
     # Strip markdown code fences if present
     raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
@@ -376,13 +377,14 @@ PRE-WORKOUT RECOVERY STATE (day before the activity):
 {cross_ref_note}
 Explain: effort level relative to heart rate, whether the recovery state going in affected performance, how the body responded, and one key takeaway. Be specific and data-driven. Return only the autopsy text, no JSON."""
 
-    message = _client.messages.create(
-        model=MODEL,
+    logger.info("[Diagnosis] Calling OpenAI gpt-4o-mini for workout autopsy")
+    response = _openai_client.chat.completions.create(
+        model="gpt-4o-mini",
         max_tokens=512,
         messages=[{"role": "user", "content": prompt}],
     )
 
-    return message.content[0].text.strip()
+    return response.choices[0].message.content.strip()
 
 
 async def generate_workout_autopsy(
