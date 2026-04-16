@@ -67,6 +67,7 @@ export interface Activity {
   total_elevation_gain: number | null;
   autopsy_text: string | null;
   autopsy_generated_at: string | null;
+  summary_polyline: string | null;
   created_at: string;
   pace_per_km_str: string;
 }
@@ -471,6 +472,11 @@ export async function syncStrava(): Promise<void> {
   await apiClient.post('/strava/sync');
 }
 
+export async function generateStravaAutopsy(activityId: string): Promise<{ autopsy: string }> {
+  const response = await apiClient.post<{ autopsy: string }>(`/diagnosis/autopsy/${activityId}`);
+  return response.data;
+}
+
 export async function getActivities(
   page = 1,
   perPage = 20
@@ -817,6 +823,213 @@ export async function getDeloadStatus(): Promise<DeloadRecommendation> {
 export async function generateWarmUp(data: WarmUpRequest): Promise<WarmUpProtocol> {
   const response = await apiClient.post<WarmUpProtocol>('/warmup/generate', data);
   return response.data;
+}
+
+// ── Home Dashboard ─────────────────────────────────────────────────────────
+
+export interface LastSession {
+  id: string;
+  name: string;
+  sport_type: string;
+  date: string;
+  duration_minutes: number;
+  training_load: number | null;
+  rpe: number | null;
+  autopsy_snippet: string | null;
+}
+
+export interface DashboardData {
+  display_name: string;
+  primary_goal: string | null;
+  sport_tags: string[];
+  weekly_training_goal: number | null;
+  readiness_score: number;
+  readiness_label: string;
+  readiness_color: 'green' | 'amber' | 'red';
+  readiness_primary_factor: string;
+  last_session: LastSession | null;
+  sessions_this_week: number;
+  weekly_load: number;
+  last_week_load: number;
+  days_since_rest: number;
+  current_streak: number;
+  weekly_goal_progress: number;
+  acwr: number | null;
+  acwr_status: string;
+  calories_today: number;
+  protein_today: number;
+  carbs_today: number;
+  fat_today: number;
+  calorie_target: number | null;
+  protein_target: number | null;
+  carbs_target: number | null;
+  fat_target: number | null;
+  calorie_deficit: number | null;
+  meals_logged_today: boolean;
+  calories_this_week: number;
+  sleep_hours: number | null;
+  hrv_ms: number | null;
+  resting_heart_rate: number | null;
+  steps_today: number;
+  energy_today: number | null;
+  soreness_today: number | null;
+  mood_today: number | null;
+}
+
+export interface DiagnosisData {
+  diagnosis_text: string;
+  contributing_factors: string[];
+  recommendation: string;
+  tone: 'positive' | 'cautionary' | 'warning';
+  generated_at: string;
+  cached?: boolean;
+  rate_limited?: boolean;
+}
+
+export async function getDashboard(): Promise<DashboardData> {
+  const response = await apiClient.get<DashboardData>('/home/dashboard');
+  return response.data;
+}
+
+export async function getDiagnosis(force?: boolean): Promise<DiagnosisData> {
+  const response = await apiClient.post<DiagnosisData>(
+    '/home/diagnosis',
+    null,
+    force ? { params: { force: true } } : {},
+  );
+  return response.data;
+}
+
+// ── Nutrition Profile & Meal Plan ──────────────────────────────────────────────
+
+export interface NutritionProfile {
+  id: string;
+  user_id: string;
+  cuisines_liked: string[] | null;
+  foods_loved: string[] | null;
+  foods_disliked: string[] | null;
+  foods_hated: string | null; // deprecated, kept for type safety
+  diet_type: string | null;
+  allergies: string[] | null;
+  nutrition_goal: string | null;
+  strictness_level: string | null;
+  cheat_day_preference: string | null;
+  sugar_preference: string | null;
+  carb_approach: string | null;
+  intermittent_fasting: string | null;
+  fasting_start_time: string | null;
+  fasting_end_time: string | null;
+  meals_per_day: number | null;
+  eats_breakfast: string | null;
+  meal_times: string[] | null;
+  pre_workout_nutrition: string | null;
+  post_workout_nutrition: string | null;
+  meal_prep: string | null;
+  cooking_skill: string | null;
+  time_per_meal: string | null;
+  weekly_budget: string | null;
+  kitchen_access: string | null;
+  region: string | null;
+  nutrition_survey_complete: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MealPlanMeal {
+  meal_name: string;
+  meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'pre_workout' | 'post_workout';
+  time: string;
+  description: string;
+  ingredients: string[];
+  prep_time_minutes: number;
+  prep_note: string;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  can_meal_prep: boolean;
+}
+
+export interface MealPlan {
+  id: string;
+  date: string;
+  generated_at: string;
+  regeneration_count: number;
+  is_cheat_day: boolean;
+  total_calories: number | null;
+  total_protein: number | null;
+  total_carbs: number | null;
+  total_fat: number | null;
+  cheat_day_note: string | null;
+  meals: MealPlanMeal[];
+  grocery_items: string[];
+  nutrition_note: string;
+}
+
+export interface SavedMeal {
+  id: string;
+  user_id: string;
+  meal_name: string;
+  meal_type: string | null;
+  description: string | null;
+  ingredients: string[] | null;
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  prep_time_minutes: number | null;
+  prep_note: string | null;
+  saved_at: string;
+}
+
+export async function getNutritionProfile(): Promise<NutritionProfile> {
+  const response = await apiClient.get<NutritionProfile>('/nutrition/profile');
+  return response.data;
+}
+
+export async function updateNutritionProfile(data: Partial<NutritionProfile> & { nutrition_survey_complete?: boolean }): Promise<NutritionProfile> {
+  const response = await apiClient.patch<NutritionProfile>('/nutrition/profile', data);
+  return response.data;
+}
+
+export async function getTodayMealPlan(): Promise<MealPlan> {
+  const response = await apiClient.get<MealPlan>('/nutrition/meal-plan/today');
+  return response.data;
+}
+
+export async function regenerateMealPlan(): Promise<MealPlan> {
+  const response = await apiClient.post<MealPlan>('/nutrition/meal-plan/regenerate');
+  return response.data;
+}
+
+export async function saveMealToCollection(meal: Omit<SavedMeal, 'id' | 'user_id' | 'saved_at'>): Promise<SavedMeal> {
+  const response = await apiClient.post<SavedMeal>('/nutrition/meals/save', meal);
+  return response.data;
+}
+
+export async function getSavedMeals(): Promise<SavedMeal[]> {
+  const response = await apiClient.get<SavedMeal[]>('/nutrition/meals/saved');
+  return response.data;
+}
+
+export async function deleteSavedMeal(id: string): Promise<void> {
+  await apiClient.delete(`/nutrition/meals/saved/${id}`);
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export async function askNutritionAssistant(
+  userMessage: string,
+  conversationHistory: ChatMessage[],
+): Promise<string> {
+  const response = await apiClient.post<{ response_text: string }>('/nutrition/assistant', {
+    user_message: userMessage,
+    conversation_history: conversationHistory.slice(-5),
+  });
+  return response.data.response_text;
 }
 
 export default apiClient;

@@ -86,7 +86,7 @@ def parse_activity(raw: dict, user_id: uuid.UUID) -> dict:
     start_date_str = raw.get("start_date") or raw.get("start_date_local")
     if start_date_str:
         try:
-            start_date = datetime.fromisoformat(start_date_str.replace("Z", "+00:00"))
+            start_date = datetime.fromisoformat(start_date_str.replace("Z", "+00:00")).replace(tzinfo=None)
         except ValueError:
             start_date = datetime.utcnow()
     else:

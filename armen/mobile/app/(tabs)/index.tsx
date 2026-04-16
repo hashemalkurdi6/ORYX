@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
   View,
   Text,
   ScrollView,
@@ -15,65 +16,76 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Circle } from 'react-native-svg';
+import { router } from 'expo-router';
 import {
-  getDailyDiagnosis,
-  getWellnessCheckins,
+  getDashboard,
+  getDiagnosis,
   submitWellnessCheckin,
   uploadHealthSnapshots,
-  getTodayNutrition,
   upsertDailySteps,
-  getDeloadStatus,
-  DiagnosisResult,
-  WellnessCheckin,
-  NutritionLog,
-  DeloadRecommendation,
+  logRestDay,
+  DashboardData,
+  DiagnosisData,
 } from '@/services/api';
-import DeloadCard from '@/components/DeloadCard';
 import { Pedometer } from 'expo-sensors';
-import { useAuthStore } from '@/services/authStore';
 import { fetchLast7DaysHealthData } from '@/services/healthKit';
-import RecoveryIndicator from '@/components/RecoveryIndicator';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ThemeColors } from '@/services/theme';
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+// ── Ring geometry ────────────────────────────────────────────────────────────
 
-function todayISODate(): string {
-  return new Date().toISOString().split('T')[0];
+const RING_R = 54;
+const RING_SW = 12;
+const RING_C = 2 * Math.PI * RING_R;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function readinessHex(c: 'green' | 'amber' | 'red'): string {
+  if (c === 'green') return '#22c55e';
+  if (c === 'amber') return '#f59e0b';
+  return '#ef4444';
+}
+
+function toneHex(tone: string): string {
+  if (tone === 'positive') return '#22c55e';
+  if (tone === 'warning') return '#ef4444';
+  return '#f59e0b';
+}
+
+function wellnessHex(v: number): string {
+  if (v >= 4) return '#22c55e';
+  if (v === 3) return '#888888';
+  return '#ef4444';
+}
+
+function acwrHex(status: string): string {
+  if (status === 'optimal') return '#22c55e';
+  if (status === 'undertraining') return '#888888';
+  if (status === 'caution') return '#f59e0b';
+  return '#ef4444';
+}
+
+function relativeDate(iso: string): string {
+  const d = new Date(iso);
+  const diff = Math.floor((Date.now() - d.getTime()) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return `${diff}d ago`;
 }
 
 function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning,';
-  if (hour < 18) return 'Good afternoon,';
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning,';
+  if (h < 18) return 'Good afternoon,';
   return 'Good evening,';
 }
 
-function recoveryLabel(color: 'green' | 'yellow' | 'red'): string {
-  if (color === 'green') return 'READY TO PERFORM';
-  if (color === 'yellow') return 'MODERATE RECOVERY';
-  return 'REST & RECOVER';
+function todayISO(): string {
+  return new Date().toISOString().split('T')[0];
 }
 
-function recoveryHexColor(color: 'green' | 'yellow' | 'red'): string {
-  if (color === 'green') return '#27ae60';
-  if (color === 'yellow') return '#888888';
-  return '#c0392b';
-}
-
-function wellnessDotColor(value: number): string {
-  if (value >= 4) return '#27ae60';
-  if (value === 3) return '#888888';
-  return '#c0392b';
-}
-
-function actionIconName(color: 'green' | 'yellow' | 'red'): React.ComponentProps<typeof Ionicons>['name'] {
-  if (color === 'green') return 'play-circle';
-  if (color === 'yellow') return 'partly-sunny';
-  return 'bed';
-}
-
-function formatTodayDate(): string {
+function formatFullDate(): string {
   return new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
@@ -83,152 +95,295 @@ function formatTodayDate(): string {
 
 // ── Skeleton ─────────────────────────────────────────────────────────────────
 
+function SkeletonBlock({
+  width,
+  height,
+  style,
+}: {
+  width: string | number;
+  height: number;
+  style?: object;
+}) {
+  const opacity = useRef(new Animated.Value(0.4)).current;
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.7, duration: 700, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.4, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [opacity]);
+  return (
+    <Animated.View
+      style={[{ width, height, borderRadius: 8, backgroundColor: '#2a2a2a', opacity }, style]}
+    />
+  );
+}
+
 function SkeletonCard({ s }: { s: ReturnType<typeof createStyles> }) {
   return (
     <View style={s.card}>
-      <View style={s.skeletonLabel} />
-      <View style={s.skeletonLine100} />
-      <View style={s.skeletonLine80} />
-      <View style={s.skeletonLine60} />
+      <SkeletonBlock width="50%" height={10} style={{ marginBottom: 14 }} />
+      <SkeletonBlock width="100%" height={13} style={{ marginBottom: 8 }} />
+      <SkeletonBlock width="80%" height={13} style={{ marginBottom: 8 }} />
+      <SkeletonBlock width="60%" height={13} />
     </View>
   );
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// ── Readiness Ring ────────────────────────────────────────────────────────────
+
+function ReadinessRing({
+  score,
+  color,
+  loading,
+}: {
+  score: number;
+  color: 'green' | 'amber' | 'red';
+  loading: boolean;
+}) {
+  const hex = readinessHex(color);
+  const pct = loading ? 0 : Math.max(0, Math.min(100, score)) / 100;
+  const offset = RING_C * (1 - pct);
+
+  return (
+    <View style={{ width: 144, height: 144, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={144} height={144} style={{ position: 'absolute' }}>
+        <Circle cx={72} cy={72} r={RING_R} stroke="#2a2a2a" strokeWidth={RING_SW} fill="none" />
+        {!loading && (
+          <Circle
+            cx={72}
+            cy={72}
+            r={RING_R}
+            stroke={hex}
+            strokeWidth={RING_SW}
+            fill="none"
+            strokeDasharray={RING_C}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            rotation={-90}
+            origin="72, 72"
+          />
+        )}
+      </Svg>
+      {loading ? (
+        <ActivityIndicator color="#555" />
+      ) : (
+        <View style={{ alignItems: 'center' }}>
+          <Text style={{ fontSize: 38, fontWeight: '800', color: hex, lineHeight: 42 }}>
+            {score}
+          </Text>
+          <Text
+            style={{
+              fontSize: 9,
+              color: '#888',
+              textTransform: 'uppercase',
+              letterSpacing: 1.5,
+            }}
+          >
+            Readiness
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ── Macro bar ─────────────────────────────────────────────────────────────────
+
+function MacroBar({
+  label,
+  value,
+  target,
+  color,
+}: {
+  label: string;
+  value: number;
+  target: number | null;
+  color: string;
+}) {
+  const pct = target && target > 0 ? Math.min(1, value / target) : 0;
+  return (
+    <View style={{ flex: 1 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+        <Text style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          {label}
+        </Text>
+        <Text style={{ fontSize: 10, fontWeight: '600', color: '#ccc' }}>
+          {value}g{target ? `/${target}` : ''}
+        </Text>
+      </View>
+      <View style={{ height: 4, backgroundColor: '#2a2a2a', borderRadius: 2, overflow: 'hidden' }}>
+        <View
+          style={{
+            width: `${pct * 100}%` as any,
+            height: 4,
+            backgroundColor: color,
+            borderRadius: 2,
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+// ── HomeScreen ────────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
-  const { user } = useAuthStore();
   const { theme } = useTheme();
   const s = useMemo(() => createStyles(theme), [theme]);
 
-  const [stepCount, setStepCount] = useState(0);
-  const [pedometerAvailable, setPedometerAvailable] = useState(false);
-
-  const [diagnosis, setDiagnosis] = useState<DiagnosisResult | null>(null);
-  const [diagnosisLoading, setDiagnosisLoading] = useState(true);
-  const [deloadRec, setDeloadRec] = useState<DeloadRecommendation | null>(null);
-  const [deloadDismissed, setDeloadDismissed] = useState(false);
-  const [todayCheckin, setTodayCheckin] = useState<WellnessCheckin | null>(null);
-  const [todayNutrition, setTodayNutrition] = useState<NutritionLog[]>([]);
-  const [showWellnessModal, setShowWellnessModal] = useState(false);
-  const [wellnessForm, setWellnessForm] = useState({
-    mood: 3,
-    energy: 3,
-    soreness: 3,
-    notes: '',
-  });
-  const [submittingWellness, setSubmittingWellness] = useState(false);
+  // Data state
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [diagnosis, setDiagnosis] = useState<DiagnosisData | null>(null);
+  const [dashLoading, setDashLoading] = useState(true);
+  const [diagLoading, setDiagLoading] = useState(true);
+  const [diagRefreshing, setDiagRefreshing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ── Data loading ──────────────────────────────────────────────────────────
+  // Pedometer
+  const [stepCount, setStepCount] = useState(0);
+  const [pedometerReady, setPedometerReady] = useState(false);
 
-  const loadData = useCallback(async () => {
+  // Wellness modal
+  const [showWellnessModal, setShowWellnessModal] = useState(false);
+  const [wellnessLogged, setWellnessLogged] = useState(false);
+  const [wellnessValues, setWellnessValues] = useState({ mood: 3, energy: 3, soreness: 3 });
+  const [wellnessForm, setWellnessForm] = useState({ mood: 3, energy: 3, soreness: 3, notes: '' });
+  const [submittingWellness, setSubmittingWellness] = useState(false);
+
+  // ── Loaders ────────────────────────────────────────────────────────────────
+
+  const loadDashboard = useCallback(async () => {
     try {
-      setError(null);
-      setDiagnosisLoading(true);
-
-      if (Platform.OS === 'ios') {
-        try {
-          const healthData = await fetchLast7DaysHealthData();
-          if (healthData.length > 0) {
-            await uploadHealthSnapshots(healthData);
-          }
-        } catch {
-          // Non-fatal — continue without HealthKit data
-        }
-      }
-
-      const [diagnosisResult, wellnessResult, nutritionResult, deloadResult] = await Promise.allSettled([
-        getDailyDiagnosis(),
-        getWellnessCheckins(1),
-        getTodayNutrition(),
-        getDeloadStatus(),
-      ]);
-
-      if (diagnosisResult.status === 'fulfilled') {
-        setDiagnosis(diagnosisResult.value);
+      const data = await getDashboard();
+      setDashboard(data);
+      if (data.mood_today != null) {
+        setWellnessLogged(true);
+        setWellnessValues({
+          mood: data.mood_today,
+          energy: data.energy_today ?? 3,
+          soreness: data.soreness_today ?? 3,
+        });
       } else {
-        setDiagnosis(null);
-      }
-
-      if (wellnessResult.status === 'fulfilled') {
-        const today = todayISODate();
-        const todayEntry = wellnessResult.value.find((c) => c.date === today) ?? null;
-        setTodayCheckin(todayEntry);
-      }
-
-      if (nutritionResult.status === 'fulfilled') {
-        setTodayNutrition(nutritionResult.value);
-      }
-
-      if (deloadResult.status === 'fulfilled') {
-        setDeloadRec(deloadResult.value);
-        setDeloadDismissed(false);
+        setWellnessLogged(false);
       }
     } catch {
-      setError('Failed to load data. Pull down to retry.');
+      setError('Failed to load dashboard. Pull down to retry.');
     } finally {
-      setDiagnosisLoading(false);
-      setRefreshing(false);
+      setDashLoading(false);
     }
   }, []);
 
+  const loadDiagnosis = useCallback(async (force = false) => {
+    if (!force) setDiagLoading(true);
+    try {
+      const data = await getDiagnosis(force || undefined);
+      setDiagnosis(data);
+    } catch {
+      // Non-fatal — diagnosis card stays empty
+    } finally {
+      setDiagLoading(false);
+      setDiagRefreshing(false);
+    }
+  }, []);
+
+  const loadAll = useCallback(async () => {
+    setError(null);
+    setDashLoading(true);
+    setDiagLoading(true);
+
+    if (Platform.OS === 'ios') {
+      try {
+        const hk = await fetchLast7DaysHealthData();
+        if (hk.length > 0) await uploadHealthSnapshots(hk);
+      } catch {
+        // Non-fatal
+      }
+    }
+
+    await Promise.all([loadDashboard(), loadDiagnosis()]);
+    setRefreshing(false);
+  }, [loadDashboard, loadDiagnosis]);
+
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadAll();
+  }, [loadAll]);
+
+  // ── Pedometer ─────────────────────────────────────────────────────────────
 
   useEffect(() => {
     let sub: any;
     (async () => {
       const { status } = await Pedometer.requestPermissionsAsync();
-      if (status === 'granted') {
-        const isAvail = await Pedometer.isAvailableAsync();
-        setPedometerAvailable(isAvail);
-        if (isAvail) {
-          const end = new Date();
-          const start = new Date();
-          start.setHours(0, 0, 0, 0);
-          const result = await Pedometer.getStepCountAsync(start, end);
-          setStepCount(result.steps);
-          sub = Pedometer.watchStepCount((r) => setStepCount((prev) => prev + r.steps));
-          const today = end.toISOString().split('T')[0];
-          upsertDailySteps(today, result.steps).catch(() => {});
-        }
-      }
+      if (status !== 'granted') return;
+      const avail = await Pedometer.isAvailableAsync();
+      if (!avail) return;
+      setPedometerReady(true);
+      const end = new Date();
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const result = await Pedometer.getStepCountAsync(start, end);
+      setStepCount(result.steps);
+      sub = Pedometer.watchStepCount((r) => setStepCount((p) => p + r.steps));
+      upsertDailySteps(end.toISOString().split('T')[0], result.steps).catch(() => {});
     })();
     return () => sub?.remove();
   }, []);
 
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
-    loadData();
-  }, [loadData]);
+    loadAll();
+  }, [loadAll]);
 
-  // ── Wellness handlers ─────────────────────────────────────────────────────
+  const handleRefreshDiagnosis = useCallback(async () => {
+    if (diagRefreshing || diagnosis?.rate_limited) return;
+    setDiagRefreshing(true);
+    await loadDiagnosis(true);
+  }, [diagRefreshing, diagnosis, loadDiagnosis]);
 
-  const handleWellnessAdjust = (
-    field: 'mood' | 'energy' | 'soreness',
-    delta: number
-  ) => {
-    setWellnessForm((prev) => ({
-      ...prev,
-      [field]: Math.min(5, Math.max(1, prev[field] + delta)),
-    }));
+  const handleLogRestDay = useCallback(async () => {
+    try {
+      await logRestDay();
+      Alert.alert('Rest Day Logged', 'Recovery is training too. Good call.');
+      loadDashboard();
+    } catch {
+      Alert.alert('Error', 'Could not log rest day. Try again.');
+    }
+  }, [loadDashboard]);
+
+  const openWellnessModal = () => {
+    setWellnessForm({ ...wellnessValues, notes: '' });
+    setShowWellnessModal(true);
+  };
+
+  const handleWellnessAdjust = (field: 'mood' | 'energy' | 'soreness', delta: number) => {
+    setWellnessForm((p) => ({ ...p, [field]: Math.min(5, Math.max(1, p[field] + delta)) }));
   };
 
   const handleSaveWellness = async () => {
     setSubmittingWellness(true);
     try {
-      const saved = await submitWellnessCheckin({
-        date: todayISODate(),
+      await submitWellnessCheckin({
+        date: todayISO(),
         mood: wellnessForm.mood,
         energy: wellnessForm.energy,
         soreness: wellnessForm.soreness,
         notes: wellnessForm.notes.trim() || undefined,
       });
-      setTodayCheckin(saved);
+      setWellnessValues({
+        mood: wellnessForm.mood,
+        energy: wellnessForm.energy,
+        soreness: wellnessForm.soreness,
+      });
+      setWellnessLogged(true);
       setShowWellnessModal(false);
+      loadDashboard();
     } catch {
       Alert.alert('Error', 'Could not save check-in. Please try again.');
     } finally {
@@ -236,36 +391,26 @@ export default function HomeScreen() {
     }
   };
 
-  const openWellnessModal = () => {
-    if (todayCheckin) {
-      setWellnessForm({
-        mood: todayCheckin.mood,
-        energy: todayCheckin.energy,
-        soreness: todayCheckin.soreness,
-        notes: todayCheckin.notes ?? '',
-      });
-    } else {
-      setWellnessForm({ mood: 3, energy: 3, soreness: 3, notes: '' });
-    }
-    setShowWellnessModal(true);
-  };
+  // ── Derived ───────────────────────────────────────────────────────────────
 
-  // ── Computed ──────────────────────────────────────────────────────────────
+  const displayName = dashboard?.display_name ?? 'Athlete';
+  const rColor = dashboard?.readiness_color ?? 'amber';
+  const rScore = dashboard?.readiness_score ?? 0;
 
-  const recoveryScore = diagnosis?.recovery_score ?? 0;
-  const recoveryColorKey = diagnosis?.recovery_color ?? 'yellow';
-  const accentColor = recoveryHexColor(recoveryColorKey);
+  const liveSteps = pedometerReady ? stepCount : (dashboard?.steps_today ?? 0);
 
-  const displayName =
-    user?.full_name ||
-    user?.username ||
-    user?.email?.split('@')[0] ||
-    'Athlete';
+  const calorieTarget = dashboard?.calorie_target ?? null;
+  const caloriesToday = dashboard?.calories_today ?? 0;
+  const caloriePct = calorieTarget ? Math.min(1, caloriesToday / calorieTarget) : 0;
 
-  const totalCalories = todayNutrition.reduce(
-    (sum, log) => sum + (log.calories ?? 0),
-    0
-  );
+  const maxLoad = Math.max(1, dashboard?.weekly_load ?? 0, dashboard?.last_week_load ?? 0);
+  const thisWeekPct = Math.round(((dashboard?.weekly_load ?? 0) / maxLoad) * 100);
+  const lastWeekPct = Math.round(((dashboard?.last_week_load ?? 0) / maxLoad) * 100);
+
+  const showSleepCard =
+    dashboard?.sleep_hours != null ||
+    dashboard?.hrv_ms != null ||
+    dashboard?.resting_heart_rate != null;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -273,7 +418,7 @@ export default function HomeScreen() {
     <>
       <ScrollView
         style={s.container}
-        contentContainerStyle={s.contentContainer}
+        contentContainerStyle={s.content}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -290,174 +435,360 @@ export default function HomeScreen() {
               <Text style={s.greeting}>{getGreeting()}</Text>
               <Text style={s.userName}>{displayName}</Text>
             </View>
-            <View style={s.notifIconPlaceholder}>
-              <Ionicons name="notifications-outline" size={22} color={theme.text.secondary} />
+            <View style={s.notifBtn}>
+              <Ionicons name="notifications-outline" size={20} color={theme.text.secondary} />
             </View>
           </View>
+          <Text style={s.dateLabel}>{formatFullDate()}</Text>
         </SafeAreaView>
-
-        {/* Step Counter Card */}
-        {pedometerAvailable && (
-          <View style={s.stepCard}>
-            <Ionicons name="walk-outline" size={20} color={theme.status.success} />
-            <View style={s.stepCardInfo}>
-              <Text style={s.stepCardLabel}>TODAY'S STEPS</Text>
-              <Text style={s.stepCardCount}>{stepCount.toLocaleString()}</Text>
-              <View style={s.stepProgressBar}>
-                <View
-                  style={[
-                    s.stepProgressFill,
-                    { width: `${Math.min(100, (stepCount / 10000) * 100)}%` as any },
-                  ]}
-                />
-              </View>
-              <Text style={s.stepGoalText}>Goal: 10,000</Text>
-            </View>
-          </View>
-        )}
 
         {/* Error banner */}
         {error ? (
           <View style={s.errorBox}>
             <Text style={s.errorText}>{error}</Text>
-            <TouchableOpacity onPress={loadData} style={s.retryButton}>
+            <TouchableOpacity onPress={loadAll} style={s.retryBtn}>
               <Text style={s.retryText}>Retry</Text>
             </TouchableOpacity>
           </View>
         ) : null}
 
-        {/* Recovery Hero Card */}
-        <View style={s.recoveryHeroCard}>
-          <RecoveryIndicator
-            score={recoveryScore}
-            color={recoveryColorKey}
-            loading={diagnosisLoading}
-          />
-          {!diagnosisLoading && (
-            <>
-              <Text style={s.recoveryStatusLabel}>
-                {recoveryLabel(recoveryColorKey)}
+        {/* ── Card 1: Readiness Hero ─────────────────────────────────────── */}
+        <View style={s.heroCard}>
+          <ReadinessRing score={rScore} color={rColor} loading={dashLoading} />
+
+          {dashLoading ? (
+            <View style={{ alignItems: 'center', gap: 8, marginTop: 10 }}>
+              <SkeletonBlock width={140} height={12} />
+              <SkeletonBlock width={100} height={10} />
+            </View>
+          ) : (
+            <View style={s.heroInfo}>
+              <Text style={[s.heroLabel, { color: readinessHex(rColor) }]}>
+                {(dashboard?.readiness_label ?? '').toUpperCase()}
               </Text>
-              {diagnosis?.diagnosis ? (
-                <Text style={s.recoveryBodyText} numberOfLines={2}>
-                  {diagnosis.diagnosis.split('.')[0].trim() + '.'}
+              {dashboard?.readiness_primary_factor ? (
+                <Text style={s.heroFactor} numberOfLines={2}>
+                  {dashboard.readiness_primary_factor}
                 </Text>
               ) : null}
-            </>
+            </View>
           )}
 
-          <View style={s.miniStatsRow}>
-            <View style={s.miniStatItem}>
-              <Text style={s.miniStatValue}>--</Text>
-              <Text style={s.miniStatLabel}>HRV</Text>
+          {/* Mini stats row */}
+          <View style={s.miniRow}>
+            <View style={s.miniStat}>
+              <Text style={s.miniVal}>
+                {dashboard?.sleep_hours != null
+                  ? `${dashboard.sleep_hours.toFixed(1)}h`
+                  : '--'}
+              </Text>
+              <Text style={s.miniLabel}>Sleep</Text>
             </View>
-            <View style={s.miniStatDivider} />
-            <View style={s.miniStatItem}>
-              <Text style={s.miniStatValue}>--</Text>
-              <Text style={s.miniStatLabel}>Sleep</Text>
+            <View style={s.miniDivider} />
+            <View style={s.miniStat}>
+              <Text style={s.miniVal}>
+                {dashboard?.hrv_ms != null ? `${Math.round(dashboard.hrv_ms)}ms` : '--'}
+              </Text>
+              <Text style={s.miniLabel}>HRV</Text>
             </View>
-            <View style={s.miniStatDivider} />
-            <View style={s.miniStatItem}>
-              <Text style={s.miniStatValue}>--</Text>
-              <Text style={s.miniStatLabel}>Strain</Text>
+            <View style={s.miniDivider} />
+            <View style={s.miniStat}>
+              <Text style={s.miniVal}>
+                {liveSteps > 0 ? liveSteps.toLocaleString() : '--'}
+              </Text>
+              <Text style={s.miniLabel}>Steps</Text>
             </View>
           </View>
         </View>
 
-        {/* Deload Detector card — only visible when a recommendation is active */}
-        {!deloadDismissed && (
-          <DeloadCard
-            recommendation={deloadRec}
-            loading={diagnosisLoading}
-            onDismiss={() => setDeloadDismissed(true)}
-          />
-        )}
+        {/* ── Quick Actions ──────────────────────────────────────────────── */}
+        <View style={s.quickActions}>
+          <TouchableOpacity
+            style={s.qaBtn}
+            onPress={() => router.push('/(tabs)/activity')}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="barbell-outline" size={22} color="#fff" />
+            <Text style={s.qaLabel}>Log{'\n'}Workout</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={s.qaBtn}
+            onPress={() => router.push('/(tabs)/nutrition')}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="restaurant-outline" size={22} color="#fff" />
+            <Text style={s.qaLabel}>Log{'\n'}Food</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.qaBtn} onPress={handleLogRestDay} activeOpacity={0.75}>
+            <Ionicons name="bed-outline" size={22} color="#fff" />
+            <Text style={s.qaLabel}>Rest{'\n'}Day</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.qaBtn, s.qaBtnAccent]}
+            onPress={openWellnessModal}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="happy-outline" size={22} color="#fff" />
+            <Text style={s.qaLabel}>Check{'\n'}In</Text>
+          </TouchableOpacity>
+        </View>
 
-        {/* Section header: Today's Intelligence */}
-        <Text style={s.sectionHeader}>TODAY'S INTELLIGENCE</Text>
-
-        {diagnosisLoading ? (
-          <>
-            <SkeletonCard s={s} />
-            <SkeletonCard s={s} />
-            <SkeletonCard s={s} />
-          </>
+        {/* ── Card 2: AI Diagnosis ───────────────────────────────────────── */}
+        <Text style={s.sectionHeader}>ORYX INTELLIGENCE</Text>
+        {diagLoading ? (
+          <SkeletonCard s={s} />
         ) : (
-          <>
-            {/* Card 1 — How is my body? */}
-            <View style={[s.card, s.intelligenceCard, { borderLeftColor: accentColor }]}>
-              <Text style={s.cardQuestionLabel}>HOW IS MY BODY?</Text>
-              <Text style={s.intelligenceText}>
-                {diagnosis?.diagnosis || 'No diagnosis available yet. Connect a health device to get started.'}
-              </Text>
-            </View>
-
-            {/* Card 2 — What should I do? */}
-            <View style={[s.card, s.intelligenceCard, { borderLeftColor: theme.accent }]}>
-              <View style={s.recommendationHeader}>
-                <Text style={s.cardQuestionLabel}>WHAT SHOULD I DO?</Text>
-                <Ionicons
-                  name={actionIconName(recoveryColorKey)}
-                  size={18}
-                  color={accentColor}
-                />
-              </View>
-              <Text style={s.intelligenceText}>
-                {diagnosis?.recommendation || 'Keep your training consistent and listen to your body.'}
-              </Text>
-            </View>
-
-            {/* Card 3 — Why do I feel this? */}
-            <View style={[s.card, s.intelligenceCard, { borderLeftColor: theme.text.secondary }]}>
-              <Text style={s.cardQuestionLabel}>WHY DO I FEEL THIS?</Text>
-              {diagnosis?.main_factor ? (
-                <>
-                  <Text style={s.mainFactorText}>{diagnosis.main_factor}</Text>
-                  <Text style={s.intelligenceSubText}>
-                    This is the primary driver of your current recovery state.
+          <View
+            style={[
+              s.card,
+              s.diagCard,
+              { borderLeftColor: diagnosis ? toneHex(diagnosis.tone) : '#555' },
+            ]}
+          >
+            <View style={s.diagHeader}>
+              <View>
+                <Text style={s.cardLabel}>TODAY'S DIAGNOSIS</Text>
+                {diagnosis?.generated_at ? (
+                  <Text style={s.diagMeta}>
+                    {diagnosis.cached ? 'Cached · ' : ''}
+                    {new Date(diagnosis.generated_at).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
                   </Text>
-                </>
-              ) : (
-                <Text style={s.intelligenceText}>
-                  Not enough data to determine the main factor yet.
-                </Text>
-              )}
+                ) : null}
+              </View>
+              <TouchableOpacity
+                style={[s.refreshBtn, (diagRefreshing || diagnosis?.rate_limited) && s.refreshBtnOff]}
+                onPress={handleRefreshDiagnosis}
+                disabled={diagRefreshing || diagnosis?.rate_limited === true}
+                activeOpacity={0.7}
+              >
+                {diagRefreshing ? (
+                  <ActivityIndicator size="small" color="#888" />
+                ) : (
+                  <Ionicons
+                    name="refresh-outline"
+                    size={16}
+                    color={diagnosis?.rate_limited ? '#444' : theme.text.secondary}
+                  />
+                )}
+              </TouchableOpacity>
             </View>
-          </>
+
+            <Text style={s.diagText}>
+              {diagnosis?.diagnosis_text ||
+                'No diagnosis available yet. Log activities and wellness to get started.'}
+            </Text>
+
+            {diagnosis?.contributing_factors && diagnosis.contributing_factors.length > 0 ? (
+              <View style={s.factorsRow}>
+                {diagnosis.contributing_factors.map((f, i) => (
+                  <View key={i} style={s.factorChip}>
+                    <Text style={s.factorText} numberOfLines={1}>
+                      {f}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            {diagnosis?.recommendation ? (
+              <View style={s.recBox}>
+                <Ionicons
+                  name="bulb-outline"
+                  size={13}
+                  color="#f59e0b"
+                  style={{ marginRight: 6, marginTop: 1 }}
+                />
+                <Text style={s.recText}>{diagnosis.recommendation}</Text>
+              </View>
+            ) : null}
+          </View>
         )}
 
-        {/* Wellness Check-In */}
-        <Text style={s.sectionHeader}>WELLNESS</Text>
-        {todayCheckin ? (
-          <TouchableOpacity style={s.card} onPress={openWellnessModal} activeOpacity={0.8}>
-            <Text style={s.cardQuestionLabel}>FEELING TODAY</Text>
-            <View style={s.wellnessChipsRow}>
-              {(['mood', 'energy', 'soreness'] as const).map((field) => (
-                <View
-                  key={field}
-                  style={[
-                    s.wellnessChip,
-                    { borderColor: wellnessDotColor(todayCheckin[field]) },
-                  ]}
-                >
-                  <Text style={[s.wellnessChipValue, { color: wellnessDotColor(todayCheckin[field]) }]}>
-                    {todayCheckin[field]}/5
+        {/* ── Card 3: Training ──────────────────────────────────────────── */}
+        <Text style={s.sectionHeader}>TRAINING</Text>
+        {dashLoading ? (
+          <SkeletonCard s={s} />
+        ) : (
+          <View style={s.card}>
+            {/* Last session */}
+            {dashboard?.last_session ? (
+              <View style={s.lastSessionRow}>
+                <View style={s.lastSessionIcon}>
+                  <Ionicons name="fitness-outline" size={17} color={theme.text.secondary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.lastSessionName} numberOfLines={1}>
+                    {dashboard.last_session.name}
                   </Text>
-                  <Text style={s.wellnessChipLabel}>
-                    {field.charAt(0).toUpperCase() + field.slice(1)}
+                  <Text style={s.lastSessionMeta}>
+                    {relativeDate(dashboard.last_session.date)}
+                    {dashboard.last_session.duration_minutes
+                      ? ` · ${dashboard.last_session.duration_minutes}min`
+                      : ''}
+                    {dashboard.last_session.rpe
+                      ? ` · RPE ${dashboard.last_session.rpe}`
+                      : ''}
+                  </Text>
+                </View>
+                {dashboard.last_session.training_load ? (
+                  <View style={s.loadBadge}>
+                    <Text style={s.loadBadgeVal}>{dashboard.last_session.training_load}</Text>
+                    <Text style={s.loadBadgeLbl}>load</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : (
+              <Text style={s.emptyHint}>No sessions logged yet</Text>
+            )}
+
+            {/* Week stats row */}
+            <View style={s.weekStatsRow}>
+              <View style={s.weekStat}>
+                <Text style={s.weekStatVal}>{dashboard?.sessions_this_week ?? 0}</Text>
+                <Text style={s.weekStatLabel}>
+                  {dashboard?.weekly_training_goal
+                    ? `of ${dashboard.weekly_training_goal} sessions`
+                    : 'sessions'}
+                </Text>
+              </View>
+              <View style={s.weekStat}>
+                <Text style={s.weekStatVal}>{dashboard?.current_streak ?? 0}</Text>
+                <Text style={s.weekStatLabel}>day streak</Text>
+              </View>
+              <View style={s.weekStat}>
+                <Text style={s.weekStatVal}>{dashboard?.days_since_rest ?? 0}</Text>
+                <Text style={s.weekStatLabel}>since rest</Text>
+              </View>
+            </View>
+
+            {/* Load bars */}
+            {((dashboard?.weekly_load ?? 0) > 0 || (dashboard?.last_week_load ?? 0) > 0) ? (
+              <View style={s.loadBarsRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.loadBarLabel}>This week</Text>
+                  <View style={s.loadBarBg}>
+                    <View
+                      style={[s.loadBarFill, { width: `${thisWeekPct}%` as any, backgroundColor: '#818cf8' }]}
+                    />
+                  </View>
+                  <Text style={s.loadBarVal}>{dashboard?.weekly_load ?? 0}</Text>
+                </View>
+                <View style={{ width: 12 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.loadBarLabel}>Last week</Text>
+                  <View style={s.loadBarBg}>
+                    <View
+                      style={[s.loadBarFill, { width: `${lastWeekPct}%` as any, backgroundColor: '#555' }]}
+                    />
+                  </View>
+                  <Text style={s.loadBarVal}>{dashboard?.last_week_load ?? 0}</Text>
+                </View>
+              </View>
+            ) : null}
+
+            {/* ACWR */}
+            {dashboard?.acwr != null ? (
+              <View style={[s.acwrRow, { borderColor: acwrHex(dashboard.acwr_status) }]}>
+                <Text style={[s.acwrVal, { color: acwrHex(dashboard.acwr_status) }]}>
+                  ACWR {dashboard.acwr.toFixed(2)}
+                </Text>
+                <Text style={s.acwrStatus}>
+                  {dashboard.acwr_status.replace('_', ' ')}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        )}
+
+        {/* ── Card 4: Nutrition ─────────────────────────────────────────── */}
+        <Text style={s.sectionHeader}>NUTRITION</Text>
+        {dashLoading ? (
+          <SkeletonCard s={s} />
+        ) : (
+          <View style={s.card}>
+            <View style={s.nutritionHeader}>
+              <Text style={s.cardLabel}>TODAY</Text>
+              <Text style={s.calTotal}>
+                {caloriesToday} kcal{calorieTarget ? ` / ${calorieTarget}` : ''}
+              </Text>
+            </View>
+
+            {/* Calorie bar */}
+            <View style={[s.loadBarBg, { marginBottom: 16 }]}>
+              <View
+                style={[
+                  s.loadBarFill,
+                  {
+                    width: `${Math.min(100, caloriePct * 100)}%` as any,
+                    backgroundColor:
+                      caloriePct > 1.05
+                        ? '#ef4444'
+                        : caloriePct > 0.85
+                        ? '#22c55e'
+                        : '#818cf8',
+                  },
+                ]}
+              />
+            </View>
+
+            {/* Macro bars */}
+            <View style={s.macrosRow}>
+              <MacroBar
+                label="Protein"
+                value={Math.round(dashboard?.protein_today ?? 0)}
+                target={dashboard?.protein_target ?? null}
+                color="#ef4444"
+              />
+              <MacroBar
+                label="Carbs"
+                value={Math.round(dashboard?.carbs_today ?? 0)}
+                target={dashboard?.carbs_target ?? null}
+                color="#f59e0b"
+              />
+              <MacroBar
+                label="Fat"
+                value={Math.round(dashboard?.fat_today ?? 0)}
+                target={dashboard?.fat_target ?? null}
+                color="#22c55e"
+              />
+            </View>
+
+            {!dashboard?.meals_logged_today ? (
+              <Text style={[s.emptyHint, { marginTop: 10 }]}>No meals logged today</Text>
+            ) : null}
+          </View>
+        )}
+
+        {/* ── Card 5: Wellness ──────────────────────────────────────────── */}
+        <Text style={s.sectionHeader}>WELLNESS</Text>
+        {dashLoading ? (
+          <SkeletonCard s={s} />
+        ) : wellnessLogged ? (
+          <TouchableOpacity style={s.card} onPress={openWellnessModal} activeOpacity={0.8}>
+            <Text style={s.cardLabel}>FEELING TODAY</Text>
+            <View style={s.wellnessChips}>
+              {(['mood', 'energy', 'soreness'] as const).map((f) => (
+                <View
+                  key={f}
+                  style={[s.wellnessChip, { borderColor: wellnessHex(wellnessValues[f]) }]}
+                >
+                  <Text style={[s.chipVal, { color: wellnessHex(wellnessValues[f]) }]}>
+                    {wellnessValues[f]}/5
+                  </Text>
+                  <Text style={s.chipLabel}>
+                    {f.charAt(0).toUpperCase() + f.slice(1)}
                   </Text>
                 </View>
               ))}
             </View>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity
-            style={[s.card, s.wellnessPromptCard]}
-            onPress={openWellnessModal}
-            activeOpacity={0.8}
-          >
+          <TouchableOpacity style={s.card} onPress={openWellnessModal} activeOpacity={0.8}>
             <View style={s.wellnessPromptRow}>
-              <View style={s.wellnessPromptIcons}>
+              <View style={s.wellnessIcons}>
                 <Ionicons name="happy-outline" size={18} color={theme.text.secondary} />
                 <Ionicons name="flash-outline" size={18} color={theme.text.secondary} />
                 <Ionicons name="body-outline" size={18} color={theme.text.secondary} />
@@ -468,44 +799,47 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Today's Nutrition */}
-        <Text style={s.sectionHeader}>NUTRITION</Text>
-        {todayNutrition.length > 0 ? (
-          <View style={s.card}>
-            <View style={s.nutritionHeaderRow}>
-              <Text style={s.cardQuestionLabel}>TODAY'S MEALS</Text>
-              <Text style={s.nutritionCaloriesTotal}>{totalCalories} kcal</Text>
-            </View>
-            {todayNutrition.slice(0, 3).map((log) => (
-              <View key={log.id} style={s.nutritionRow}>
-                <Ionicons name="restaurant-outline" size={14} color={theme.text.secondary} />
-                <Text style={s.nutritionMealName} numberOfLines={1}>
-                  {log.meal_name}
-                </Text>
-                {log.calories ? (
-                  <Text style={s.nutritionMealCal}>{log.calories} kcal</Text>
-                ) : null}
+        {/* ── Card 6: Sleep & Recovery (conditional) ────────────────────── */}
+        {showSleepCard && !dashLoading ? (
+          <>
+            <Text style={s.sectionHeader}>SLEEP & RECOVERY</Text>
+            <View style={s.card}>
+              <View style={s.sleepRow}>
+                <View style={s.sleepStat}>
+                  <Text style={s.sleepVal}>
+                    {dashboard?.sleep_hours != null
+                      ? `${dashboard.sleep_hours.toFixed(1)}h`
+                      : '--'}
+                  </Text>
+                  <Text style={s.sleepLabel}>Sleep</Text>
+                </View>
+                <View style={s.miniDivider} />
+                <View style={s.sleepStat}>
+                  <Text style={s.sleepVal}>
+                    {dashboard?.hrv_ms != null
+                      ? `${Math.round(dashboard.hrv_ms)}ms`
+                      : '--'}
+                  </Text>
+                  <Text style={s.sleepLabel}>HRV</Text>
+                </View>
+                <View style={s.miniDivider} />
+                <View style={s.sleepStat}>
+                  <Text style={s.sleepVal}>
+                    {dashboard?.resting_heart_rate != null
+                      ? `${Math.round(dashboard.resting_heart_rate)}`
+                      : '--'}
+                  </Text>
+                  <Text style={s.sleepLabel}>Resting HR</Text>
+                </View>
               </View>
-            ))}
-            {todayNutrition.length > 3 && (
-              <Text style={s.nutritionMore}>
-                +{todayNutrition.length - 3} more meals
-              </Text>
-            )}
-          </View>
-        ) : (
-          <View style={s.card}>
-            <View style={s.nutritionEmptyRow}>
-              <Ionicons name="restaurant-outline" size={20} color={theme.text.secondary} />
-              <Text style={s.nutritionEmptyText}>No meals logged yet</Text>
             </View>
-          </View>
-        )}
+          </>
+        ) : null}
 
-        <View style={s.bottomPadding} />
+        <View style={{ height: 32 }} />
       </ScrollView>
 
-      {/* Wellness Modal */}
+      {/* ── Wellness Modal ────────────────────────────────────────────────── */}
       <Modal
         visible={showWellnessModal}
         animationType="slide"
@@ -516,10 +850,13 @@ export default function HomeScreen() {
           style={s.modalWrapper}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <ScrollView contentContainerStyle={s.modalContent} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            contentContainerStyle={s.modalContent}
+            keyboardShouldPersistTaps="handled"
+          >
             <View style={s.modalHandle} />
             <Text style={s.modalTitle}>How are you feeling today?</Text>
-            <Text style={s.modalSubtitle}>{formatTodayDate()}</Text>
+            <Text style={s.modalSubtitle}>{formatFullDate()}</Text>
 
             {(['mood', 'energy', 'soreness'] as const).map((field) => (
               <View key={field} style={s.wellnessRow}>
@@ -528,33 +865,25 @@ export default function HomeScreen() {
                 </Text>
                 <View style={s.wellnessControls}>
                   <TouchableOpacity
-                    style={s.stepButton}
+                    style={s.stepBtn}
                     onPress={() => handleWellnessAdjust(field, -1)}
                     activeOpacity={0.7}
                   >
-                    <Text style={s.stepButtonText}>−</Text>
+                    <Text style={s.stepBtnText}>−</Text>
                   </TouchableOpacity>
                   <View
-                    style={[
-                      s.valueBadge,
-                      { borderColor: wellnessDotColor(wellnessForm[field]) },
-                    ]}
+                    style={[s.valueBadge, { borderColor: wellnessHex(wellnessForm[field]) }]}
                   >
-                    <Text
-                      style={[
-                        s.valueText,
-                        { color: wellnessDotColor(wellnessForm[field]) },
-                      ]}
-                    >
+                    <Text style={[s.valueText, { color: wellnessHex(wellnessForm[field]) }]}>
                       {wellnessForm[field]}/5
                     </Text>
                   </View>
                   <TouchableOpacity
-                    style={s.stepButton}
+                    style={s.stepBtn}
                     onPress={() => handleWellnessAdjust(field, 1)}
                     activeOpacity={0.7}
                   >
-                    <Text style={s.stepButtonText}>+</Text>
+                    <Text style={s.stepBtnText}>+</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -568,13 +897,11 @@ export default function HomeScreen() {
               multiline
               numberOfLines={3}
               value={wellnessForm.notes}
-              onChangeText={(val) =>
-                setWellnessForm((prev) => ({ ...prev, notes: val }))
-              }
+              onChangeText={(v) => setWellnessForm((p) => ({ ...p, notes: v }))}
             />
 
             <TouchableOpacity
-              style={[s.saveButton, submittingWellness && s.buttonDisabled]}
+              style={[s.saveBtn, submittingWellness && s.btnDisabled]}
               onPress={handleSaveWellness}
               disabled={submittingWellness}
               activeOpacity={0.85}
@@ -582,12 +909,12 @@ export default function HomeScreen() {
               {submittingWellness ? (
                 <ActivityIndicator size="small" color={theme.bg.primary} />
               ) : (
-                <Text style={s.saveButtonText}>Save Check-in</Text>
+                <Text style={s.saveBtnText}>Save Check-in</Text>
               )}
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={s.cancelButton}
+              style={s.cancelBtn}
               onPress={() => setShowWellnessModal(false)}
               activeOpacity={0.7}
             >
@@ -608,12 +935,12 @@ function createStyles(t: ThemeColors) {
       flex: 1,
       backgroundColor: t.bg.primary,
     },
-    contentContainer: {
+    content: {
       paddingHorizontal: 20,
       paddingBottom: 40,
     },
     safeHeader: {
-      paddingBottom: 20,
+      paddingBottom: 16,
     },
     headerRow: {
       flexDirection: 'row',
@@ -621,16 +948,16 @@ function createStyles(t: ThemeColors) {
       justifyContent: 'space-between',
     },
     greeting: {
-      fontSize: 14,
+      fontSize: 13,
       color: t.text.muted,
-      marginBottom: 4,
+      marginBottom: 3,
     },
     userName: {
       fontSize: 22,
       fontWeight: '700',
       color: t.text.primary,
     },
-    notifIconPlaceholder: {
+    notifBtn: {
       width: 40,
       height: 40,
       borderRadius: 20,
@@ -640,56 +967,18 @@ function createStyles(t: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    stepCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 14,
-      backgroundColor: t.bg.elevated,
-      borderRadius: 16,
-      padding: 14,
-      borderWidth: 1,
-      borderColor: t.border,
-      marginBottom: 12,
-    },
-    stepCardInfo: {
-      flex: 1,
-      gap: 4,
-    },
-    stepCardLabel: {
-      fontSize: 10,
-      fontWeight: '600',
+    dateLabel: {
+      fontSize: 13,
       color: t.text.muted,
-      textTransform: 'uppercase',
-      letterSpacing: 1,
-    },
-    stepCardCount: {
-      fontSize: 22,
-      fontWeight: '700',
-      color: t.text.primary,
-    },
-    stepProgressBar: {
-      height: 4,
-      backgroundColor: t.border,
-      borderRadius: 2,
-      overflow: 'hidden',
-      marginTop: 2,
-    },
-    stepProgressFill: {
-      height: 4,
-      backgroundColor: t.status.success,
-      borderRadius: 2,
-    },
-    stepGoalText: {
-      fontSize: 11,
-      color: t.text.muted,
+      marginTop: 6,
     },
     errorBox: {
-      backgroundColor: 'rgba(192,57,43,0.12)',
+      backgroundColor: 'rgba(239,68,68,0.1)',
       borderLeftWidth: 3,
       borderLeftColor: t.status.danger,
       borderRadius: 10,
       padding: 14,
-      marginBottom: 16,
+      marginBottom: 14,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
@@ -699,10 +988,10 @@ function createStyles(t: ThemeColors) {
       fontSize: 14,
       flex: 1,
     },
-    retryButton: {
+    retryBtn: {
       paddingHorizontal: 12,
       paddingVertical: 6,
-      backgroundColor: 'rgba(192,57,43,0.12)',
+      backgroundColor: 'rgba(239,68,68,0.12)',
       borderRadius: 8,
       marginLeft: 8,
     },
@@ -711,113 +1000,309 @@ function createStyles(t: ThemeColors) {
       fontSize: 13,
       fontWeight: '600',
     },
+    // ── Hero card ────────────────────────────────────────────────────────────
+    heroCard: {
+      backgroundColor: '#1a1a1a',
+      borderRadius: 20,
+      padding: 20,
+      borderWidth: 1,
+      borderColor: '#2a2a2a',
+      marginBottom: 16,
+      alignItems: 'center',
+      gap: 10,
+    },
+    heroInfo: {
+      alignItems: 'center',
+      gap: 4,
+    },
+    heroLabel: {
+      fontSize: 12,
+      fontWeight: '700',
+      letterSpacing: 2,
+      textTransform: 'uppercase',
+    },
+    heroFactor: {
+      fontSize: 13,
+      color: t.text.muted,
+      textAlign: 'center',
+      lineHeight: 18,
+    },
+    miniRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      width: '100%',
+      paddingHorizontal: 8,
+      marginTop: 4,
+    },
+    miniStat: {
+      flex: 1,
+      alignItems: 'center',
+      gap: 2,
+    },
+    miniVal: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: t.text.primary,
+    },
+    miniLabel: {
+      fontSize: 9,
+      color: t.text.muted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    miniDivider: {
+      width: 1,
+      height: 28,
+      backgroundColor: t.border,
+    },
+    // ── Quick Actions ────────────────────────────────────────────────────────
+    quickActions: {
+      flexDirection: 'row',
+      gap: 10,
+      marginBottom: 24,
+    },
+    qaBtn: {
+      flex: 1,
+      backgroundColor: t.bg.elevated,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: t.border,
+      paddingVertical: 14,
+      alignItems: 'center',
+      gap: 6,
+    },
+    qaBtnAccent: {
+      backgroundColor: '#1e3a5f',
+      borderColor: '#2563eb',
+    },
+    qaLabel: {
+      fontSize: 10,
+      color: '#ccc',
+      textAlign: 'center',
+      lineHeight: 14,
+      letterSpacing: 0.3,
+    },
+    // ── Section header ───────────────────────────────────────────────────────
+    sectionHeader: {
+      fontSize: 10,
+      fontWeight: '600',
+      color: t.text.muted,
+      textTransform: 'uppercase',
+      letterSpacing: 2,
+      marginBottom: 10,
+    },
+    // ── Card shared ──────────────────────────────────────────────────────────
     card: {
       backgroundColor: t.bg.elevated,
       borderRadius: 16,
       padding: 16,
       borderWidth: 1,
       borderColor: t.border,
+      marginBottom: 20,
+    },
+    cardLabel: {
+      fontSize: 9,
+      fontWeight: '600',
+      color: t.text.secondary,
+      textTransform: 'uppercase',
+      letterSpacing: 1.2,
+      marginBottom: 10,
+    },
+    emptyHint: {
+      fontSize: 13,
+      color: t.text.muted,
+      fontStyle: 'italic',
+    },
+    // ── Diagnosis card ───────────────────────────────────────────────────────
+    diagCard: {
+      borderLeftWidth: 3,
+    },
+    diagHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      marginBottom: 10,
+    },
+    diagMeta: {
+      fontSize: 10,
+      color: t.text.muted,
+      marginTop: 2,
+    },
+    refreshBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: t.bg.secondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    refreshBtnOff: {
+      opacity: 0.4,
+    },
+    diagText: {
+      fontSize: 15,
+      color: t.text.primary,
+      lineHeight: 22,
       marginBottom: 12,
     },
-    // ── Recovery hero card ───────────────────────────────────────────────────
-    recoveryHeroCard: {
-      backgroundColor: '#1a1a1a',
-      borderRadius: 16,
-      padding: 20,
-      borderWidth: 1,
-      borderColor: '#2a2a2a',
-      marginBottom: 20,
-      alignItems: 'center',
-      gap: 8,
+    factorsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+      marginBottom: 12,
     },
-    recoveryStatusLabel: {
-      fontSize: 13,
-      fontWeight: '700',
-      letterSpacing: 2,
-      textTransform: 'uppercase',
+    factorChip: {
+      backgroundColor: t.bg.secondary,
+      borderRadius: 20,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      maxWidth: '80%',
+    },
+    factorText: {
+      fontSize: 11,
       color: t.text.secondary,
     },
-    recoveryBodyText: {
-      fontSize: 14,
-      color: t.text.muted,
-      lineHeight: 20,
-      textAlign: 'center',
+    recBox: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      backgroundColor: 'rgba(245,158,11,0.08)',
+      borderRadius: 10,
+      padding: 10,
     },
-    miniStatsRow: {
+    recText: {
+      flex: 1,
+      fontSize: 13,
+      color: '#f59e0b',
+      lineHeight: 18,
+    },
+    // ── Training card ────────────────────────────────────────────────────────
+    lastSessionRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginTop: 6,
-      width: '100%',
-      paddingHorizontal: 16,
+      gap: 10,
+      marginBottom: 14,
+      paddingBottom: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: t.border,
     },
-    miniStatItem: {
-      flex: 1,
+    lastSessionIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      backgroundColor: t.bg.secondary,
       alignItems: 'center',
-      gap: 3,
+      justifyContent: 'center',
     },
-    miniStatDivider: {
-      width: 1,
-      height: 28,
-      backgroundColor: t.border,
+    lastSessionName: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: t.text.primary,
+      marginBottom: 2,
     },
-    miniStatValue: {
-      fontSize: 18,
+    lastSessionMeta: {
+      fontSize: 12,
+      color: t.text.muted,
+    },
+    loadBadge: {
+      alignItems: 'center',
+      backgroundColor: t.bg.secondary,
+      borderRadius: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    loadBadgeVal: {
+      fontSize: 16,
       fontWeight: '700',
       color: t.text.primary,
     },
-    miniStatLabel: {
-      fontSize: 10,
+    loadBadgeLbl: {
+      fontSize: 9,
       color: t.text.muted,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
     },
-    sectionHeader: {
-      fontSize: 11,
-      fontWeight: '600',
-      color: t.text.muted,
-      textTransform: 'uppercase',
-      letterSpacing: 2,
-      marginBottom: 10,
-      marginTop: 4,
+    weekStatsRow: {
+      flexDirection: 'row',
+      marginBottom: 16,
     },
-    intelligenceCard: {
-      borderLeftWidth: 3,
+    weekStat: {
+      flex: 1,
+      alignItems: 'center',
+      gap: 3,
     },
-    cardQuestionLabel: {
-      fontSize: 10,
-      fontWeight: '600',
-      color: t.text.secondary,
-      textTransform: 'uppercase',
-      letterSpacing: 1,
-      marginBottom: 8,
-    },
-    intelligenceText: {
-      fontSize: 15,
+    weekStatVal: {
+      fontSize: 22,
+      fontWeight: '700',
       color: t.text.primary,
-      lineHeight: 22,
     },
-    intelligenceSubText: {
-      fontSize: 13,
+    weekStatLabel: {
+      fontSize: 10,
+      color: t.text.muted,
+      textAlign: 'center',
+      lineHeight: 14,
+    },
+    loadBarsRow: {
+      flexDirection: 'row',
+      marginBottom: 12,
+    },
+    loadBarLabel: {
+      fontSize: 10,
+      color: t.text.muted,
+      marginBottom: 4,
+    },
+    loadBarBg: {
+      height: 6,
+      backgroundColor: '#2a2a2a',
+      borderRadius: 3,
+      overflow: 'hidden',
+    },
+    loadBarFill: {
+      height: 6,
+      borderRadius: 3,
+    },
+    loadBarVal: {
+      fontSize: 11,
       color: t.text.secondary,
       marginTop: 4,
-      lineHeight: 18,
     },
-    recommendationHeader: {
+    acwrRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      borderWidth: 1,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    acwrVal: {
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    acwrStatus: {
+      fontSize: 11,
+      color: t.text.muted,
+      textTransform: 'capitalize',
+    },
+    // ── Nutrition card ───────────────────────────────────────────────────────
+    nutritionHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: 8,
+      marginBottom: 10,
     },
-    mainFactorText: {
-      fontSize: 18,
+    calTotal: {
+      fontSize: 15,
       fontWeight: '700',
       color: t.text.primary,
-      marginBottom: 4,
     },
-    wellnessChipsRow: {
+    macrosRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    // ── Wellness card ────────────────────────────────────────────────────────
+    wellnessChips: {
       flexDirection: 'row',
       gap: 10,
-      marginTop: 4,
     },
     wellnessChip: {
       flex: 1,
@@ -828,111 +1313,55 @@ function createStyles(t: ThemeColors) {
       backgroundColor: t.bg.secondary,
       gap: 2,
     },
-    wellnessChipValue: {
+    chipVal: {
       fontSize: 15,
       fontWeight: '700',
     },
-    wellnessChipLabel: {
-      fontSize: 11,
+    chipLabel: {
+      fontSize: 10,
       color: t.text.muted,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
-    },
-    wellnessPromptCard: {
-      padding: 16,
     },
     wellnessPromptRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
     },
-    wellnessPromptIcons: {
+    wellnessIcons: {
       flexDirection: 'row',
       gap: 4,
     },
     wellnessPromptText: {
       flex: 1,
-      fontSize: 15,
+      fontSize: 14,
       color: t.text.muted,
     },
-    nutritionHeaderRow: {
+    // ── Sleep card ───────────────────────────────────────────────────────────
+    sleepRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 10,
     },
-    nutritionCaloriesTotal: {
-      fontSize: 16,
-      fontWeight: '700',
-      color: t.status.success,
-    },
-    nutritionRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      paddingVertical: 6,
-      borderTopWidth: 1,
-      borderTopColor: t.border,
-    },
-    nutritionMealName: {
+    sleepStat: {
       flex: 1,
-      fontSize: 14,
+      alignItems: 'center',
+      gap: 4,
+    },
+    sleepVal: {
+      fontSize: 22,
+      fontWeight: '700',
       color: t.text.primary,
     },
-    nutritionMealCal: {
-      fontSize: 13,
-      color: t.text.secondary,
-    },
-    nutritionMore: {
-      fontSize: 12,
+    sleepLabel: {
+      fontSize: 10,
       color: t.text.muted,
-      marginTop: 8,
-      textAlign: 'center',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
     },
-    nutritionEmptyRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      paddingVertical: 4,
-    },
-    nutritionEmptyText: {
-      fontSize: 14,
-      color: t.text.muted,
-    },
-    // Skeleton styles
-    skeletonLabel: {
-      height: 11,
-      width: '50%',
-      backgroundColor: t.border,
-      borderRadius: 6,
-      marginBottom: 14,
-    },
-    skeletonLine100: {
-      height: 14,
-      width: '100%',
-      backgroundColor: t.border,
-      borderRadius: 6,
-      marginBottom: 10,
-    },
-    skeletonLine80: {
-      height: 14,
-      width: '80%',
-      backgroundColor: t.border,
-      borderRadius: 6,
-      marginBottom: 10,
-    },
-    skeletonLine60: {
-      height: 14,
-      width: '60%',
-      backgroundColor: t.border,
-      borderRadius: 6,
-    },
-    // Modal styles
+    // ── Wellness Modal ───────────────────────────────────────────────────────
     modalWrapper: {
       flex: 1,
       backgroundColor: t.bg.primary,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
     },
     modalContent: {
       padding: 24,
@@ -973,7 +1402,7 @@ function createStyles(t: ThemeColors) {
       alignItems: 'center',
       gap: 12,
     },
-    stepButton: {
+    stepBtn: {
       width: 36,
       height: 36,
       borderRadius: 18,
@@ -981,7 +1410,7 @@ function createStyles(t: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    stepButtonText: {
+    stepBtnText: {
       fontSize: 20,
       color: t.text.primary,
       lineHeight: 24,
@@ -1017,31 +1446,28 @@ function createStyles(t: ThemeColors) {
       textAlignVertical: 'top',
       marginBottom: 24,
     },
-    saveButton: {
+    saveBtn: {
       backgroundColor: t.text.primary,
       borderRadius: 12,
       paddingVertical: 16,
       alignItems: 'center',
       marginBottom: 12,
     },
-    saveButtonText: {
+    saveBtnText: {
       color: t.bg.primary,
       fontSize: 16,
       fontWeight: '700',
     },
-    cancelButton: {
+    btnDisabled: {
+      opacity: 0.5,
+    },
+    cancelBtn: {
       alignItems: 'center',
       paddingVertical: 12,
     },
     cancelText: {
       color: t.text.muted,
       fontSize: 15,
-    },
-    buttonDisabled: {
-      opacity: 0.5,
-    },
-    bottomPadding: {
-      height: 24,
     },
   });
 }

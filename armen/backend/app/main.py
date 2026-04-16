@@ -20,6 +20,9 @@ from app.models import user_activity as user_activity_model  # noqa: F401
 from app.models import daily_steps as daily_steps_model  # noqa: F401
 from app.models import hevy_workout as hevy_workout_model  # noqa: F401
 from app.models import food as food_model  # noqa: F401
+from app.models import diagnosis as diagnosis_model  # noqa: F401
+from app.models import nutrition_profile as nutrition_profile_model  # noqa: F401
+from app.models import meal_plan as meal_plan_model  # noqa: F401
 
 from app.routers import auth, strava, health, diagnosis
 from app.routers import whoop, oura, wellness, nutrition
@@ -29,6 +32,8 @@ from app.routers import hevy as hevy_router
 from app.routers import deload as deload_router
 from app.routers import warmup as warmup_router
 from app.routers import food as food_router
+from app.routers import home as home_router
+from app.routers import meal_plan as meal_plan_router
 
 
 _USER_COLUMN_MIGRATIONS = [
@@ -51,6 +56,27 @@ _USER_COLUMN_MIGRATIONS = [
     "ALTER TABLE user_activities ADD COLUMN IF NOT EXISTS rpe INTEGER",
     "ALTER TABLE user_activities ADD COLUMN IF NOT EXISTS training_load INTEGER",
     "ALTER TABLE user_activities ADD COLUMN IF NOT EXISTS is_rest_day BOOLEAN NOT NULL DEFAULT FALSE",
+    # Nutrition profile — foods_disliked + foods_loved JSON migration
+    "ALTER TABLE nutrition_profiles ADD COLUMN IF NOT EXISTS foods_disliked JSON",
+    """DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='nutrition_profiles' AND column_name='foods_loved' AND udt_name='text') THEN ALTER TABLE nutrition_profiles ALTER COLUMN foods_loved TYPE JSON USING NULL; END IF; END $$""",
+    # Remove duplicate meal_plans rows (keep newest per user+date), then add unique constraint
+    """
+    DELETE FROM meal_plans mp1
+    USING meal_plans mp2
+    WHERE mp1.user_id = mp2.user_id
+      AND mp1.date = mp2.date
+      AND mp1.generated_at < mp2.generated_at
+    """,
+    """
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'meal_plans' AND constraint_name = 'uq_meal_plans_user_date'
+      ) THEN
+        ALTER TABLE meal_plans ADD CONSTRAINT uq_meal_plans_user_date UNIQUE (user_id, date);
+      END IF;
+    END $$
+    """,
 ]
 
 
@@ -109,6 +135,8 @@ app.include_router(hevy_router.router)
 app.include_router(deload_router.router)
 app.include_router(warmup_router.router)
 app.include_router(food_router.router)
+app.include_router(home_router.router)
+app.include_router(meal_plan_router.router)
 
 
 @app.get("/", tags=["health-check"])

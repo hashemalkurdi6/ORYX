@@ -75,7 +75,8 @@ async def _upsert_activities(raw_activities: list[dict], user: User, db: AsyncSe
 @router.get("/auth-url")
 async def get_strava_auth_url(current_user: User = Depends(get_current_user), _: None = Depends(_require_strava_keys)):
     """Return the Strava OAuth authorization URL."""
-    state = secrets.token_urlsafe(16)
+    # Embed user ID in state so the callback can identify the user without a JWT
+    state = f"{current_user.id}:{secrets.token_urlsafe(16)}"
     url = strava_service.get_auth_url(state=state)
     return {"url": url, "state": state}
 
@@ -85,13 +86,28 @@ async def strava_callback(
     code: str = Query(...),
     state: str = Query(default=""),
     _: None = Depends(_require_strava_keys),
-    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Handle Strava OAuth callback: exchange code for tokens, save to user,
     fetch and save recent 20 activities.
     """
+    # Resolve user from state (format: "<user_id>:<random>")
+    user_id_str = state.split(":")[0] if ":" in state else None
+    if not user_id_str:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid state parameter")
+
+    import uuid as _uuid
+    try:
+        user_uuid = _uuid.UUID(user_id_str)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user ID in state")
+
+    user_result = await db.execute(select(User).where(User.id == user_uuid))
+    current_user = user_result.scalar_one_or_none()
+    if current_user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
     try:
         token_data = await strava_service.exchange_code(code)
     except Exception as exc:
@@ -202,6 +218,7 @@ async def get_activities(
             "total_elevation_gain": act.total_elevation_gain,
             "autopsy_text": act.autopsy_text,
             "autopsy_generated_at": act.autopsy_generated_at,
+            "summary_polyline": ((act.raw_strava_data or {}).get("map") or {}).get("summary_polyline"),
             "created_at": act.created_at,
             "pace_per_km_str": "N/A",
         }

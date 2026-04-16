@@ -29,6 +29,7 @@ class ActivityOut(BaseModel):
     total_elevation_gain: float | None
     autopsy_text: str | None
     autopsy_generated_at: datetime | None
+    summary_polyline: str | None = None
     created_at: datetime
     pace_per_km_str: str = "N/A"
 

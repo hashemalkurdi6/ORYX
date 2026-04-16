@@ -18,6 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { Pedometer } from 'expo-sensors';
 import { BarChart } from 'react-native-chart-kit';
+import { WebView } from 'react-native-webview';
 import {
   logActivity,
   getMyActivities,
@@ -32,6 +33,7 @@ import {
   getReadiness,
   updateActivityRPE,
   logRestDay,
+  generateStravaAutopsy,
   UserActivity,
   HevyWorkout,
   Activity,
@@ -153,6 +155,37 @@ function loadColor(load: number): string {
   if (load < 300) return '#f39c12';
   if (load < 500) return '#e67e22';
   return '#c0392b';
+}
+
+function decodePolyline(encoded: string): { latitude: number; longitude: number }[] {
+  const coords: { latitude: number; longitude: number }[] = [];
+  let index = 0, lat = 0, lng = 0;
+  while (index < encoded.length) {
+    let result = 0, shift = 0, b: number;
+    do { b = encoded.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lat += (result & 1) ? ~(result >> 1) : (result >> 1);
+    result = 0; shift = 0;
+    do { b = encoded.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lng += (result & 1) ? ~(result >> 1) : (result >> 1);
+    coords.push({ latitude: lat / 1e5, longitude: lng / 1e5 });
+  }
+  return coords;
+}
+
+function buildMapHtml(coords: { latitude: number; longitude: number }[]): string {
+  const latlngs = JSON.stringify(coords.map(c => [c.latitude, c.longitude]));
+  return `<!DOCTYPE html><html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>body{margin:0;padding:0;background:#0a0a0a}#map{width:100vw;height:100vh}</style>
+</head><body><div id="map"></div><script>
+var map=L.map('map',{zoomControl:false,attributionControl:false});
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(map);
+var coords=${latlngs};
+var line=L.polyline(coords,{color:'#FC4C02',weight:4,opacity:1}).addTo(map);
+map.fitBounds(line.getBounds(),{padding:[24,24]});
+</script></body></html>`;
 }
 
 function cardioMuscles(sportId: string): string[] {
@@ -1022,6 +1055,107 @@ const FeedCard = ({ item, onPress }: { item: FeedItem; onPress: () => void }) =>
   );
 };
 
+// ── Strava Activity Detail ─────────────────────────────────────────────────────
+
+const StravaDetail = ({ activity }: { activity: Activity }) => {
+  const [autopsy, setAutopsy] = useState(activity.autopsy_text);
+  const [generating, setGenerating] = useState(false);
+
+  const coords = activity.summary_polyline ? decodePolyline(activity.summary_polyline) : [];
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      const result = await generateStravaAutopsy(activity.id);
+      setAutopsy(result.autopsy);
+    } catch {
+      // silently fail
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  return (
+    <>
+      <Text style={styles.expandTitle}>{activity.name}</Text>
+      <Text style={styles.expandMeta}>{fmtDate(activity.start_date)} · {activity.sport_type}</Text>
+
+      {/* Route Map */}
+      {coords.length > 1 && (
+        <View style={styles.stravaMapWrap}>
+          <WebView
+            style={styles.stravaMap}
+            source={{ html: buildMapHtml(coords) }}
+            scrollEnabled={false}
+            originWhitelist={['*']}
+          />
+        </View>
+      )}
+
+      {/* Stats */}
+      <View style={styles.reviewStatsRow}>
+        {activity.distance_meters != null && (
+          <View style={styles.reviewStat}>
+            <Text style={styles.reviewStatVal}>{(activity.distance_meters / 1000).toFixed(2)}</Text>
+            <Text style={styles.reviewStatLabel}>km</Text>
+          </View>
+        )}
+        {!!activity.elapsed_time_seconds && (
+          <View style={styles.reviewStat}>
+            <Text style={styles.reviewStatVal}>{formatDuration(Math.round(activity.elapsed_time_seconds / 60))}</Text>
+            <Text style={styles.reviewStatLabel}>Time</Text>
+          </View>
+        )}
+        {activity.avg_heart_rate != null && (
+          <View style={styles.reviewStat}>
+            <Text style={styles.reviewStatVal}>{Math.round(activity.avg_heart_rate)}</Text>
+            <Text style={styles.reviewStatLabel}>Avg HR</Text>
+          </View>
+        )}
+        {activity.pace_per_km_str && activity.pace_per_km_str !== 'N/A' && (
+          <View style={styles.reviewStat}>
+            <Text style={styles.reviewStatVal}>{activity.pace_per_km_str}</Text>
+            <Text style={styles.reviewStatLabel}>/km</Text>
+          </View>
+        )}
+        {activity.total_elevation_gain != null && (
+          <View style={styles.reviewStat}>
+            <Text style={styles.reviewStatVal}>{Math.round(activity.total_elevation_gain)}m</Text>
+            <Text style={styles.reviewStatLabel}>Elevation</Text>
+          </View>
+        )}
+      </View>
+
+      {/* AI Summary */}
+      {autopsy ? (
+        <View style={[styles.autopsyCard, { marginTop: 16 }]}>
+          <View style={styles.autopsyHeader}>
+            <Ionicons name="analytics-outline" size={16} color="#e0e0e0" />
+            <Text style={styles.autopsyTitle}>AI Analysis</Text>
+          </View>
+          <Text style={styles.autopsyText}>{autopsy}</Text>
+        </View>
+      ) : (
+        <TouchableOpacity
+          style={[styles.generateAutopsyBtn, generating && { opacity: 0.5 }]}
+          onPress={handleGenerate}
+          disabled={generating}
+          activeOpacity={0.8}
+        >
+          {generating ? (
+            <ActivityIndicator size="small" color="#FC4C02" />
+          ) : (
+            <Ionicons name="analytics-outline" size={16} color="#FC4C02" />
+          )}
+          <Text style={styles.generateAutopsyText}>
+            {generating ? 'Generating...' : 'Generate AI Summary'}
+          </Text>
+        </TouchableOpacity>
+      )}
+    </>
+  );
+};
+
 // ── Expanded Activity Modal ────────────────────────────────────────────────────
 
 const ExpandedModal = ({ item, onClose }: { item: FeedItem | null; onClose: () => void }) => {
@@ -1119,28 +1253,7 @@ const ExpandedModal = ({ item, onClose }: { item: FeedItem | null; onClose: () =
       );
     }
 
-    const s = item.data as Activity;
-    return (
-      <>
-        <Text style={styles.expandTitle}>{s.name}</Text>
-        <Text style={styles.expandMeta}>{fmtDate(s.start_date)} · {s.sport_type}</Text>
-        <View style={styles.reviewStatsRow}>
-          {s.distance_meters != null && <View style={styles.reviewStat}><Text style={styles.reviewStatVal}>{(s.distance_meters / 1000).toFixed(1)}</Text><Text style={styles.reviewStatLabel}>km</Text></View>}
-          {s.elapsed_time_seconds && <View style={styles.reviewStat}><Text style={styles.reviewStatVal}>{formatDuration(Math.round(s.elapsed_time_seconds / 60))}</Text><Text style={styles.reviewStatLabel}>Time</Text></View>}
-          {s.avg_heart_rate && <View style={styles.reviewStat}><Text style={styles.reviewStatVal}>{Math.round(s.avg_heart_rate)}</Text><Text style={styles.reviewStatLabel}>Avg HR</Text></View>}
-          {s.pace_per_km_str && <View style={styles.reviewStat}><Text style={styles.reviewStatVal}>{s.pace_per_km_str}</Text><Text style={styles.reviewStatLabel}>/km</Text></View>}
-        </View>
-        {s.autopsy_text && (
-          <View style={[styles.autopsyCard, { marginTop: 16 }]}>
-            <View style={styles.autopsyHeader}>
-              <Ionicons name="analytics-outline" size={16} color="#e0e0e0" />
-              <Text style={styles.autopsyTitle}>AI Analysis</Text>
-            </View>
-            <Text style={styles.autopsyText}>{s.autopsy_text}</Text>
-          </View>
-        )}
-      </>
-    );
+    return <StravaDetail activity={item.data as Activity} />;
   };
 
   return (
@@ -1321,6 +1434,7 @@ export default function ActivityScreen() {
   // UI state
   const [filter, setFilter] = useState<FilterType>('All');
   const [expandedItem, setExpandedItem] = useState<FeedItem | null>(null);
+  const [journalExpanded, setJournalExpanded] = useState(true);
   const [showProgress, setShowProgress] = useState(true);
 
   // Log modal
@@ -1846,22 +1960,35 @@ export default function ActivityScreen() {
       </View>
 
       {/* Journal header + filter */}
-      <View style={styles.journalHeader}>
+      <TouchableOpacity
+        style={styles.journalHeader}
+        onPress={() => setJournalExpanded(v => !v)}
+        activeOpacity={0.7}
+      >
         <Text style={styles.journalTitle}>Journal</Text>
-        <Text style={styles.journalCount}>{filteredFeed.length} sessions</Text>
-      </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={styles.journalCount}>{filteredFeed.length} sessions</Text>
+          <Ionicons
+            name={journalExpanded ? 'chevron-up' : 'chevron-down'}
+            size={15}
+            color="#555"
+          />
+        </View>
+      </TouchableOpacity>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterContent}>
-        {FILTERS.map(f => (
-          <TouchableOpacity
-            key={f}
-            style={[styles.filterChip, filter === f && styles.filterChipActive]}
-            onPress={() => setFilter(f)}
-          >
-            <Text style={[styles.filterChipText, filter === f && styles.filterChipTextActive]}>{f}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {journalExpanded && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterContent}>
+          {FILTERS.map(f => (
+            <TouchableOpacity
+              key={f}
+              style={[styles.filterChip, filter === f && styles.filterChipActive]}
+              onPress={() => setFilter(f)}
+            >
+              <Text style={[styles.filterChipText, filter === f && styles.filterChipTextActive]}>{f}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
     </>
     );
   };
@@ -1879,18 +2006,20 @@ export default function ActivityScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <FlatList
-        data={filteredFeed}
+        data={journalExpanded ? filteredFeed : []}
         keyExtractor={(item, i) => `${item.kind}-${i}`}
         renderItem={({ item }) => (
           <FeedCard item={item} onPress={() => setExpandedItem(item)} />
         )}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="barbell-outline" size={40} color="#2a2a2a" />
-            <Text style={styles.emptyText}>No activities yet</Text>
-            <Text style={styles.emptySubText}>Tap Log to record your first session</Text>
-          </View>
+          journalExpanded ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="barbell-outline" size={40} color="#2a2a2a" />
+              <Text style={styles.emptyText}>No activities yet</Text>
+              <Text style={styles.emptySubText}>Tap Log to record your first session</Text>
+            </View>
+          ) : null
         }
         contentContainerStyle={styles.listContent}
         refreshing={refreshing}
@@ -2267,6 +2396,10 @@ const styles = StyleSheet.create({
   muscleTag: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
   muscleDot: { width: 7, height: 7, borderRadius: 3.5 },
   muscleTagText: { fontSize: 12, fontWeight: '600' },
+  stravaMapWrap: { width: '100%', height: 220, borderRadius: 16, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: '#2a2a2a' },
+  stravaMap: { width: '100%', height: '100%' },
+  generateAutopsyBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16, paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12, borderWidth: 1, borderColor: '#FC4C02', backgroundColor: 'rgba(252,76,2,0.08)', justifyContent: 'center' },
+  generateAutopsyText: { fontSize: 14, fontWeight: '600', color: '#FC4C02' },
   autopsyCard: { width: '100%', backgroundColor: '#1a1a1a', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#2a2a2a' },
   autopsyHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   autopsyTitle: { fontSize: 12, fontWeight: '700', color: '#e0e0e0', textTransform: 'uppercase', letterSpacing: 0.5 },
