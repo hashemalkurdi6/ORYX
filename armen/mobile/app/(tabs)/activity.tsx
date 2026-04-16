@@ -428,6 +428,7 @@ const StrengthBuilder = ({
   onAddExercise,
   onComplete,
   onBack,
+  sportLabel,
 }: {
   workoutName: string;
   onWorkoutNameChange: (v: string) => void;
@@ -441,6 +442,7 @@ const StrengthBuilder = ({
   onAddExercise: () => void;
   onComplete: () => void;
   onBack: () => void;
+  sportLabel?: string;
 }) => {
   const insets = useSafeAreaInsets();
 
@@ -504,7 +506,7 @@ const StrengthBuilder = ({
       {/* Workout name */}
       <TextInput
         style={styles.workoutNameInput}
-        placeholder="Workout name (e.g. Push Day)"
+        placeholder={sportLabel ? `${sportLabel} Day` : 'Workout name'}
         placeholderTextColor="#555"
         value={workoutName}
         onChangeText={onWorkoutNameChange}
@@ -1991,6 +1993,7 @@ export default function ActivityScreen() {
                 onAddExercise={() => setShowExerciseSearch(true)}
                 onComplete={handleStrengthComplete}
                 onBack={() => setLogStep('sport')}
+                sportLabel={selectedSport?.label}
               />
               <ExerciseSearchModal
                 visible={showExerciseSearch}
