@@ -12,7 +12,12 @@ import {
   Modal,
   TextInput,
   KeyboardAvoidingView,
+  ImageBackground,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const IMG_RECOVERY_HIGH = require('../../assets/images/cards/recovery_high.jpg');
+const IMG_RECOVERY_LOW = require('../../assets/images/cards/recovery_low.jpg');
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -327,43 +332,57 @@ export default function HomeScreen() {
         ) : null}
 
         {/* Recovery Hero Card */}
-        <View style={[s.card, s.recoveryHeroCard]}>
-          <RecoveryIndicator
-            score={recoveryScore}
-            color={recoveryColorKey}
-            loading={diagnosisLoading}
-          />
-          {!diagnosisLoading && (
-            <>
-              <Text style={[s.recoveryStatusLabel, { color: accentColor }]}>
-                {recoveryLabel(recoveryColorKey)}
-              </Text>
-              {diagnosis?.diagnosis ? (
-                <Text style={s.recoveryShortDiagnosis} numberOfLines={2}>
-                  {diagnosis.diagnosis.split('.')[0].trim() + '.'}
-                </Text>
-              ) : null}
-            </>
-          )}
+        <ImageBackground
+          source={recoveryColorKey === 'green' ? IMG_RECOVERY_HIGH : IMG_RECOVERY_LOW}
+          style={s.photoCard}
+          imageStyle={s.photoCardImage}
+        >
+          <LinearGradient
+            colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.88)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={s.photoGradient}
+          >
+            <View style={s.photoChevron} pointerEvents="none">
+              <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.5)" />
+            </View>
 
-          {/* Mini stats row */}
-          <View style={s.miniStatsRow}>
-            <View style={s.miniStatItem}>
-              <Text style={s.miniStatValue}>--</Text>
-              <Text style={s.miniStatLabel}>HRV</Text>
+            <RecoveryIndicator
+              score={recoveryScore}
+              color={recoveryColorKey}
+              loading={diagnosisLoading}
+            />
+            {!diagnosisLoading && (
+              <>
+                <Text style={s.photoStatusLabel}>
+                  {recoveryLabel(recoveryColorKey)}
+                </Text>
+                {diagnosis?.diagnosis ? (
+                  <Text style={s.photoBodyText} numberOfLines={2}>
+                    {diagnosis.diagnosis.split('.')[0].trim() + '.'}
+                  </Text>
+                ) : null}
+              </>
+            )}
+
+            <View style={s.photoMiniStatsRow}>
+              <View style={s.miniStatItem}>
+                <Text style={s.photoStatValue}>--</Text>
+                <Text style={s.photoStatLabel}>HRV</Text>
+              </View>
+              <View style={s.photoStatDivider} />
+              <View style={s.miniStatItem}>
+                <Text style={s.photoStatValue}>--</Text>
+                <Text style={s.photoStatLabel}>Sleep</Text>
+              </View>
+              <View style={s.photoStatDivider} />
+              <View style={s.miniStatItem}>
+                <Text style={s.photoStatValue}>--</Text>
+                <Text style={s.photoStatLabel}>Strain</Text>
+              </View>
             </View>
-            <View style={s.miniStatDivider} />
-            <View style={s.miniStatItem}>
-              <Text style={s.miniStatValue}>--</Text>
-              <Text style={s.miniStatLabel}>Sleep</Text>
-            </View>
-            <View style={s.miniStatDivider} />
-            <View style={s.miniStatItem}>
-              <Text style={s.miniStatValue}>--</Text>
-              <Text style={s.miniStatLabel}>Strain</Text>
-            </View>
-          </View>
-        </View>
+          </LinearGradient>
+        </ImageBackground>
 
         {/* Deload Detector card — only visible when a recommendation is active */}
         {!deloadDismissed && (
@@ -720,26 +739,64 @@ function createStyles(t: ThemeColors) {
       borderColor: t.border,
       marginBottom: 12,
     },
-    recoveryHeroCard: {
-      alignItems: 'center',
-      paddingVertical: 24,
-      gap: 10,
+    // ── Photo card styles ────────────────────────────────────────────────────
+    photoCard: {
       borderRadius: 20,
+      overflow: 'hidden',
+      minHeight: 240,
       marginBottom: 20,
     },
-    recoveryStatusLabel: {
+    photoCardImage: { borderRadius: 20 },
+    photoGradient: {
+      minHeight: 240,
+      padding: 20,
+      justifyContent: 'flex-end',
+      gap: 8,
+    },
+    photoChevron: {
+      position: 'absolute',
+      top: 16,
+      right: 16,
+    },
+    photoStatusLabel: {
       fontSize: 13,
       fontWeight: '700',
       letterSpacing: 2,
       textTransform: 'uppercase',
+      color: 'rgba(255,255,255,0.7)',
     },
-    recoveryShortDiagnosis: {
+    photoBodyText: {
       fontSize: 14,
-      color: t.text.muted,
-      textAlign: 'center',
+      color: 'rgba(255,255,255,0.75)',
       lineHeight: 20,
-      paddingHorizontal: 16,
+      textAlign: 'center',
     },
+    photoMiniStatsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 4,
+      width: '100%',
+      backgroundColor: 'rgba(0,0,0,0.3)',
+      borderRadius: 12,
+      padding: 14,
+    },
+    photoStatValue: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: '#FFFFFF',
+    },
+    photoStatLabel: {
+      fontSize: 10,
+      color: 'rgba(255,255,255,0.6)',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    photoStatDivider: {
+      width: 1,
+      height: 28,
+      backgroundColor: 'rgba(255,255,255,0.2)',
+    },
+    // ── Legacy (kept for non-photo uses) ─────────────────────────────────────
     miniStatsRow: {
       flexDirection: 'row',
       alignItems: 'center',
