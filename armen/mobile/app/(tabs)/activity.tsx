@@ -1929,7 +1929,7 @@ export default function ActivityScreen() {
           <View style={[styles.menuSheet, { paddingBottom: insets.bottom + 40 }]}>
             <View style={styles.menuHandle} />
             {([
-              { icon: 'barbell-outline', label: 'Log Workout', onPress: () => { setShowActionMenu(false); openStrengthModal(); } },
+              { icon: 'barbell-outline', label: 'Log Workout', onPress: () => { setShowActionMenu(false); openLogModal(); } },
               { icon: 'walk-outline', label: 'Log Run or Cardio', onPress: () => { setShowActionMenu(false); openCardioModal(); } },
               { icon: 'flash-outline', label: 'Start Warm-Up', onPress: () => { setShowActionMenu(false); setShowWarmUpModal(true); } },
               { icon: 'navigate-outline', label: 'Track Activity', onPress: () => { setShowActionMenu(false); setShowOutdoorTracker(true); } },
