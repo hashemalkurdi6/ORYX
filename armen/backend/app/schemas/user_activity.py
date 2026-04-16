@@ -14,6 +14,7 @@ class UserActivityIn(BaseModel):
     distance_meters: Optional[float] = None
     sport_category: Optional[str] = None
     muscle_groups: Optional[list[str]] = None
+    rpe: Optional[int] = None
 
 
 class UserActivityOut(BaseModel):
@@ -29,6 +30,9 @@ class UserActivityOut(BaseModel):
     distance_meters: Optional[float]
     sport_category: Optional[str]
     muscle_groups: Optional[list[str]]
+    rpe: Optional[int] = None
+    training_load: Optional[int] = None
+    is_rest_day: bool = False
     logged_at: datetime
     created_at: datetime
 
@@ -46,3 +50,45 @@ class HeatmapEntryOut(BaseModel):
     date: str
     count: int
     total_minutes: int
+
+
+class RPEUpdate(BaseModel):
+    rpe: int = Field(..., ge=1, le=10)
+
+
+class WeeklyLoadOut(BaseModel):
+    this_week_load: int
+    last_week_load: int
+    four_week_average: float
+    percentage_change: float
+    status: str  # "normal" | "elevated" | "high"
+    acwr: float | None
+    acwr_status: str  # "undertraining" | "optimal" | "caution" | "high_risk" | "insufficient_data"
+
+
+class ReadinessOut(BaseModel):
+    score: int
+    label: str
+    color: str  # "green" | "amber" | "red"
+    explanation: str
+
+
+class RestDayOut(BaseModel):
+    id: UUID
+    user_id: UUID
+    activity_type: str
+    duration_minutes: int
+    intensity: str
+    notes: Optional[str]
+    calories_burned: Optional[float]
+    autopsy_text: Optional[str]
+    exercise_data: Optional[list]
+    distance_meters: Optional[float]
+    sport_category: Optional[str]
+    muscle_groups: Optional[list]
+    rpe: Optional[int]
+    training_load: Optional[int]
+    is_rest_day: bool
+    logged_at: datetime
+    created_at: datetime
+    model_config = {"from_attributes": True}

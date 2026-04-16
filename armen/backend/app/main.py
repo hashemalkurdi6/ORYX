@@ -47,6 +47,10 @@ _USER_COLUMN_MIGRATIONS = [
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS date_of_birth VARCHAR(10)",
     # Food feature columns (safe to re-run — IF NOT EXISTS)
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS hevy_api_key VARCHAR(255)",
+    # Training load columns
+    "ALTER TABLE user_activities ADD COLUMN IF NOT EXISTS rpe INTEGER",
+    "ALTER TABLE user_activities ADD COLUMN IF NOT EXISTS training_load INTEGER",
+    "ALTER TABLE user_activities ADD COLUMN IF NOT EXISTS is_rest_day BOOLEAN NOT NULL DEFAULT FALSE",
 ]
 
 

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, DateTime, Integer, Text, Float, ForeignKey, JSON
+from sqlalchemy import String, DateTime, Integer, Text, Float, ForeignKey, JSON, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -31,6 +31,9 @@ class UserActivity(Base):
     distance_meters: Mapped[float | None] = mapped_column(Float, nullable=True)
     sport_category: Mapped[str | None] = mapped_column(String(32), nullable=True)
     muscle_groups: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    rpe: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    training_load: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_rest_day: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default='false')
     logged_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

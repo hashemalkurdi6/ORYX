@@ -13,8 +13,11 @@ from app.routers.auth import get_current_user
 from app.schemas.user_activity import (
     ActivityStatsOut,
     HeatmapEntryOut,
+    RPEUpdate,
+    ReadinessOut,
     UserActivityIn,
     UserActivityOut,
+    WeeklyLoadOut,
 )
 from app.services.claude_service import generate_activity_autopsy
 
@@ -42,11 +45,18 @@ MET_TABLE: dict[str, dict[str, float]] = {
 }
 DEFAULT_MET: dict[str, float] = {"Easy": 4.5, "Moderate": 6.0, "Hard": 8.0, "Max": 10.0}
 
+RPE_FROM_INTENSITY = {"Easy": 4, "Moderate": 6, "Hard": 8, "Max": 10}
+
 
 def _compute_calories(activity_type: str, intensity: str, duration_minutes: int, weight_kg: float) -> float:
     met_values = MET_TABLE.get(activity_type, DEFAULT_MET)
     met = met_values.get(intensity, DEFAULT_MET.get(intensity, 6.0))
     return met * weight_kg * (duration_minutes / 60.0)
+
+
+def _compute_training_load(duration_minutes: int, rpe: int | None, intensity: str) -> int:
+    effective_rpe = rpe if rpe is not None else RPE_FROM_INTENSITY.get(intensity, 6)
+    return duration_minutes * effective_rpe
 
 
 # ── Stats ──────────────────────────────────────────────────────────────────────
@@ -148,6 +158,236 @@ async def get_activity_heatmap(
     ]
 
 
+# ── Weekly Load ────────────────────────────────────────────────────────────────
+
+@router.get("/weekly-load", response_model=WeeklyLoadOut)
+async def get_weekly_load(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    today = date.today()
+    # Current week: Monday to Sunday
+    week_start = today - timedelta(days=today.weekday())
+    last_week_start = week_start - timedelta(weeks=1)
+    twenty_eight_days_ago = today - timedelta(days=28)
+    seven_days_ago = today - timedelta(days=7)
+
+    date_col = cast(UserActivity.logged_at, Date)
+
+    async def sum_load(start: date, end: date) -> int:
+        r = await db.execute(
+            select(func.coalesce(func.sum(UserActivity.training_load), 0))
+            .where(
+                UserActivity.user_id == current_user.id,
+                date_col >= start,
+                date_col < end,
+                UserActivity.is_rest_day == False,
+            )
+        )
+        return int(r.scalar() or 0)
+
+    this_week_load = await sum_load(week_start, today + timedelta(days=1))
+    last_week_load = await sum_load(last_week_start, week_start)
+
+    # 4-week average (each of 4 complete weeks before this week)
+    week_loads = []
+    for i in range(4):
+        ws = week_start - timedelta(weeks=i + 1)
+        we = week_start - timedelta(weeks=i)
+        week_loads.append(await sum_load(ws, we))
+    four_week_average = sum(week_loads) / 4.0
+
+    # percentage change
+    if last_week_load > 0:
+        percentage_change = (this_week_load - last_week_load) / last_week_load * 100
+    else:
+        percentage_change = 0.0
+
+    # status
+    if four_week_average > 0 and this_week_load > four_week_average * 1.5:
+        status = "high"
+    elif four_week_average > 0 and this_week_load > four_week_average * 1.3:
+        status = "elevated"
+    else:
+        status = "normal"
+
+    # ACWR
+    acute_load = await sum_load(seven_days_ago, today + timedelta(days=1))
+
+    # Check if user has at least 28 days of data
+    oldest_result = await db.execute(
+        select(func.min(date_col)).where(UserActivity.user_id == current_user.id)
+    )
+    oldest_date = oldest_result.scalar()
+
+    acwr = None
+    acwr_status = "insufficient_data"
+    if oldest_date and (today - oldest_date).days >= 28:
+        chronic_load = await sum_load(twenty_eight_days_ago, today + timedelta(days=1))
+        chronic_weekly_avg = chronic_load / 4.0
+        if chronic_weekly_avg > 0:
+            acwr = round(acute_load / chronic_weekly_avg, 2)
+            if acwr < 0.8:
+                acwr_status = "undertraining"
+            elif acwr <= 1.3:
+                acwr_status = "optimal"
+            elif acwr <= 1.5:
+                acwr_status = "caution"
+            else:
+                acwr_status = "high_risk"
+        else:
+            acwr_status = "insufficient_data"
+
+    return WeeklyLoadOut(
+        this_week_load=this_week_load,
+        last_week_load=last_week_load,
+        four_week_average=round(four_week_average, 1),
+        percentage_change=round(percentage_change, 1),
+        status=status,
+        acwr=acwr,
+        acwr_status=acwr_status,
+    )
+
+
+# ── Readiness ──────────────────────────────────────────────────────────────────
+
+@router.get("/readiness", response_model=ReadinessOut)
+async def get_readiness(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.health_data import HealthSnapshot
+    from app.models.wellness import WellnessCheckin as WellnessCheckinModel
+
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    score = 100
+    factors = []
+
+    # Factor 1: Sleep from Apple Health (yesterday's snapshot)
+    sleep_result = await db.execute(
+        select(HealthSnapshot).where(
+            HealthSnapshot.user_id == current_user.id,
+            HealthSnapshot.date == yesterday,
+        )
+    )
+    health_snap = sleep_result.scalar_one_or_none()
+    sleep_hours = health_snap.sleep_duration_hours if health_snap else None
+    if sleep_hours is not None:
+        if sleep_hours < 6:
+            score -= 25
+            factors.append(f"Short sleep ({sleep_hours:.1f}h last night).")
+        elif sleep_hours < 7:
+            score -= 15
+            factors.append(f"Moderate sleep ({sleep_hours:.1f}h last night).")
+        elif sleep_hours < 8:
+            score -= 5
+
+    # Factor 2: Days since last rest day
+    date_col = cast(UserActivity.logged_at, Date)
+    rest_result = await db.execute(
+        select(func.max(date_col))
+        .where(
+            UserActivity.user_id == current_user.id,
+            UserActivity.is_rest_day == True,
+        )
+    )
+    last_rest = rest_result.scalar()
+    days_since_rest = (today - last_rest).days if last_rest else 999
+    if days_since_rest >= 6:
+        score -= 30
+        factors.append(f"No rest day in {days_since_rest} days.")
+    elif days_since_rest == 5:
+        score -= 20
+        factors.append("Training 5 consecutive days.")
+    elif days_since_rest == 4:
+        score -= 10
+    elif days_since_rest == 3:
+        score -= 5
+
+    # Factor 3: Yesterday's training load
+    load_result = await db.execute(
+        select(func.coalesce(func.sum(UserActivity.training_load), 0))
+        .where(
+            UserActivity.user_id == current_user.id,
+            date_col == yesterday,
+            UserActivity.is_rest_day == False,
+        )
+    )
+    yesterday_load = int(load_result.scalar() or 0)
+    if yesterday_load > 400:
+        score -= 20
+        factors.append("High training load yesterday.")
+    elif yesterday_load > 200:
+        score -= 10
+
+    # Factor 4: Soreness from today's wellness check-in
+    wellness_result = await db.execute(
+        select(WellnessCheckinModel).where(
+            WellnessCheckinModel.user_id == current_user.id,
+            WellnessCheckinModel.date == today,
+        )
+    )
+    checkin = wellness_result.scalar_one_or_none()
+    if checkin:
+        # soreness is 1-10 scale in the wellness model
+        if checkin.soreness >= 8:
+            score -= 25
+            factors.append("High soreness reported today.")
+        elif checkin.soreness >= 5:
+            score -= 15
+            factors.append("Moderate soreness reported today.")
+        elif checkin.soreness >= 3:
+            score -= 5
+        if checkin.energy <= 3:
+            score -= 15
+            factors.append("Low energy reported today.")
+        elif checkin.energy <= 5:
+            score -= 5
+
+    score = max(0, min(100, score))
+
+    if score >= 80:
+        label = "Ready to Train"
+        color = "green"
+        if not factors:
+            explanation = "Your body is well recovered and ready for a hard session."
+        else:
+            explanation = factors[0]
+    elif score >= 60:
+        label = "Train with Caution"
+        color = "amber"
+        explanation = factors[0] if factors else "Moderate readiness. Consider a lighter session."
+    else:
+        label = "Rest Recommended"
+        color = "red"
+        explanation = factors[0] if factors else "Your body needs recovery time. Rest or light movement today."
+
+    return ReadinessOut(score=score, label=label, color=color, explanation=explanation)
+
+
+# ── Log Rest Day ───────────────────────────────────────────────────────────────
+
+@router.post("/rest", response_model=UserActivityOut, status_code=201)
+async def log_rest_day(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    activity = UserActivity(
+        user_id=current_user.id,
+        activity_type="Rest Day",
+        duration_minutes=0,
+        intensity="Easy",
+        sport_category="rest",
+        is_rest_day=True,
+        training_load=0,
+    )
+    db.add(activity)
+    await db.commit()
+    await db.refresh(activity)
+    return activity
+
+
 # ── Log Activity ───────────────────────────────────────────────────────────────
 
 @router.post("/", response_model=UserActivityOut, status_code=status.HTTP_201_CREATED)
@@ -161,6 +401,9 @@ async def log_activity(
         payload.activity_type, payload.intensity, payload.duration_minutes, weight_kg
     )
 
+    rpe = payload.rpe
+    training_load = _compute_training_load(payload.duration_minutes, rpe, payload.intensity)
+
     activity = UserActivity(
         user_id=current_user.id,
         activity_type=payload.activity_type,
@@ -172,6 +415,8 @@ async def log_activity(
         distance_meters=payload.distance_meters,
         sport_category=payload.sport_category,
         muscle_groups=payload.muscle_groups,
+        rpe=rpe,
+        training_load=training_load,
     )
     db.add(activity)
     await db.commit()
@@ -218,6 +463,31 @@ async def list_activities(
     stmt = stmt.order_by(UserActivity.logged_at.desc())
     result = await db.execute(stmt)
     return result.scalars().all()
+
+
+# ── Update RPE ─────────────────────────────────────────────────────────────────
+
+@router.patch("/{activity_id}/rpe", response_model=UserActivityOut)
+async def update_activity_rpe(
+    activity_id: UUID,
+    payload: RPEUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(UserActivity).where(
+            UserActivity.id == activity_id,
+            UserActivity.user_id == current_user.id,
+        )
+    )
+    activity = result.scalar_one_or_none()
+    if activity is None:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    activity.rpe = payload.rpe
+    activity.training_load = _compute_training_load(activity.duration_minutes, payload.rpe, activity.intensity)
+    await db.commit()
+    await db.refresh(activity)
+    return activity
 
 
 # ── Retry Autopsy ──────────────────────────────────────────────────────────────

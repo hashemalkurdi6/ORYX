@@ -28,12 +28,18 @@ import {
   getActivityHeatmap,
   getWellnessCheckins,
   retryActivityAutopsy,
+  getWeeklyLoad,
+  getReadiness,
+  updateActivityRPE,
+  logRestDay,
   UserActivity,
   HevyWorkout,
   Activity,
   ActivityStats,
   HeatmapEntry,
   WellnessCheckin,
+  WeeklyLoad,
+  ReadinessScore,
 } from '@/services/api';
 import { useAuthStore } from '@/services/authStore';
 import WarmUpModal from '@/components/WarmUpModal';
@@ -50,7 +56,7 @@ import {
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type IntensityType = 'Easy' | 'Moderate' | 'Hard' | 'Max';
-type LogStep = 'sport' | 'cardio' | 'strength' | 'review';
+type LogStep = 'sport' | 'cardio' | 'strength' | 'rpe' | 'review';
 type FilterType = 'All' | 'Strength' | 'Cardio' | 'Sport' | 'Strava' | 'Hevy';
 type SetType = 'working' | 'warmup' | 'drop' | 'failure';
 
@@ -140,6 +146,13 @@ function uniqueMuscles(exercises: ExerciseEntry[]): string[] {
   const set = new Set<string>();
   exercises.forEach(ex => ex.muscles.forEach(m => set.add(m)));
   return Array.from(set).filter(m => m !== 'full_body' && m !== 'cardio').slice(0, 6);
+}
+
+function loadColor(load: number): string {
+  if (load < 150) return '#27ae60';
+  if (load < 300) return '#f39c12';
+  if (load < 500) return '#e67e22';
+  return '#c0392b';
 }
 
 function cardioMuscles(sportId: string): string[] {
@@ -334,6 +347,67 @@ const SetRow = ({
           size={22}
           color={set.completed ? '#27ae60' : '#555555'}
         />
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+// ── RPE Prompt ─────────────────────────────────────────────────────────────────
+const RPE_COLORS: Record<number, string> = {
+  1: '#27ae60', 2: '#27ae60', 3: '#27ae60',
+  4: '#f39c12', 5: '#f39c12', 6: '#f39c12',
+  7: '#e67e22', 8: '#e67e22', 9: '#e67e22',
+  10: '#c0392b',
+};
+const RPE_LABELS: Record<number, string> = {
+  1: 'Easy', 2: 'Easy', 3: 'Moderate', 4: 'Moderate',
+  5: 'Hard', 6: 'Hard', 7: 'Very Hard', 8: 'Very Hard',
+  9: 'Max Effort', 10: 'Max Effort',
+};
+
+const RPEPrompt = ({
+  onSubmit,
+  onSkip,
+}: {
+  onSubmit: (rpe: number) => void;
+  onSkip: () => void;
+}) => {
+  const [selected, setSelected] = useState<number | null>(null);
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.rpeContainer, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
+      <Text style={styles.rpeQuestion}>How hard was that?</Text>
+      <Text style={styles.rpeSubtitle}>Rate the session difficulty</Text>
+      <View style={styles.rpeCirclesRow}>
+        {[1,2,3,4,5,6,7,8,9,10].map(n => (
+          <TouchableOpacity
+            key={n}
+            style={[
+              styles.rpeCircle,
+              selected === n && { backgroundColor: RPE_COLORS[n], borderColor: RPE_COLORS[n] },
+            ]}
+            onPress={() => setSelected(n)}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.rpeCircleNum, selected === n && { color: '#0a0a0a' }]}>{n}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {selected !== null && (
+        <View style={[styles.rpeLabelPill, { backgroundColor: RPE_COLORS[selected] + '22', borderColor: RPE_COLORS[selected] }]}>
+          <Text style={[styles.rpeLabelText, { color: RPE_COLORS[selected] }]}>{RPE_LABELS[selected]}</Text>
+        </View>
+      )}
+      <TouchableOpacity
+        style={[styles.rpeSubmitBtn, selected === null && { opacity: 0.4 }]}
+        onPress={() => selected !== null && onSubmit(selected)}
+        disabled={selected === null}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.rpeSubmitText}>Save</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.rpeSkipBtn} onPress={onSkip}>
+        <Text style={styles.rpeSkipText}>Skip</Text>
       </TouchableOpacity>
     </View>
   );
@@ -856,6 +930,11 @@ const FeedCard = ({ item, onPress }: { item: FeedItem; onPress: () => void }) =>
           <View style={[styles.intensityBadge, { backgroundColor: intensityColor(a.intensity) + '22', borderColor: intensityColor(a.intensity) }]}>
             <Text style={[styles.intensityBadgeText, { color: intensityColor(a.intensity) }]}>{a.intensity}</Text>
           </View>
+          {a.training_load != null && a.training_load > 0 && (
+            <View style={[styles.loadBadge, { backgroundColor: loadColor(a.training_load) + '22', borderColor: loadColor(a.training_load) }]}>
+              <Text style={[styles.loadBadgeText, { color: loadColor(a.training_load) }]}>Load: {a.training_load}</Text>
+            </View>
+          )}
           {a.calories_burned != null && (
             <View style={styles.feedStatItem}>
               <Ionicons name="flame-outline" size={12} color="#FF6B35" />
@@ -1076,6 +1155,110 @@ const ExpandedModal = ({ item, onClose }: { item: FeedItem | null; onClose: () =
   );
 };
 
+// ── Readiness Card ─────────────────────────────────────────────────────────────
+const ReadinessCard = ({
+  data,
+  onLogRestDay,
+}: {
+  data: ReadinessScore;
+  onLogRestDay: () => void;
+}) => {
+  const [showRestModal, setShowRestModal] = useState(false);
+  const colorMap = { green: '#27ae60', amber: '#f39c12', red: '#c0392b' };
+  const c = colorMap[data.color] ?? '#888888';
+  return (
+    <View style={styles.readinessCard}>
+      <View style={styles.readinessTopRow}>
+        <View>
+          <Text style={styles.readinessCardTitle}>Readiness to Train</Text>
+          <Text style={[styles.readinessLabel, { color: c }]}>{data.label}</Text>
+        </View>
+        <Text style={[styles.readinessScore, { color: c }]}>{data.score}</Text>
+      </View>
+      <Text style={styles.readinessExplanation}>{data.explanation}</Text>
+      {data.score < 60 && (
+        <TouchableOpacity style={styles.restDayBanner} onPress={() => setShowRestModal(true)}>
+          <Ionicons name="moon-outline" size={14} color="#e67e22" />
+          <Text style={styles.restDayBannerText}>Rest Day Recommended</Text>
+        </TouchableOpacity>
+      )}
+      <Modal visible={showRestModal} transparent animationType="fade" onRequestClose={() => setShowRestModal(false)}>
+        <TouchableOpacity style={styles.restModalOverlay} activeOpacity={1} onPress={() => setShowRestModal(false)}>
+          <View style={styles.restModalSheet}>
+            <Ionicons name="moon-outline" size={32} color="#e67e22" style={{ marginBottom: 12 }} />
+            <Text style={styles.restModalTitle}>Rest Day Recommended</Text>
+            <Text style={styles.restModalBody}>Based on your training load, sleep, and soreness, your body would benefit from a rest day today. Light walking or stretching is fine.</Text>
+            <TouchableOpacity style={styles.restModalDismiss} onPress={() => setShowRestModal(false)}>
+              <Text style={styles.restModalDismissText}>Dismiss</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
+};
+
+// ── Weekly Load Card ───────────────────────────────────────────────────────────
+const WeeklyLoadCard = ({ data }: { data: WeeklyLoad }) => {
+  const barPct = data.four_week_average > 0 ? Math.min(1, data.this_week_load / (data.four_week_average * 1.5)) : 0;
+  const barColor = data.status === 'high' ? '#c0392b' : data.status === 'elevated' ? '#f39c12' : '#27ae60';
+  const pctChange = data.percentage_change;
+  const acwrColor = data.acwr_status === 'optimal' ? '#27ae60' : data.acwr_status === 'caution' ? '#f39c12' : data.acwr_status === 'high_risk' ? '#c0392b' : '#555555';
+  const acwrLabel: Record<string, string> = { undertraining: 'Undertraining', optimal: 'Optimal', caution: 'Caution', high_risk: 'High Injury Risk', insufficient_data: 'Not enough data yet' };
+  const acwrExplanation: Record<string, string> = {
+    undertraining: 'Your training load is lower than usual.',
+    optimal: 'Your training load is well balanced this week.',
+    caution: 'You have ramped up training faster than usual. Monitor soreness closely.',
+    high_risk: 'Your training load this week is significantly higher than your recent average. Consider a lighter session or rest day.',
+    insufficient_data: 'ACWR becomes accurate after 4 weeks of logging.',
+  };
+
+  return (
+    <View style={styles.weeklyLoadCard}>
+      <Text style={styles.weeklyLoadTitle}>Weekly Training Load</Text>
+      <View style={styles.weeklyLoadTopRow}>
+        <Text style={styles.weeklyLoadNum}>{data.this_week_load}</Text>
+        <View style={styles.weeklyLoadChange}>
+          <Ionicons
+            name={pctChange >= 0 ? 'arrow-up-outline' : 'arrow-down-outline'}
+            size={14}
+            color={pctChange >= 0 ? '#27ae60' : '#f39c12'}
+          />
+          <Text style={[styles.weeklyLoadChangePct, { color: pctChange >= 0 ? '#27ae60' : '#f39c12' }]}>
+            {Math.abs(pctChange).toFixed(0)}% from last week
+          </Text>
+        </View>
+      </View>
+
+      {/* Progress bar vs 4-week average */}
+      <View style={styles.weeklyLoadBarBg}>
+        <View style={[styles.weeklyLoadBarFill, { width: `${barPct * 100}%` as any, backgroundColor: barColor }]} />
+        {data.status === 'high' && <Ionicons name="warning-outline" size={12} color="#c0392b" style={{ position: 'absolute', right: 4, top: 2 }} />}
+      </View>
+      <Text style={styles.weeklyLoadAvgLabel}>vs {Math.round(data.four_week_average)} avg (4wk)</Text>
+
+      {/* ACWR */}
+      <View style={styles.acwrRow}>
+        <Text style={styles.acwrLabel}>ACWR</Text>
+        {data.acwr !== null ? (
+          <>
+            <Text style={[styles.acwrValue, { color: acwrColor }]}>{data.acwr.toFixed(1)}</Text>
+            <View style={[styles.acwrStatusPill, { backgroundColor: acwrColor + '22', borderColor: acwrColor }]}>
+              {(data.acwr_status === 'caution' || data.acwr_status === 'high_risk') && (
+                <Ionicons name="warning-outline" size={10} color={acwrColor} />
+              )}
+              <Text style={[styles.acwrStatusText, { color: acwrColor }]}>{acwrLabel[data.acwr_status]}</Text>
+            </View>
+          </>
+        ) : (
+          <Text style={styles.acwrInsufficient}>Not enough data yet</Text>
+        )}
+      </View>
+      <Text style={styles.acwrExplanation}>{acwrExplanation[data.acwr_status]}</Text>
+    </View>
+  );
+};
+
 // ── Activity Heatmap ───────────────────────────────────────────────────────────
 
 const ActivityHeatmap = ({ data }: { data: HeatmapEntry[] }) => {
@@ -1172,6 +1355,13 @@ export default function ActivityScreen() {
   // Action menu
   const [showActionMenu, setShowActionMenu] = useState(false);
 
+  // RPE + new features
+  const [showRpePrompt, setShowRpePrompt] = useState(false);
+  const [pendingRpeActivityId, setPendingRpeActivityId] = useState<string | null>(null);
+  const [weeklyLoad, setWeeklyLoad] = useState<WeeklyLoad | null>(null);
+  const [readiness, setReadiness] = useState<ReadinessScore | null>(null);
+  const [showRestDayModal, setShowRestDayModal] = useState(false);
+
   // ── Load Data ────────────────────────────────────────────────────────────────
 
   const loadData = useCallback(async () => {
@@ -1200,6 +1390,12 @@ export default function ActivityScreen() {
 
       if (statsR.status === 'fulfilled') setStats(statsR.value);
       if (hmR.status === 'fulfilled') setHeatmap(hmR.value);
+
+      try {
+        const [loadR, readinessR] = await Promise.allSettled([getWeeklyLoad(), getReadiness()]);
+        if (loadR.status === 'fulfilled') setWeeklyLoad(loadR.value);
+        if (readinessR.status === 'fulfilled') setReadiness(readinessR.value);
+      } catch { /* non-fatal */ }
 
       // Load today's wellness checkin for warm-up personalization
       try {
@@ -1313,6 +1509,7 @@ export default function ActivityScreen() {
     setStrengthName('');
     setExercises([]);
     setCompletedActivity(null);
+    setPendingRpeActivityId(null);
     setShowLogModal(true);
   };
 
@@ -1323,6 +1520,7 @@ export default function ActivityScreen() {
     setStrengthName('');
     setExercises([]);
     setCompletedActivity(null);
+    setPendingRpeActivityId(null);
     setShowLogModal(true);
   };
 
@@ -1332,6 +1530,7 @@ export default function ActivityScreen() {
     setSelectedSport(s);
     setCardioForm({ workoutName: '', duration: '', distance: '', intensity: 'Moderate', notes: '' });
     setCompletedActivity(null);
+    setPendingRpeActivityId(null);
     setShowLogModal(true);
   };
 
@@ -1365,7 +1564,7 @@ export default function ActivityScreen() {
   const handleStrengthComplete = async () => {
     const durationMin = Math.max(1, Math.round(elapsedSeconds / 60));
     const muscles = uniqueMuscles(exercises);
-    setLogStep('review');
+    setLogStep('rpe');
     setSubmitting(true);
     try {
       const payload = {
@@ -1384,6 +1583,7 @@ export default function ActivityScreen() {
       };
       const result = await logActivity(payload);
       setCompletedActivity(result);
+      setPendingRpeActivityId(result.id);
     } catch {
       Alert.alert('Error', 'Failed to save workout. Please try again.');
       setLogStep('strength');
@@ -1409,13 +1609,23 @@ export default function ActivityScreen() {
         muscle_groups: muscles,
       });
       setCompletedActivity(result);
-      setLogStep('review');
+      setPendingRpeActivityId(result.id);
+      setLogStep('rpe');
     } catch {
       Alert.alert('Error', 'Failed to log activity. Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
+
+  const handleRpeSubmit = async (rpe: number) => {
+    if (pendingRpeActivityId) {
+      try { await updateActivityRPE(pendingRpeActivityId, rpe); } catch {}
+    }
+    setLogStep('review');
+  };
+
+  const handleRpeSkip = () => setLogStep('review');
 
   // ── Filtered Feed ─────────────────────────────────────────────────────────────
 
@@ -1510,7 +1720,23 @@ export default function ActivityScreen() {
 
   // ── List Header ───────────────────────────────────────────────────────────────
 
-  const renderHeader = () => (
+  const renderHeader = () => {
+    // Compute weekly session count and hours for stats bar
+    const now = new Date();
+    const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay()); weekStart.setHours(0, 0, 0, 0);
+    const thisWeekFeed = feed.filter(f => new Date(f.sortKey) >= weekStart);
+    const weeklySessionCount = thisWeekFeed.length;
+    const weeklyMinutes = thisWeekFeed.reduce((sum, f) => {
+      if (f.kind === 'manual') return sum + f.data.duration_minutes;
+      if (f.kind === 'hevy') return sum + (f.data.duration_seconds ? f.data.duration_seconds / 60 : 0);
+      if (f.kind === 'strava') return sum + f.data.elapsed_time_seconds / 60;
+      return sum;
+    }, 0);
+    const wH = Math.floor(weeklyMinutes / 60);
+    const wM = Math.round(weeklyMinutes % 60);
+    const weeklyHoursFormatted = wH > 0 ? (wM > 0 ? `${wH}h ${wM}m` : `${wH}h`) : `${wM}m`;
+
+    return (
     <>
       {/* Title Bar */}
       <View style={styles.titleBar}>
@@ -1519,6 +1745,8 @@ export default function ActivityScreen() {
           <Ionicons name="add" size={24} color="#0a0a0a" />
         </TouchableOpacity>
       </View>
+
+      {readiness && <ReadinessCard data={readiness} onLogRestDay={async () => { try { await logRestDay(); loadData(); } catch {} }} />}
 
       {/* Steps Card */}
       <View style={styles.stepsCard}>
@@ -1540,6 +1768,8 @@ export default function ActivityScreen() {
             { val: `${stats.total_hours}h`, label: 'Total Hours' },
             { val: `${stats.current_streak}d`, label: 'Streak' },
             { val: `${stats.longest_streak}d`, label: 'Best Streak' },
+            { val: weeklySessionCount, label: 'This Week' },
+            { val: weeklyHoursFormatted, label: 'Week Hours' },
           ].map((s, i) => (
             <View key={i} style={styles.statItem}>
               <Text style={styles.statVal}>{s.val}</Text>
@@ -1549,6 +1779,8 @@ export default function ActivityScreen() {
         </View>
       )}
 
+      {weeklyLoad && <WeeklyLoadCard data={weeklyLoad} />}
+
       {/* Progress Section Toggle */}
       <TouchableOpacity style={styles.progressToggle} onPress={() => setShowProgress(p => !p)}>
         <Text style={styles.progressToggleText}>Progress & Records</Text>
@@ -1557,39 +1789,6 @@ export default function ActivityScreen() {
 
       {showProgress && (
         <View style={styles.progressSection}>
-          {/* Weekly Volume */}
-          {feed.length > 0 && (
-            <View style={styles.progressCard}>
-              <Text style={styles.progressCardTitle}>Weekly Volume (hrs)</Text>
-              <BarChart
-                data={weeklyVolumeData}
-                width={SCREEN_W - 64}
-                height={140}
-                yAxisLabel=""
-                yAxisSuffix="h"
-                chartConfig={chartConfig}
-                style={styles.barChart}
-                withInnerLines={false}
-                showBarTops={false}
-                fromZero
-              />
-            </View>
-          )}
-
-          {/* Activity Heatmap */}
-          <View style={styles.progressCard}>
-            <Text style={styles.progressCardTitle}>Activity Heatmap (12 weeks)</Text>
-            <ActivityHeatmap data={heatmap} />
-            <View style={styles.heatmapLegend}>
-              {['None', 'Light', 'Medium', 'Heavy'].map((l, i) => (
-                <View key={l} style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: ['#1a1a1a', '#2a2a2a', '#e0e0e0', '#e0e0e0'][i] }]} />
-                  <Text style={styles.legendText}>{l}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
           {/* Sport Breakdown */}
           {sportBreakdown.length > 0 && (
             <View style={styles.progressCard}>
@@ -1662,7 +1861,8 @@ export default function ActivityScreen() {
         ))}
       </ScrollView>
     </>
-  );
+    );
+  };
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
@@ -1734,6 +1934,7 @@ export default function ActivityScreen() {
               { icon: 'flash-outline', label: 'Start Warm-Up', onPress: () => { setShowActionMenu(false); setShowWarmUpModal(true); } },
               { icon: 'navigate-outline', label: 'Track Activity', onPress: () => { setShowActionMenu(false); setShowOutdoorTracker(true); } },
               { icon: 'football-outline', label: 'Log Sport Session', onPress: () => { setShowActionMenu(false); openLogModal(); } },
+              { icon: 'moon-outline', label: 'Log Rest Day', onPress: async () => { setShowActionMenu(false); try { await logRestDay(); loadData(); } catch { Alert.alert('Error', 'Could not log rest day.'); } } },
             ] as Array<{ icon: string; label: string; onPress: () => void }>).map((item, idx, arr) => (
               <TouchableOpacity
                 key={idx}
@@ -1797,6 +1998,20 @@ export default function ActivityScreen() {
                 onSelect={ex => { handleAddExercise(ex); startRestTimer(); }}
               />
             </>
+          )}
+
+          {logStep === 'rpe' && (
+            submitting && !completedActivity ? (
+              <View style={styles.reviewLoading}>
+                <ActivityIndicator size="large" color="#e0e0e0" />
+                <Text style={styles.reviewLoadingText}>Saving session...</Text>
+              </View>
+            ) : (
+              <RPEPrompt
+                onSubmit={handleRpeSubmit}
+                onSkip={handleRpeSkip}
+              />
+            )
           )}
 
           {logStep === 'review' && (
@@ -2085,4 +2300,56 @@ const styles = StyleSheet.create({
   expandExName: { fontSize: 13, fontWeight: '600', color: '#f0f0f0', marginBottom: 4 },
   expandSetText: { fontSize: 12, color: '#888888', marginBottom: 2 },
   expandNotes: { fontSize: 13, color: '#888888', fontStyle: 'italic', marginTop: 16 },
+
+  // RPE Prompt
+  rpeContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, gap: 20 },
+  rpeQuestion: { fontSize: 24, fontWeight: '700', color: '#f0f0f0', textAlign: 'center' },
+  rpeSubtitle: { fontSize: 14, color: '#888888', textAlign: 'center', marginTop: -12 },
+  rpeCirclesRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center' },
+  rpeCircle: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: '#2a2a2a', backgroundColor: '#1a1a1a', alignItems: 'center', justifyContent: 'center' },
+  rpeCircleNum: { fontSize: 15, fontWeight: '700', color: '#e0e0e0' },
+  rpeLabelPill: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
+  rpeLabelText: { fontSize: 13, fontWeight: '600' },
+  rpeSubmitBtn: { backgroundColor: '#f0f0f0', paddingHorizontal: 48, paddingVertical: 14, borderRadius: 12, width: '100%', alignItems: 'center' },
+  rpeSubmitText: { fontSize: 16, fontWeight: '700', color: '#0a0a0a' },
+  rpeSkipBtn: { paddingVertical: 10 },
+  rpeSkipText: { fontSize: 14, color: '#555555' },
+
+  // Load badge (feed card)
+  loadBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
+  loadBadgeText: { fontSize: 11, fontWeight: '600' },
+
+  // Readiness card
+  readinessCard: { marginHorizontal: 16, marginBottom: 12, backgroundColor: '#1a1a1a', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#2a2a2a' },
+  readinessTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+  readinessCardTitle: { fontSize: 11, fontWeight: '600', color: '#888888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  readinessLabel: { fontSize: 14, fontWeight: '700' },
+  readinessScore: { fontSize: 48, fontWeight: '800', lineHeight: 52 },
+  readinessExplanation: { fontSize: 13, color: '#888888', lineHeight: 19 },
+  restDayBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: '#e67e2222', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, alignSelf: 'flex-start', borderWidth: 1, borderColor: '#e67e22' },
+  restDayBannerText: { fontSize: 12, fontWeight: '600', color: '#e67e22' },
+  restModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: 32 },
+  restModalSheet: { backgroundColor: '#1a1a1a', borderRadius: 20, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: '#2a2a2a', width: '100%' },
+  restModalTitle: { fontSize: 18, fontWeight: '700', color: '#f0f0f0', marginBottom: 12, textAlign: 'center' },
+  restModalBody: { fontSize: 14, color: '#888888', lineHeight: 21, textAlign: 'center', marginBottom: 20 },
+  restModalDismiss: { backgroundColor: '#2a2a2a', paddingHorizontal: 32, paddingVertical: 12, borderRadius: 10 },
+  restModalDismissText: { fontSize: 14, fontWeight: '600', color: '#f0f0f0' },
+
+  // Weekly load card
+  weeklyLoadCard: { marginHorizontal: 16, marginBottom: 12, backgroundColor: '#1a1a1a', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#2a2a2a' },
+  weeklyLoadTitle: { fontSize: 11, fontWeight: '600', color: '#888888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
+  weeklyLoadTopRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, marginBottom: 12 },
+  weeklyLoadNum: { fontSize: 42, fontWeight: '800', color: '#f0f0f0', lineHeight: 46 },
+  weeklyLoadChange: { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 6 },
+  weeklyLoadChangePct: { fontSize: 12, fontWeight: '600' },
+  weeklyLoadBarBg: { height: 8, backgroundColor: '#2a2a2a', borderRadius: 4, marginBottom: 4, overflow: 'hidden' },
+  weeklyLoadBarFill: { height: 8, borderRadius: 4 },
+  weeklyLoadAvgLabel: { fontSize: 11, color: '#555555', marginBottom: 12 },
+  acwrRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  acwrLabel: { fontSize: 12, color: '#888888', fontWeight: '600' },
+  acwrValue: { fontSize: 18, fontWeight: '800' },
+  acwrStatusPill: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1 },
+  acwrStatusText: { fontSize: 11, fontWeight: '600' },
+  acwrInsufficient: { fontSize: 12, color: '#555555' },
+  acwrExplanation: { fontSize: 12, color: '#555555', lineHeight: 17 },
 });

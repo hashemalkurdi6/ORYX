@@ -652,6 +652,9 @@ export interface UserActivity {
   distance_meters: number | null;
   sport_category: string | null;
   muscle_groups: string[] | null;
+  rpe: number | null;
+  training_load: number | null;
+  is_rest_day: boolean;
   logged_at: string;
   created_at: string;
 }
@@ -665,6 +668,24 @@ export interface UserActivityIn {
   distance_meters?: number;
   sport_category?: string;
   muscle_groups?: string[];
+  rpe?: number;
+}
+
+export interface WeeklyLoad {
+  this_week_load: number;
+  last_week_load: number;
+  four_week_average: number;
+  percentage_change: number;
+  status: 'normal' | 'elevated' | 'high';
+  acwr: number | null;
+  acwr_status: 'undertraining' | 'optimal' | 'caution' | 'high_risk' | 'insufficient_data';
+}
+
+export interface ReadinessScore {
+  score: number;
+  label: string;
+  color: 'green' | 'amber' | 'red';
+  explanation: string;
 }
 
 export interface ActivityStats {
@@ -717,6 +738,26 @@ export async function retryActivityAutopsy(activityId: string): Promise<UserActi
 
 export async function deleteActivity(id: string): Promise<void> {
   await apiClient.delete(`/activities/${id}`);
+}
+
+export async function getWeeklyLoad(): Promise<WeeklyLoad> {
+  const response = await apiClient.get<WeeklyLoad>('/activities/weekly-load');
+  return response.data;
+}
+
+export async function getReadiness(): Promise<ReadinessScore> {
+  const response = await apiClient.get<ReadinessScore>('/activities/readiness');
+  return response.data;
+}
+
+export async function updateActivityRPE(activityId: string, rpe: number): Promise<UserActivity> {
+  const response = await apiClient.patch<UserActivity>(`/activities/${activityId}/rpe`, { rpe });
+  return response.data;
+}
+
+export async function logRestDay(): Promise<UserActivity> {
+  const response = await apiClient.post<UserActivity>('/activities/rest');
+  return response.data;
 }
 
 // ── Steps ──────────────────────────────────────────────────────────────────
