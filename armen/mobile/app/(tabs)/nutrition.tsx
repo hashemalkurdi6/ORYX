@@ -15,16 +15,12 @@ import {
   Dimensions,
   Image,
   Animated,
-  ImageBackground,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 import { LineChart } from 'react-native-chart-kit';
 import * as ImagePicker from 'expo-image-picker';
-import { LinearGradient } from 'expo-linear-gradient';
-
-const IMG_NUTRITION = require('../../assets/images/cards/nutrition.jpg');
 import {
   getTodayNutrition,
   logNutrition,
@@ -432,63 +428,60 @@ export default function NutritionScreen() {
         </SafeAreaView>
 
         {/* ── Calorie Counter ── */}
-        <ImageBackground source={IMG_NUTRITION} style={s.photoCard} imageStyle={s.photoCardImage}>
-          <LinearGradient
-            colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.92)']}
-            start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
-            style={s.photoGradient}
-          >
-            <View style={s.photoChevron} pointerEvents="none">
-              <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.5)" />
+        <View style={s.calorieCard}>
+          <View style={s.calorieHeaderRow}>
+            <View>
+              <Text style={s.calorieTitle}>
+                {Math.round(totalCalories)}<Text style={s.calorieSuffix}> kcal</Text>
+              </Text>
+              <Text style={[s.calorieSubtitle, isOverGoal && { color: '#FF6B6B' }]}>
+                {isOverGoal ? `${calorieDiff} kcal over goal` : `${calorieDiff} kcal remaining`}
+              </Text>
             </View>
-
-            <Text style={s.photoCalorieTitle}>
-              {Math.round(totalCalories)}<Text style={s.photoCalorieSuffix}> kcal</Text>
-            </Text>
-            <Text style={[s.photoCalorieSubtitle, isOverGoal && { color: '#FF6B6B' }]}>
-              {isOverGoal ? `${calorieDiff} kcal over goal` : `${calorieDiff} kcal remaining`}
-            </Text>
-
-            <View style={s.calorieProgressBg}>
-              <View style={[
-                s.calorieProgressFill,
-                { width: `${Math.round(calorieBarPct * 100)}%` as any,
-                  backgroundColor: isOverGoal ? '#FF6B6B' : '#27ae60' }
-              ]} />
+            <View style={[s.caloriePct, { borderColor: isOverGoal ? '#FF6B6B' : '#27ae60' }]}>
+              <Text style={[s.caloriePctText, { color: isOverGoal ? '#FF6B6B' : '#27ae60' }]}>
+                {Math.round(calorieBarPct * 100)}%
+              </Text>
             </View>
-            <Text style={s.photoGoalLabel}>Daily goal: {DAILY_TARGETS.calories} kcal</Text>
-
-            <LineChart
-              data={{
-                labels: weekLabels,
-                datasets: [
-                  { data: mockWeeklyCalories, color: () => '#27ae60', strokeWidth: 2 },
-                  { data: [DAILY_TARGETS.calories], withDots: false, color: () => 'rgba(255,255,255,0.3)', strokeWidth: 1 },
-                ],
-              }}
-              width={CARD_WIDTH - 8}
-              height={100}
-              withDots
-              withInnerLines={false}
-              withOuterLines={false}
-              withHorizontalLabels={false}
-              withVerticalLabels={true}
-              chartConfig={{
-                backgroundColor: 'transparent',
-                backgroundGradientFrom: 'transparent',
-                backgroundGradientTo: 'transparent',
-                color: () => '#27ae60',
-                labelColor: () => 'rgba(255,255,255,0.5)',
-                strokeWidth: 2,
-                propsForBackgroundLines: { stroke: 'transparent' },
-                propsForDots: { r: '3', strokeWidth: '0', fill: '#27ae60' },
-                propsForLabels: { fontSize: 10 },
-              }}
-              bezier
-              style={s.lineChart}
-            />
-          </LinearGradient>
-        </ImageBackground>
+          </View>
+          <View style={s.calorieProgressBg}>
+            <View style={[
+              s.calorieProgressFill,
+              { width: `${Math.round(calorieBarPct * 100)}%` as any,
+                backgroundColor: isOverGoal ? '#FF6B6B' : '#27ae60' }
+            ]} />
+          </View>
+          <Text style={s.calorieGoalLabel}>Daily goal: {DAILY_TARGETS.calories} kcal</Text>
+          <LineChart
+            data={{
+              labels: weekLabels,
+              datasets: [
+                { data: mockWeeklyCalories, color: () => '#27ae60', strokeWidth: 2 },
+                { data: [DAILY_TARGETS.calories], withDots: false, color: () => 'rgba(255,255,255,0.3)', strokeWidth: 1 },
+              ],
+            }}
+            width={CARD_WIDTH - 8}
+            height={100}
+            withDots
+            withInnerLines={false}
+            withOuterLines={false}
+            withHorizontalLabels={false}
+            withVerticalLabels={true}
+            chartConfig={{
+              backgroundColor: '#1a1a1a',
+              backgroundGradientFrom: '#1a1a1a',
+              backgroundGradientTo: '#1a1a1a',
+              color: () => '#27ae60',
+              labelColor: () => theme.text.muted,
+              strokeWidth: 2,
+              propsForBackgroundLines: { stroke: 'transparent' },
+              propsForDots: { r: '3', strokeWidth: '0', fill: '#27ae60' },
+              propsForLabels: { fontSize: 10 },
+            }}
+            bezier
+            style={s.lineChart}
+          />
+        </View>
 
         {/* ── AI Food Scanner ── */}
         <TouchableOpacity style={s.scanCard} onPress={handleScanPhoto} activeOpacity={0.85}>
@@ -893,8 +886,8 @@ function createStyles(t: ThemeColors) {
 
     // Calorie counter card
     calorieCard: {
-      backgroundColor: t.bg.elevated, borderRadius: 20, padding: 20,
-      borderWidth: 1, borderColor: t.border, marginBottom: 16,
+      backgroundColor: '#1a1a1a', borderRadius: 16, padding: 20,
+      borderWidth: 1, borderColor: '#2a2a2a', marginBottom: 16,
     },
     calorieHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 },
     calorieTitle: { fontSize: 36, fontWeight: '800', color: t.text.primary },
@@ -1045,14 +1038,5 @@ function createStyles(t: ThemeColors) {
     scanErrorTitle: { fontSize: 16, fontWeight: '600', color: t.text.primary, marginTop: 4 },
     scanErrorDetail: { fontSize: 13, color: t.text.secondary, textAlign: 'center', lineHeight: 18 },
 
-    // ── Photo card styles ──────────────────────────────────────────────────
-    photoCard: { borderRadius: 20, overflow: 'hidden', minHeight: 260, marginBottom: 16 },
-    photoCardImage: { borderRadius: 20 },
-    photoGradient: { minHeight: 260, padding: 20, justifyContent: 'flex-end', gap: 6 },
-    photoChevron: { position: 'absolute', top: 16, right: 16 },
-    photoCalorieTitle: { fontSize: 52, fontWeight: '800', color: '#FFFFFF' },
-    photoCalorieSuffix: { fontSize: 18, fontWeight: '400', color: 'rgba(255,255,255,0.7)' },
-    photoCalorieSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 8 },
-    photoGoalLabel: { fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 4, marginBottom: 6 },
   });
 }

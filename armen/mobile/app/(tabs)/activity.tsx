@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Dimensions,
   FlatList,
-  ImageBackground,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -15,9 +14,6 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-
-const IMG_WORKOUT = require('../../assets/images/cards/workout.jpg');
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Pedometer } from 'expo-sensors';
@@ -762,29 +758,24 @@ const PostSessionView = ({
       )}
 
       {/* AI Autopsy */}
-      <ImageBackground source={IMG_WORKOUT} style={styles.autopsyPhotoCard} imageStyle={styles.autopsyPhotoImage}>
-        <LinearGradient
-          colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.9)']}
-          start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
-          style={styles.autopsyPhotoGradient}
-        >
-          <View style={styles.autopsyPhotoChevron} pointerEvents="none">
-            <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.5)" />
-          </View>
+      {activity.autopsy_text ? (
+        <View style={styles.autopsyCard}>
           <View style={styles.autopsyHeader}>
-            <Ionicons name="analytics-outline" size={16} color="rgba(255,255,255,0.7)" />
-            <Text style={styles.autopsyPhotoTitle}>AI Analysis</Text>
+            <Ionicons name="analytics-outline" size={16} color="#e0e0e0" />
+            <Text style={styles.autopsyTitle}>AI Analysis</Text>
           </View>
-          {activity.autopsy_text ? (
-            <Text style={styles.autopsyPhotoText}>{activity.autopsy_text}</Text>
-          ) : (
-            <View style={styles.autopsyLoadingRow}>
-              <ActivityIndicator size="small" color="#FFFFFF" />
-              <Text style={styles.autopsyPhotoText}>Generating AI analysis...</Text>
-            </View>
-          )}
-        </LinearGradient>
-      </ImageBackground>
+          <Text style={styles.autopsyText}>{activity.autopsy_text}</Text>
+        </View>
+      ) : (
+        <View style={styles.autopsyCard}>
+          <View style={styles.autopsyHeader}>
+            <Ionicons name="analytics-outline" size={16} color="#e0e0e0" />
+            <Text style={styles.autopsyTitle}>AI Analysis</Text>
+          </View>
+          <ActivityIndicator size="small" color="#888888" style={{ marginTop: 8 }} />
+          <Text style={styles.autopsyGenerating}>Generating AI analysis...</Text>
+        </View>
+      )}
 
       <TouchableOpacity style={styles.doneBtn} onPress={onDone}>
         <Text style={styles.doneBtnText}>Done</Text>
@@ -950,15 +941,13 @@ const ExpandedModal = ({ item, onClose }: { item: FeedItem | null; onClose: () =
           )}
 
           {a.autopsy_text && (
-            <ImageBackground source={IMG_WORKOUT} style={[styles.autopsyPhotoCard, { marginTop: 16 }]} imageStyle={styles.autopsyPhotoImage}>
-              <LinearGradient colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.9)']} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.autopsyPhotoGradient}>
-                <View style={styles.autopsyHeader}>
-                  <Ionicons name="analytics-outline" size={16} color="rgba(255,255,255,0.7)" />
-                  <Text style={styles.autopsyPhotoTitle}>AI Analysis</Text>
-                </View>
-                <Text style={styles.autopsyPhotoText}>{a.autopsy_text}</Text>
-              </LinearGradient>
-            </ImageBackground>
+            <View style={[styles.autopsyCard, { marginTop: 16 }]}>
+              <View style={styles.autopsyHeader}>
+                <Ionicons name="analytics-outline" size={16} color="#e0e0e0" />
+                <Text style={styles.autopsyTitle}>AI Analysis</Text>
+              </View>
+              <Text style={styles.autopsyText}>{a.autopsy_text}</Text>
+            </View>
           )}
 
           {a.notes && <Text style={styles.expandNotes}>"{a.notes}"</Text>}
@@ -989,15 +978,13 @@ const ExpandedModal = ({ item, onClose }: { item: FeedItem | null; onClose: () =
           )}
 
           {h.autopsy_text && (
-            <ImageBackground source={IMG_WORKOUT} style={[styles.autopsyPhotoCard, { marginTop: 16 }]} imageStyle={styles.autopsyPhotoImage}>
-              <LinearGradient colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.9)']} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.autopsyPhotoGradient}>
-                <View style={styles.autopsyHeader}>
-                  <Ionicons name="analytics-outline" size={16} color="rgba(255,255,255,0.7)" />
-                  <Text style={styles.autopsyPhotoTitle}>AI Analysis</Text>
-                </View>
-                <Text style={styles.autopsyPhotoText}>{h.autopsy_text}</Text>
-              </LinearGradient>
-            </ImageBackground>
+            <View style={[styles.autopsyCard, { marginTop: 16 }]}>
+              <View style={styles.autopsyHeader}>
+                <Ionicons name="analytics-outline" size={16} color="#e0e0e0" />
+                <Text style={styles.autopsyTitle}>AI Analysis</Text>
+              </View>
+              <Text style={styles.autopsyText}>{h.autopsy_text}</Text>
+            </View>
           )}
         </>
       );
@@ -1015,15 +1002,13 @@ const ExpandedModal = ({ item, onClose }: { item: FeedItem | null; onClose: () =
           {s.pace_per_km_str && <View style={styles.reviewStat}><Text style={styles.reviewStatVal}>{s.pace_per_km_str}</Text><Text style={styles.reviewStatLabel}>/km</Text></View>}
         </View>
         {s.autopsy_text && (
-          <ImageBackground source={IMG_WORKOUT} style={[styles.autopsyPhotoCard, { marginTop: 16 }]} imageStyle={styles.autopsyPhotoImage}>
-            <LinearGradient colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.9)']} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.autopsyPhotoGradient}>
-              <View style={styles.autopsyHeader}>
-                <Ionicons name="analytics-outline" size={16} color="rgba(255,255,255,0.7)" />
-                <Text style={styles.autopsyPhotoTitle}>AI Analysis</Text>
-              </View>
-              <Text style={styles.autopsyPhotoText}>{s.autopsy_text}</Text>
-            </LinearGradient>
-          </ImageBackground>
+          <View style={[styles.autopsyCard, { marginTop: 16 }]}>
+            <View style={styles.autopsyHeader}>
+              <Ionicons name="analytics-outline" size={16} color="#e0e0e0" />
+              <Text style={styles.autopsyTitle}>AI Analysis</Text>
+            </View>
+            <Text style={styles.autopsyText}>{s.autopsy_text}</Text>
+          </View>
         )}
       </>
     );
@@ -1972,18 +1957,11 @@ const styles = StyleSheet.create({
   muscleTag: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
   muscleDot: { width: 7, height: 7, borderRadius: 3.5 },
   muscleTagText: { fontSize: 12, fontWeight: '600' },
-  autopsyCard: { width: '100%', backgroundColor: '#111111', borderRadius: 12, padding: 14, borderLeftWidth: 3, borderLeftColor: '#e0e0e0' },
+  autopsyCard: { width: '100%', backgroundColor: '#1a1a1a', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#2a2a2a' },
   autopsyHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   autopsyTitle: { fontSize: 12, fontWeight: '700', color: '#e0e0e0', textTransform: 'uppercase', letterSpacing: 0.5 },
   autopsyText: { fontSize: 13, color: '#888888', lineHeight: 20 },
   autopsyGenerating: { fontSize: 13, color: '#555555', marginTop: 8, textAlign: 'center' },
-  autopsyPhotoCard: { width: '100%', borderRadius: 16, overflow: 'hidden', minHeight: 160 },
-  autopsyPhotoImage: { borderRadius: 16 },
-  autopsyPhotoGradient: { flex: 1, minHeight: 160, justifyContent: 'flex-end', padding: 16 },
-  autopsyPhotoChevron: { position: 'absolute', top: 12, right: 12 },
-  autopsyPhotoTitle: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.9)', textTransform: 'uppercase', letterSpacing: 0.5 },
-  autopsyPhotoText: { fontSize: 13, color: 'rgba(255,255,255,0.75)', lineHeight: 20, marginTop: 6 },
-  autopsyLoadingRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 },
   doneBtn: { marginTop: 24, backgroundColor: '#e0e0e0', paddingHorizontal: 48, paddingVertical: 14, borderRadius: 12, width: '100%', alignItems: 'center' },
   doneBtnText: { fontSize: 16, fontWeight: '700', color: '#f0f0f0' },
   reviewLoading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 },

@@ -13,14 +13,7 @@ import {
   Platform,
   ActivityIndicator,
   Dimensions,
-  ImageBackground,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-
-const IMG_RECOVERY_HIGH = require('../../assets/images/cards/recovery_high.jpg');
-const IMG_RECOVERY_LOW = require('../../assets/images/cards/recovery_low.jpg');
-const IMG_HRV = require('../../assets/images/cards/hrv.jpg');
-const IMG_WELLNESS = require('../../assets/images/cards/wellness.jpg');
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LineChart } from 'react-native-chart-kit';
@@ -226,106 +219,85 @@ export default function WellnessScreen() {
         </SafeAreaView>
 
         {/* Recovery Status Card */}
-        <ImageBackground
-          source={recoveryColor === 'green' ? IMG_RECOVERY_HIGH : IMG_RECOVERY_LOW}
-          style={styles.photoCard}
-          imageStyle={styles.photoCardImage}
-        >
-          <LinearGradient
-            colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.88)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={styles.photoGradient}
-          >
-            <View style={styles.photoChevron} pointerEvents="none">
-              <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.5)" />
+        <View style={[styles.recoveryCard, { borderColor: accentColor }]}>
+          <View style={styles.recoveryScoreRow}>
+            <View style={[styles.recoveryScoreCircle, { borderColor: accentColor }]}>
+              <Text style={[styles.recoveryScoreNum, { color: accentColor }]}>{recoveryScore}</Text>
+              <Text style={styles.recoveryScoreLabel}>/ 100</Text>
             </View>
-
-            <View style={styles.photoScoreRow}>
-              <Text style={styles.photoScoreNum}>{recoveryScore}</Text>
-              <View style={styles.photoScoreRight}>
-                <Text style={styles.photoStatusLabel}>{recoveryLabel(recoveryColor)}</Text>
-                <Text style={styles.photoBodyText}>{recoveryDescription(recoveryColor)}</Text>
-              </View>
+            <View style={styles.recoveryTextBlock}>
+              <Text style={[styles.recoveryStatus, { color: accentColor }]}>{recoveryLabel(recoveryColor)}</Text>
+              <Text style={styles.recoveryDesc}>{recoveryDescription(recoveryColor)}</Text>
             </View>
-
-            <View style={styles.photoMetricsRow}>
-              <View style={styles.photoMetricItem}>
-                <Text style={styles.photoMetricValue}>
-                  {latestWhoop?.hrv_rmssd != null
-                    ? `${Math.round(latestWhoop.hrv_rmssd)}`
-                    : latestSnapshot?.hrv_ms != null
-                    ? `${Math.round(latestSnapshot.hrv_ms)}`
-                    : avgHrv != null ? `${avgHrv}` : '--'}
-                </Text>
-                <Text style={styles.photoMetricLabel}>HRV (ms)</Text>
-              </View>
-              <View style={styles.photoMetricDivider} />
-              <View style={styles.photoMetricItem}>
-                <Text style={styles.photoMetricValue}>
-                  {latestWhoop?.sleep_performance_pct != null
-                    ? `${Math.round(latestWhoop.sleep_performance_pct)}%`
-                    : latestOura?.sleep_score != null
-                    ? `${latestOura.sleep_score}`
-                    : latestSnapshot?.sleep_duration_hours != null
-                    ? sleepLabel(latestSnapshot.sleep_duration_hours)
-                    : '--'}
-                </Text>
-                <Text style={styles.photoMetricLabel}>Sleep</Text>
-              </View>
-              <View style={styles.photoMetricDivider} />
-              <View style={styles.photoMetricItem}>
-                <Text style={styles.photoMetricValue}>
-                  {latestWhoop?.strain_score != null
-                    ? latestWhoop.strain_score.toFixed(1)
-                    : latestOura?.readiness_score != null
-                    ? `${latestOura.readiness_score}`
-                    : '--'}
-                </Text>
-                <Text style={styles.photoMetricLabel}>
-                  {latestWhoop ? 'Strain' : 'Readiness'}
-                </Text>
-              </View>
+          </View>
+          <View style={styles.metricsRow}>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricValue}>
+                {latestWhoop?.hrv_rmssd != null
+                  ? `${Math.round(latestWhoop.hrv_rmssd)}`
+                  : latestSnapshot?.hrv_ms != null
+                  ? `${Math.round(latestSnapshot.hrv_ms)}`
+                  : avgHrv != null ? `${avgHrv}` : '--'}
+              </Text>
+              <Text style={styles.metricLabel}>HRV (ms)</Text>
             </View>
-          </LinearGradient>
-        </ImageBackground>
+            <View style={styles.metricDivider} />
+            <View style={styles.metricItem}>
+              <Text style={styles.metricValue}>
+                {latestWhoop?.sleep_performance_pct != null
+                  ? `${Math.round(latestWhoop.sleep_performance_pct)}%`
+                  : latestOura?.sleep_score != null
+                  ? `${latestOura.sleep_score}`
+                  : latestSnapshot?.sleep_duration_hours != null
+                  ? sleepLabel(latestSnapshot.sleep_duration_hours)
+                  : '--'}
+              </Text>
+              <Text style={styles.metricLabel}>Sleep</Text>
+            </View>
+            <View style={styles.metricDivider} />
+            <View style={styles.metricItem}>
+              <Text style={styles.metricValue}>
+                {latestWhoop?.strain_score != null
+                  ? latestWhoop.strain_score.toFixed(1)
+                  : latestOura?.readiness_score != null
+                  ? `${latestOura.readiness_score}`
+                  : '--'}
+              </Text>
+              <Text style={styles.metricLabel}>
+                {latestWhoop ? 'Strain' : 'Readiness'}
+              </Text>
+            </View>
+          </View>
+        </View>
 
         {/* Today's Check-in */}
         <Text style={styles.sectionLabel}>TODAY'S CHECK-IN</Text>
         <TouchableOpacity onPress={openModal} activeOpacity={0.85}>
-          <ImageBackground source={IMG_WELLNESS} style={styles.photoCardSmall} imageStyle={styles.photoCardImage}>
-            <LinearGradient
-              colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.9)']}
-              start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
-              style={styles.photoGradientSmall}
-            >
-              <View style={styles.photoChevron} pointerEvents="none">
-                <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.5)" />
-              </View>
-              <Text style={styles.photoCardLabel}>HOW YOU FEEL</Text>
-              {todayCheckin ? (
-                <View style={styles.checkinChipsRow}>
-                  {(['mood', 'energy', 'soreness'] as const).map((field) => (
-                    <View key={field} style={styles.photoCheckinChip}>
-                      <Text style={styles.photoCheckinValue}>{todayCheckin[field]}/5</Text>
-                      <Text style={styles.photoCheckinLabel}>
-                        {field.charAt(0).toUpperCase() + field.slice(1)}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <View style={styles.promptRow}>
-                  <View style={styles.promptIcons}>
-                    <Ionicons name="happy-outline" size={20} color="rgba(255,255,255,0.6)" />
-                    <Ionicons name="flash-outline" size={20} color="rgba(255,255,255,0.6)" />
-                    <Ionicons name="body-outline" size={20} color="rgba(255,255,255,0.6)" />
+          <View style={[styles.card, styles.promptCard]}>
+            <Text style={styles.cardInnerLabel}>HOW YOU FEEL</Text>
+            {todayCheckin ? (
+              <View style={styles.checkinChipsRow}>
+                {(['mood', 'energy', 'soreness'] as const).map((field) => (
+                  <View key={field} style={[styles.checkinChip, { borderColor: wellnessColor(todayCheckin[field]) }]}>
+                    <Text style={[styles.checkinChipValue, { color: wellnessColor(todayCheckin[field]) }]}>{todayCheckin[field]}/5</Text>
+                    <Text style={styles.checkinChipLabel}>
+                      {field.charAt(0).toUpperCase() + field.slice(1)}
+                    </Text>
                   </View>
-                  <Text style={styles.photoPromptText}>Log how you feel today</Text>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.promptRow}>
+                <View style={styles.promptIcons}>
+                  <Ionicons name="happy-outline" size={20} color="#888888" />
+                  <Ionicons name="flash-outline" size={20} color="#888888" />
+                  <Ionicons name="body-outline" size={20} color="#888888" />
                 </View>
-              )}
-            </LinearGradient>
-          </ImageBackground>
+                <Text style={styles.promptText}>Log how you feel today</Text>
+                <Ionicons name="chevron-forward" size={16} color="#555555" />
+              </View>
+            )}
+          </View>
         </TouchableOpacity>
 
         {/* WHOOP Data */}
@@ -418,45 +390,36 @@ export default function WellnessScreen() {
         {hrvPoints.length >= 2 && (
           <>
             <Text style={styles.sectionLabel}>7-DAY HRV TREND</Text>
-            <ImageBackground source={IMG_HRV} style={styles.photoCardSmall} imageStyle={styles.photoCardImage}>
-              <LinearGradient
-                colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.9)']}
-                start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
-                style={styles.photoGradientSmall}
-              >
-                <View style={styles.photoChevron} pointerEvents="none">
-                  <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.5)" />
-                </View>
-                <View style={styles.chartHeaderRow}>
-                  <Text style={styles.photoCardLabel}>Heart Rate Variability</Text>
-                  {avgHrv !== null && (
-                    <View style={styles.avgChip}>
-                      <Text style={styles.avgChipText}>Avg {avgHrv}ms</Text>
-                    </View>
-                  )}
-                </View>
-                <LineChart
-                  data={{ labels: [], datasets: [{ data: hrvPoints, color: () => '#27ae60', strokeWidth: 2 }] }}
-                  width={CARD_WIDTH - 32}
-                  height={90}
-                  withDots={false}
-                  withInnerLines={false}
-                  withOuterLines={false}
-                  withHorizontalLabels={false}
-                  withVerticalLabels={false}
-                  chartConfig={{
-                    backgroundColor: 'transparent',
-                    backgroundGradientFrom: 'transparent',
-                    backgroundGradientTo: 'transparent',
-                    color: () => '#27ae60',
-                    strokeWidth: 2,
-                    propsForBackgroundLines: { stroke: 'transparent' },
-                  }}
-                  bezier
-                  style={styles.chart}
-                />
-              </LinearGradient>
-            </ImageBackground>
+            <View style={styles.card}>
+              <View style={styles.chartHeaderRow}>
+                <Text style={styles.cardInnerLabel}>Heart Rate Variability</Text>
+                {avgHrv !== null && (
+                  <View style={styles.avgChip}>
+                    <Text style={styles.avgChipText}>Avg {avgHrv}ms</Text>
+                  </View>
+                )}
+              </View>
+              <LineChart
+                data={{ labels: [], datasets: [{ data: hrvPoints, color: () => '#27ae60', strokeWidth: 2 }] }}
+                width={CARD_WIDTH - 32}
+                height={90}
+                withDots={false}
+                withInnerLines={false}
+                withOuterLines={false}
+                withHorizontalLabels={false}
+                withVerticalLabels={false}
+                chartConfig={{
+                  backgroundColor: 'transparent',
+                  backgroundGradientFrom: '#1a1a1a',
+                  backgroundGradientTo: '#1a1a1a',
+                  color: () => '#27ae60',
+                  strokeWidth: 2,
+                  propsForBackgroundLines: { stroke: 'transparent' },
+                }}
+                bezier
+                style={styles.chart}
+              />
+            </View>
           </>
         )}
 
@@ -618,7 +581,7 @@ const styles = StyleSheet.create({
   logButtonText: { fontSize: 14, fontWeight: '700', color: '#0a0a0a' },
 
   recoveryCard: {
-    backgroundColor: '#111111', borderRadius: 20, padding: 20,
+    backgroundColor: '#1a1a1a', borderRadius: 16, padding: 20,
     borderWidth: 1, marginBottom: 20,
   },
   recoveryScoreRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 16 },
@@ -647,8 +610,8 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10, marginTop: 4,
   },
   card: {
-    backgroundColor: '#111111', borderRadius: 16, padding: 16,
-    borderWidth: 1, borderColor: '#1a1a1a', marginBottom: 12,
+    backgroundColor: '#1a1a1a', borderRadius: 16, padding: 16,
+    borderWidth: 1, borderColor: '#2a2a2a', marginBottom: 12,
   },
   cardInnerLabel: {
     fontSize: 11, fontWeight: '600', color: '#555555',
@@ -725,29 +688,4 @@ const styles = StyleSheet.create({
   cancelBtnText: { color: '#888888', fontSize: 15 },
   btnDisabled: { opacity: 0.5 },
 
-  // ── Photo card styles ──────────────────────────────────────────────────────
-  photoCard: { borderRadius: 20, overflow: 'hidden', minHeight: 240, marginBottom: 20 },
-  photoCardImage: { borderRadius: 20 },
-  photoGradient: { minHeight: 240, padding: 20, justifyContent: 'flex-end', gap: 8 },
-  photoChevron: { position: 'absolute', top: 16, right: 16 },
-  photoScoreRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 8 },
-  photoScoreNum: { fontSize: 56, fontWeight: '800', color: '#FFFFFF', lineHeight: 60 },
-  photoScoreRight: { flex: 1, gap: 4 },
-  photoStatusLabel: { fontSize: 13, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)' },
-  photoBodyText: { fontSize: 14, color: 'rgba(255,255,255,0.75)', lineHeight: 20 },
-  photoMetricsRow: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 12, padding: 14,
-  },
-  photoMetricItem: { flex: 1, alignItems: 'center', gap: 3 },
-  photoMetricDivider: { width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.2)' },
-  photoMetricValue: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
-  photoMetricLabel: { fontSize: 10, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 0.5 },
-  photoCardSmall: { borderRadius: 16, overflow: 'hidden', minHeight: 180, marginBottom: 12 },
-  photoGradientSmall: { minHeight: 180, padding: 16, justifyContent: 'flex-end', gap: 6 },
-  photoCardLabel: { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
-  photoCheckinChip: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(0,0,0,0.3)', gap: 3 },
-  photoCheckinValue: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
-  photoCheckinLabel: { fontSize: 11, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 0.5 },
-  photoPromptText: { flex: 1, fontSize: 15, color: 'rgba(255,255,255,0.75)' },
 });
