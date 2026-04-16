@@ -27,6 +27,7 @@ import {
   getActivityStats,
   getActivityHeatmap,
   getWellnessCheckins,
+  retryActivityAutopsy,
   UserActivity,
   HevyWorkout,
   Activity,
@@ -708,6 +709,36 @@ const PostSessionView = ({
       return s2 + w * r;
     }, 0), 0);
 
+  const [autopsyText, setAutopsyText] = useState<string | null>(activity.autopsy_text);
+  const [autopsyTimedOut, setAutopsyTimedOut] = useState(false);
+  const [autopsyRetrying, setAutopsyRetrying] = useState(false);
+
+  useEffect(() => {
+    if (autopsyText) return;
+    const timer = setTimeout(() => setAutopsyTimedOut(true), 15000);
+    return () => clearTimeout(timer);
+  }, [autopsyText]);
+
+  const handleRetryAutopsy = async () => {
+    setAutopsyRetrying(true);
+    setAutopsyTimedOut(false);
+    try {
+      console.log('[Autopsy] Retrying for activity', activity.id);
+      const updated = await retryActivityAutopsy(activity.id);
+      console.log('[Autopsy] Retry result:', updated.autopsy_text ? 'success' : 'still null');
+      if (updated.autopsy_text) {
+        setAutopsyText(updated.autopsy_text);
+      } else {
+        setAutopsyTimedOut(true);
+      }
+    } catch (err) {
+      console.error('[Autopsy] Retry failed:', err);
+      setAutopsyTimedOut(true);
+    } finally {
+      setAutopsyRetrying(false);
+    }
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.reviewScroll}>
       <View style={styles.reviewCheckCircle}>
@@ -758,24 +789,36 @@ const PostSessionView = ({
       )}
 
       {/* AI Autopsy */}
-      {activity.autopsy_text ? (
-        <View style={styles.autopsyCard}>
-          <View style={styles.autopsyHeader}>
-            <Ionicons name="analytics-outline" size={16} color="#e0e0e0" />
-            <Text style={styles.autopsyTitle}>AI Analysis</Text>
-          </View>
-          <Text style={styles.autopsyText}>{activity.autopsy_text}</Text>
+      <View style={styles.autopsyCard}>
+        <View style={styles.autopsyHeader}>
+          <Ionicons name="analytics-outline" size={16} color="#e0e0e0" />
+          <Text style={styles.autopsyTitle}>AI Analysis</Text>
         </View>
-      ) : (
-        <View style={styles.autopsyCard}>
-          <View style={styles.autopsyHeader}>
-            <Ionicons name="analytics-outline" size={16} color="#e0e0e0" />
-            <Text style={styles.autopsyTitle}>AI Analysis</Text>
-          </View>
-          <ActivityIndicator size="small" color="#888888" style={{ marginTop: 8 }} />
-          <Text style={styles.autopsyGenerating}>Generating AI analysis...</Text>
-        </View>
-      )}
+        {autopsyText ? (
+          <Text style={styles.autopsyText}>{autopsyText}</Text>
+        ) : autopsyTimedOut ? (
+          <>
+            <Text style={styles.autopsyGenerating}>Analysis is taking longer than expected.</Text>
+            <TouchableOpacity
+              style={styles.autopsyRetryBtn}
+              onPress={handleRetryAutopsy}
+              disabled={autopsyRetrying}
+              activeOpacity={0.8}
+            >
+              {autopsyRetrying ? (
+                <ActivityIndicator size="small" color="#888888" />
+              ) : (
+                <Text style={styles.autopsyRetryText}>Tap to retry</Text>
+              )}
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <ActivityIndicator size="small" color="#888888" style={{ marginTop: 8 }} />
+            <Text style={styles.autopsyGenerating}>Generating AI analysis...</Text>
+          </>
+        )}
+      </View>
 
       <TouchableOpacity style={styles.doneBtn} onPress={onDone}>
         <Text style={styles.doneBtnText}>Done</Text>
@@ -1120,6 +1163,9 @@ export default function ActivityScreen() {
   // Outdoor Tracker
   const [showOutdoorTracker, setShowOutdoorTracker] = useState(false);
 
+  // Action menu
+  const [showActionMenu, setShowActionMenu] = useState(false);
+
   // ── Load Data ────────────────────────────────────────────────────────────────
 
   const loadData = useCallback(async () => {
@@ -1260,6 +1306,25 @@ export default function ActivityScreen() {
     setCardioForm({ workoutName: '', duration: '', distance: '', intensity: 'Moderate', notes: '' });
     setStrengthName('');
     setExercises([]);
+    setCompletedActivity(null);
+    setShowLogModal(true);
+  };
+
+  const openStrengthModal = () => {
+    const s = SPORT_TYPES.find(x => x.id === 'strength') ?? SPORT_TYPES[0];
+    setLogStep('strength');
+    setSelectedSport(s);
+    setStrengthName('');
+    setExercises([]);
+    setCompletedActivity(null);
+    setShowLogModal(true);
+  };
+
+  const openCardioModal = () => {
+    const s = SPORT_TYPES.find(x => x.id === 'running') ?? SPORT_TYPES[0];
+    setLogStep('cardio');
+    setSelectedSport(s);
+    setCardioForm({ workoutName: '', duration: '', distance: '', intensity: 'Moderate', notes: '' });
     setCompletedActivity(null);
     setShowLogModal(true);
   };
@@ -1444,26 +1509,9 @@ export default function ActivityScreen() {
       {/* Title Bar */}
       <View style={styles.titleBar}>
         <Text style={styles.screenTitle}>Activity</Text>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity
-            style={[styles.addFab, { backgroundColor: '#1a1a1a', borderWidth: 1, borderColor: '#2a2a2a' }]}
-            onPress={() => setShowWarmUpModal(true)}
-          >
-            <Ionicons name="flash-outline" size={18} color="#888888" />
-            <Text style={[styles.addFabText, { color: '#888888' }]}>Warm-Up</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.addFab, { backgroundColor: '#0f2010', borderWidth: 1, borderColor: '#27ae60' }]}
-            onPress={() => setShowOutdoorTracker(true)}
-          >
-            <Ionicons name="navigate-outline" size={18} color="#27ae60" />
-            <Text style={[styles.addFabText, { color: '#27ae60' }]}>Track</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.addFab} onPress={openLogModal}>
-            <Ionicons name="add" size={22} color="#f0f0f0" />
-            <Text style={styles.addFabText}>Log</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.plusBtn} onPress={() => setShowActionMenu(true)} activeOpacity={0.85}>
+          <Ionicons name="add" size={24} color="#0a0a0a" />
+        </TouchableOpacity>
       </View>
 
       {/* Steps Card */}
@@ -1659,6 +1707,44 @@ export default function ActivityScreen() {
         onClose={() => setShowOutdoorTracker(false)}
         onSave={handleOutdoorSave}
       />
+
+      {/* Action Menu */}
+      <Modal
+        visible={showActionMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowActionMenu(false)}
+      >
+        <TouchableOpacity
+          style={styles.menuOverlay}
+          onPress={() => setShowActionMenu(false)}
+          activeOpacity={1}
+        >
+          <View style={styles.menuSheet}>
+            <View style={styles.menuHandle} />
+            {([
+              { icon: 'barbell-outline', label: 'Log Workout', onPress: () => { setShowActionMenu(false); openStrengthModal(); } },
+              { icon: 'walk-outline', label: 'Log Run or Cardio', onPress: () => { setShowActionMenu(false); openCardioModal(); } },
+              { icon: 'flash-outline', label: 'Start Warm-Up', onPress: () => { setShowActionMenu(false); setShowWarmUpModal(true); } },
+              { icon: 'navigate-outline', label: 'Track Activity', onPress: () => { setShowActionMenu(false); setShowOutdoorTracker(true); } },
+              { icon: 'football-outline', label: 'Log Sport Session', onPress: () => { setShowActionMenu(false); openLogModal(); } },
+            ] as Array<{ icon: string; label: string; onPress: () => void }>).map((item, idx, arr) => (
+              <TouchableOpacity
+                key={idx}
+                style={[styles.menuItem, idx === arr.length - 1 && { borderBottomWidth: 0 }]}
+                onPress={item.onPress}
+                activeOpacity={0.75}
+              >
+                <View style={styles.menuIconWrap}>
+                  <Ionicons name={item.icon as any} size={20} color="#f0f0f0" />
+                </View>
+                <Text style={styles.menuItemText}>{item.label}</Text>
+                <Ionicons name="chevron-forward" size={14} color="#555555" />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Log Activity Modal */}
       <Modal visible={showLogModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={closeLogModal}>
@@ -1943,7 +2029,7 @@ const styles = StyleSheet.create({
   submitBtnText: { fontSize: 15, fontWeight: '700', color: '#f0f0f0' },
 
   // Post session / review
-  reviewScroll: { padding: 24, alignItems: 'center' },
+  reviewScroll: { padding: 24, paddingTop: 80, alignItems: 'center' },
   reviewCheckCircle: { marginBottom: 12 },
   reviewTitle: { fontSize: 22, fontWeight: '700', color: '#f0f0f0', marginBottom: 4 },
   reviewSubtitle: { fontSize: 14, color: '#888888', marginBottom: 20 },
@@ -1966,6 +2052,21 @@ const styles = StyleSheet.create({
   doneBtnText: { fontSize: 16, fontWeight: '700', color: '#f0f0f0' },
   reviewLoading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 },
   reviewLoadingText: { fontSize: 14, color: '#888888' },
+
+  // Autopsy retry
+  autopsyRetryBtn: { marginTop: 10, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#2a2a2a', borderRadius: 8, alignSelf: 'flex-start' },
+  autopsyRetryText: { fontSize: 13, color: '#e0e0e0', fontWeight: '600' },
+
+  // Plus button (matches Nutrition page)
+  plusBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#f0f0f0', alignItems: 'center', justifyContent: 'center' },
+
+  // Action menu
+  menuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  menuSheet: { backgroundColor: '#1a1a1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingHorizontal: 20, paddingBottom: 40, borderWidth: 1, borderColor: '#2a2a2a' },
+  menuHandle: { width: 40, height: 4, backgroundColor: '#2a2a2a', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#2a2a2a' },
+  menuIconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#2a2a2a', alignItems: 'center', justifyContent: 'center' },
+  menuItemText: { flex: 1, fontSize: 16, color: '#f0f0f0', fontWeight: '500' },
 
   // Expanded modal
   expandContainer: { flex: 1, backgroundColor: '#0a0a0a' },

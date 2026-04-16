@@ -1,3 +1,4 @@
+import logging
 from datetime import date, timedelta
 from uuid import UUID
 
@@ -16,6 +17,8 @@ from app.schemas.user_activity import (
     UserActivityOut,
 )
 from app.services.claude_service import generate_activity_autopsy
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/activities", tags=["activities"])
 
@@ -174,8 +177,12 @@ async def log_activity(
     await db.commit()
     await db.refresh(activity)
 
-    # Generate autopsy inline (Haiku is fast)
+    # Generate autopsy inline
     try:
+        logger.info(
+            "log_activity: generating autopsy for activity %s (%s, %d min, %s)",
+            activity.id, payload.activity_type, payload.duration_minutes, payload.intensity,
+        )
         autopsy = await generate_activity_autopsy(
             activity_type=payload.activity_type,
             duration_minutes=payload.duration_minutes,
@@ -187,8 +194,9 @@ async def log_activity(
         activity.autopsy_text = autopsy
         await db.commit()
         await db.refresh(activity)
-    except Exception:
-        pass
+        logger.info("log_activity: autopsy generated successfully for %s", activity.id)
+    except Exception as exc:
+        logger.exception("log_activity: autopsy generation failed for %s: %s", activity.id, exc)
 
     return activity
 
@@ -210,6 +218,45 @@ async def list_activities(
     stmt = stmt.order_by(UserActivity.logged_at.desc())
     result = await db.execute(stmt)
     return result.scalars().all()
+
+
+# ── Retry Autopsy ──────────────────────────────────────────────────────────────
+
+@router.post("/{activity_id}/autopsy", response_model=UserActivityOut)
+async def retry_activity_autopsy(
+    activity_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(UserActivity).where(
+            UserActivity.id == activity_id,
+            UserActivity.user_id == current_user.id,
+        )
+    )
+    activity = result.scalar_one_or_none()
+    if activity is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found")
+
+    logger.info("retry_autopsy: regenerating for %s", activity_id)
+    try:
+        autopsy = await generate_activity_autopsy(
+            activity_type=activity.activity_type,
+            duration_minutes=activity.duration_minutes,
+            intensity=activity.intensity,
+            calories=activity.calories_burned,
+            notes=activity.notes,
+            exercise_data=activity.exercise_data,
+        )
+        activity.autopsy_text = autopsy
+        await db.commit()
+        await db.refresh(activity)
+        logger.info("retry_autopsy: success for %s", activity_id)
+    except Exception as exc:
+        logger.exception("retry_autopsy: failed for %s: %s", activity_id, exc)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate analysis")
+
+    return activity
 
 
 # ── Delete Activity ────────────────────────────────────────────────────────────

@@ -415,11 +415,10 @@ def _sync_generate_activity_autopsy(
     notes: str | None,
     exercise_data: list | None = None,
 ) -> str:
-    """Synchronous call to Claude Haiku for manual activity autopsy."""
+    """Synchronous call to OpenAI gpt-4o-mini for manual activity autopsy."""
     calories_str = f"~{calories:.0f}" if calories is not None else "unknown"
 
     if exercise_data:
-        # Strength workout — format exercise details
         exercise_lines = []
         total_volume = 0.0
         for ex in exercise_data:
@@ -446,7 +445,7 @@ def _sync_generate_activity_autopsy(
             f"Calories: {calories_str} kcal | Total Volume: {volume_str}\n"
             f"Exercises:\n{exercises_text}\n"
             f"Notes: {notes or 'none'}.\n"
-            "Be specific, motivating, and data-driven. Return only the autopsy text."
+            "Be specific, motivating, and data-driven. Return only the autopsy text, no JSON, no markdown."
         )
     else:
         prompt = (
@@ -454,15 +453,32 @@ def _sync_generate_activity_autopsy(
             f"{activity_type}, {duration_minutes} minutes, {intensity} intensity, "
             f"{calories_str} kcal burned. "
             f"Notes: {notes or 'none'}. "
-            "Be specific, motivating, and data-driven. Return only the autopsy text."
+            "Be specific, motivating, and data-driven. Return only the autopsy text, no JSON, no markdown."
         )
 
-    message = _client.messages.create(
-        model=HAIKU_MODEL,
-        max_tokens=256,
-        messages=[{"role": "user", "content": prompt}],
+    logger.info(
+        "activity_autopsy: calling OpenAI gpt-4o-mini for %s %dmin %s",
+        activity_type, duration_minutes, intensity,
     )
-    return message.content[0].text.strip()
+    try:
+        response = _openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=256,
+            messages=[
+                {"role": "system", "content": "You are ORYX, an expert sports science AI assistant."},
+                {"role": "user", "content": prompt},
+            ],
+        )
+    except Exception as exc:
+        logger.exception("activity_autopsy: OpenAI call failed: %s", exc)
+        raise
+
+    text = response.choices[0].message.content.strip()
+    # Strip any accidental markdown
+    text = re.sub(r"^```(?:json)?\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    logger.info("activity_autopsy: result=%r", text[:200])
+    return text
 
 
 async def generate_activity_autopsy(
@@ -495,8 +511,7 @@ def _sync_generate_hevy_autopsy(
     exercises: list,
     volume_kg: float | None,
 ) -> str:
-    """Synchronous call to Claude Haiku for Hevy strength session autopsy."""
-    # Format exercises: name + total sets
+    """Synchronous call to OpenAI gpt-4o-mini for Hevy strength session autopsy."""
     exercise_lines = []
     for ex in exercises:
         ex_title = ex.get("title") or ex.get("name", "Unknown")
@@ -513,14 +528,28 @@ def _sync_generate_hevy_autopsy(
         f"Duration: {duration_str}\n"
         f"Total volume: {volume_str}\n"
         f"Exercises:\n{exercises_text}\n"
-        "Be specific, motivating, and data-driven. Return only the autopsy text."
+        "Be specific, motivating, and data-driven. Return only the autopsy text, no JSON, no markdown."
     )
-    message = _client.messages.create(
-        model=HAIKU_MODEL,
-        max_tokens=256,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return message.content[0].text.strip()
+
+    logger.info("hevy_autopsy: calling OpenAI gpt-4o-mini for %s", title)
+    try:
+        response = _openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=256,
+            messages=[
+                {"role": "system", "content": "You are ORYX, an expert sports science AI assistant."},
+                {"role": "user", "content": prompt},
+            ],
+        )
+    except Exception as exc:
+        logger.exception("hevy_autopsy: OpenAI call failed: %s", exc)
+        raise
+
+    text = response.choices[0].message.content.strip()
+    text = re.sub(r"^```(?:json)?\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    logger.info("hevy_autopsy: result=%r", text[:200])
+    return text
 
 
 async def generate_hevy_autopsy(

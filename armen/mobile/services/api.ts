@@ -710,6 +710,11 @@ export async function getMyActivities(): Promise<UserActivity[]> {
   return response.data;
 }
 
+export async function retryActivityAutopsy(activityId: string): Promise<UserActivity> {
+  const response = await apiClient.post<UserActivity>(`/activities/${activityId}/autopsy`);
+  return response.data;
+}
+
 export async function deleteActivity(id: string): Promise<void> {
   await apiClient.delete(`/activities/${id}`);
 }
