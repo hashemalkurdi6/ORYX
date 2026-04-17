@@ -14,7 +14,6 @@ from app.schemas.user_activity import (
     ActivityStatsOut,
     HeatmapEntryOut,
     RPEUpdate,
-    ReadinessOut,
     UserActivityIn,
     UserActivityOut,
     WeeklyLoadOut,
@@ -66,16 +65,22 @@ async def get_activity_stats(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # Total workouts
+    # Total workouts (exclude rest days)
     count_result = await db.execute(
-        select(func.count()).where(UserActivity.user_id == current_user.id)
+        select(func.count()).where(
+            UserActivity.user_id == current_user.id,
+            UserActivity.is_rest_day == False,
+        )
     )
     total_workouts = count_result.scalar() or 0
 
-    # Total hours
+    # Total hours (exclude rest days)
     hours_result = await db.execute(
         select(func.sum(UserActivity.duration_minutes))
-        .where(UserActivity.user_id == current_user.id)
+        .where(
+            UserActivity.user_id == current_user.id,
+            UserActivity.is_rest_day == False,
+        )
     )
     total_minutes = hours_result.scalar() or 0
     total_hours = round(total_minutes / 60.0, 1)
@@ -238,6 +243,15 @@ async def get_weekly_load(
         else:
             acwr_status = "insufficient_data"
 
+    # Compute days until ACWR unlocks (only when still insufficient data)
+    days_until_acwr: int | None = None
+    if acwr_status == "insufficient_data":
+        if oldest_date:
+            remaining = 28 - (today - oldest_date).days
+            days_until_acwr = max(1, remaining)
+        else:
+            days_until_acwr = 28
+
     return WeeklyLoadOut(
         this_week_load=this_week_load,
         last_week_load=last_week_load,
@@ -246,124 +260,20 @@ async def get_weekly_load(
         status=status,
         acwr=acwr,
         acwr_status=acwr_status,
+        days_until_acwr=days_until_acwr,
     )
 
 
 # ── Readiness ──────────────────────────────────────────────────────────────────
 
-@router.get("/readiness", response_model=ReadinessOut)
+@router.get("/readiness")
 async def get_readiness(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.models.health_data import HealthSnapshot
-    from app.models.wellness import WellnessCheckin as WellnessCheckinModel
-
-    today = date.today()
-    yesterday = today - timedelta(days=1)
-    score = 100
-    factors = []
-
-    # Factor 1: Sleep from Apple Health (yesterday's snapshot)
-    sleep_result = await db.execute(
-        select(HealthSnapshot).where(
-            HealthSnapshot.user_id == current_user.id,
-            HealthSnapshot.date == yesterday,
-        )
-    )
-    health_snap = sleep_result.scalar_one_or_none()
-    sleep_hours = health_snap.sleep_duration_hours if health_snap else None
-    if sleep_hours is not None:
-        if sleep_hours < 6:
-            score -= 25
-            factors.append(f"Short sleep ({sleep_hours:.1f}h last night).")
-        elif sleep_hours < 7:
-            score -= 15
-            factors.append(f"Moderate sleep ({sleep_hours:.1f}h last night).")
-        elif sleep_hours < 8:
-            score -= 5
-
-    # Factor 2: Days since last rest day
-    date_col = cast(UserActivity.logged_at, Date)
-    rest_result = await db.execute(
-        select(func.max(date_col))
-        .where(
-            UserActivity.user_id == current_user.id,
-            UserActivity.is_rest_day == True,
-        )
-    )
-    last_rest = rest_result.scalar()
-    days_since_rest = (today - last_rest).days if last_rest else 999
-    if days_since_rest >= 6:
-        score -= 30
-        factors.append(f"No rest day in {days_since_rest} days.")
-    elif days_since_rest == 5:
-        score -= 20
-        factors.append("Training 5 consecutive days.")
-    elif days_since_rest == 4:
-        score -= 10
-    elif days_since_rest == 3:
-        score -= 5
-
-    # Factor 3: Yesterday's training load
-    load_result = await db.execute(
-        select(func.coalesce(func.sum(UserActivity.training_load), 0))
-        .where(
-            UserActivity.user_id == current_user.id,
-            date_col == yesterday,
-            UserActivity.is_rest_day == False,
-        )
-    )
-    yesterday_load = int(load_result.scalar() or 0)
-    if yesterday_load > 400:
-        score -= 20
-        factors.append("High training load yesterday.")
-    elif yesterday_load > 200:
-        score -= 10
-
-    # Factor 4: Soreness from today's wellness check-in
-    wellness_result = await db.execute(
-        select(WellnessCheckinModel).where(
-            WellnessCheckinModel.user_id == current_user.id,
-            WellnessCheckinModel.date == today,
-        )
-    )
-    checkin = wellness_result.scalar_one_or_none()
-    if checkin:
-        # soreness is 1-10 scale in the wellness model
-        if checkin.soreness >= 8:
-            score -= 25
-            factors.append("High soreness reported today.")
-        elif checkin.soreness >= 5:
-            score -= 15
-            factors.append("Moderate soreness reported today.")
-        elif checkin.soreness >= 3:
-            score -= 5
-        if checkin.energy <= 3:
-            score -= 15
-            factors.append("Low energy reported today.")
-        elif checkin.energy <= 5:
-            score -= 5
-
-    score = max(0, min(100, score))
-
-    if score >= 80:
-        label = "Ready to Train"
-        color = "green"
-        if not factors:
-            explanation = "Your body is well recovered and ready for a hard session."
-        else:
-            explanation = factors[0]
-    elif score >= 60:
-        label = "Train with Caution"
-        color = "amber"
-        explanation = factors[0] if factors else "Moderate readiness. Consider a lighter session."
-    else:
-        label = "Rest Recommended"
-        color = "red"
-        explanation = factors[0] if factors else "Your body needs recovery time. Rest or light movement today."
-
-    return ReadinessOut(score=score, label=label, color=color, explanation=explanation)
+    """Return the readiness score via the single shared calculation service."""
+    from app.services.readiness_service import calculate_readiness
+    return await calculate_readiness(current_user.id, db)
 
 
 # ── Log Rest Day ───────────────────────────────────────────────────────────────
@@ -373,6 +283,21 @@ async def log_rest_day(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.services.readiness_service import invalidate_readiness_cache
+
+    # Dedup: return existing rest day if already logged today
+    today = date.today()
+    existing_result = await db.execute(
+        select(UserActivity).where(
+            UserActivity.user_id == current_user.id,
+            UserActivity.is_rest_day == True,
+            cast(UserActivity.logged_at, Date) == today,
+        )
+    )
+    existing = existing_result.scalars().first()
+    if existing:
+        return existing
+
     activity = UserActivity(
         user_id=current_user.id,
         activity_type="Rest Day",
@@ -383,6 +308,7 @@ async def log_rest_day(
         training_load=0,
     )
     db.add(activity)
+    await invalidate_readiness_cache(current_user.id, db)
     await db.commit()
     await db.refresh(activity)
     return activity
@@ -418,7 +344,9 @@ async def log_activity(
         rpe=rpe,
         training_load=training_load,
     )
+    from app.services.readiness_service import invalidate_readiness_cache
     db.add(activity)
+    await invalidate_readiness_cache(current_user.id, db)
     await db.commit()
     await db.refresh(activity)
 
@@ -527,6 +455,46 @@ async def retry_activity_autopsy(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate analysis")
 
     return activity
+
+
+# ── Regenerate Stale Autopsies ─────────────────────────────────────────────────
+
+@router.post("/regenerate-autopsies")
+async def regenerate_stale_autopsies(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Regenerate autopsy for manual activities that are missing one (up to 5 at a time)."""
+    result = await db.execute(
+        select(UserActivity)
+        .where(
+            UserActivity.user_id == current_user.id,
+            UserActivity.is_rest_day == False,
+            UserActivity.autopsy_text.is_(None),
+            UserActivity.sport_category != "rest",
+        )
+        .order_by(UserActivity.logged_at.desc())
+        .limit(5)
+    )
+    activities = result.scalars().all()
+    regenerated = 0
+    for activity in activities:
+        try:
+            autopsy = await generate_activity_autopsy(
+                activity_type=activity.activity_type,
+                duration_minutes=activity.duration_minutes,
+                intensity=activity.intensity,
+                calories=activity.calories_burned,
+                notes=activity.notes,
+                exercise_data=activity.exercise_data,
+            )
+            activity.autopsy_text = autopsy
+            regenerated += 1
+        except Exception as exc:
+            logger.warning("regenerate_autopsies: failed for %s: %s", activity.id, exc)
+    if regenerated > 0:
+        await db.commit()
+    return {"regenerated": regenerated}
 
 
 # ── Delete Activity ────────────────────────────────────────────────────────────

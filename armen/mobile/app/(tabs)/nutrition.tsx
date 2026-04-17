@@ -19,7 +19,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
-import { LineChart } from 'react-native-chart-kit';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import {
@@ -27,7 +26,10 @@ import {
   logNutrition,
   deleteNutritionLog,
   scanFoodPhoto,
+  getNutritionTargets,
   NutritionLog,
+  NutritionTargets,
+  DailyNutritionSummary,
   FoodScanResult,
   getNutritionProfile,
   getTodayMealPlan,
@@ -40,6 +42,14 @@ import {
   SavedMeal,
   ChatMessage,
   askNutritionAssistant,
+  getWaterToday,
+  patchWaterToday,
+  patchWaterSettings,
+  WaterSettingsPayload,
+  getWeeklyNutritionSummary,
+  WeeklyNutritionSummary,
+  getWeeklyCalories,
+  WeeklyCalorieDay,
 } from '@/services/api';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ThemeColors } from '@/services/theme';
@@ -48,39 +58,69 @@ import FoodSearchModal from '@/components/FoodSearchModal';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - 40;
 
-// ── Targets ───────────────────────────────────────────────────────────────────
+// ── Micronutrient metadata ────────────────────────────────────────────────────
 
-const DAILY_TARGETS = {
-  calories: 2200,
-  protein: 150,
-  carbs: 220,
-  fat: 70,
-  fibre: 30,
-};
+interface MicroDef {
+  key: keyof NutritionTargets;
+  consumedKey: keyof DailyNutritionSummary | null;
+  label: string;
+  unit: string;
+  goalLabel: (t: NutritionTargets) => string;
+  info: string;
+}
 
-const MICROS: Array<{ label: string; target: string; value: number; color: string }> = [
-  { label: 'Vitamin D', target: '20 µg', value: 0.62, color: '#888888' },
-  { label: 'Magnesium', target: '400 mg', value: 0.45, color: '#888888' },
-  { label: 'Omega-3', target: '1.6 g', value: 0.30, color: '#888888' },
-  { label: 'Iron', target: '18 mg', value: 0.80, color: '#FF6B35' },
-  { label: 'Calcium', target: '1000 mg', value: 0.65, color: '#27ae60' },
-  { label: 'Zinc', target: '11 mg', value: 0.55, color: '#888888' },
+const MICRO_DEFS: MicroDef[] = [
+  {
+    key: 'fibre_g', consumedKey: 'fibre_consumed_g', label: 'Fibre', unit: 'g',
+    goalLabel: (t) => `${t.fibre_g ?? 28}g`,
+    info: 'Supports gut health, slows carb absorption, and reduces recovery inflammation.',
+  },
+  {
+    key: 'sugar_max_g', consumedKey: 'sugar_consumed_g', label: 'Sugar', unit: 'g',
+    goalLabel: (t) => `max ${t.sugar_max_g ?? 50}g`,
+    info: 'Excessive added sugar impairs insulin sensitivity and recovery quality.',
+  },
+  {
+    key: 'sodium_max_mg', consumedKey: 'sodium_consumed_mg', label: 'Sodium', unit: 'mg',
+    goalLabel: (t) => `max ${t.sodium_max_mg ?? 2300}mg`,
+    info: 'Essential electrolyte for hydration and muscle contraction. Limit excess.',
+  },
+  {
+    key: 'vitamin_d_iu', consumedKey: 'vitamin_d_consumed_iu', label: 'Vitamin D', unit: 'IU',
+    goalLabel: (t) => `${t.vitamin_d_iu ?? 600} IU`,
+    info: 'Commonly deficient in athletes. Critical for bone strength and immune function.',
+  },
+  {
+    key: 'magnesium_mg', consumedKey: 'magnesium_consumed_mg', label: 'Magnesium', unit: 'mg',
+    goalLabel: (t) => `${t.magnesium_mg ?? 355}mg`,
+    info: 'Important for muscle recovery, sleep quality, and energy production.',
+  },
+  {
+    key: 'iron_mg', consumedKey: 'iron_consumed_mg', label: 'Iron', unit: 'mg',
+    goalLabel: (t) => `${t.iron_mg ?? 13}mg`,
+    info: 'Carries oxygen to muscles. Deficiency causes fatigue and reduced performance.',
+  },
+  {
+    key: 'calcium_mg', consumedKey: 'calcium_consumed_mg', label: 'Calcium', unit: 'mg',
+    goalLabel: (t) => `${t.calcium_mg ?? 1000}mg`,
+    info: 'Essential for bone density, muscle contraction, and nerve function.',
+  },
+  {
+    key: 'zinc_mg', consumedKey: 'zinc_consumed_mg', label: 'Zinc', unit: 'mg',
+    goalLabel: (t) => `${t.zinc_mg ?? 9.5}mg`,
+    info: 'Supports testosterone production, immune function, and tissue repair.',
+  },
+  {
+    key: 'omega3_g', consumedKey: 'omega3_consumed_g', label: 'Omega-3', unit: 'g',
+    goalLabel: (t) => `${t.omega3_g ?? 1.35}g`,
+    info: 'Reduces exercise-induced inflammation and supports cardiovascular health.',
+  },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function todayDisplayDate(): string {
   return new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-}
-
-function getPast7DayLabels(): string[] {
-  const labels: string[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    labels.push(d.toLocaleDateString('en-US', { weekday: 'short' }).slice(0, 1));
-  }
-  return labels;
 }
 
 // ── Macro Circle ─────────────────────────────────────────────────────────────
@@ -127,6 +167,12 @@ function MacroCircle({ label, value, target, unit, color, size = 76 }: MacroCirc
       <View style={{ alignItems: 'center', gap: 1 }}>
         <Text style={{ fontSize: 12, fontWeight: '600', color: color }}>{label}</Text>
         <Text style={{ fontSize: 10, color: theme.text.muted }}>/ {target}{unit}</Text>
+        {target > 0 && (() => {
+          const pct = value / target;
+          if (pct > 1.1) return <Text style={{ fontSize: 9, color: '#c0392b', fontWeight: '600' }}>Over</Text>;
+          if (pct >= 0.8) return <Text style={{ fontSize: 9, color: '#e67e22', fontWeight: '600' }}>On Track</Text>;
+          return <Text style={{ fontSize: 9, color: '#666', fontWeight: '600' }}>Low</Text>;
+        })()}
       </View>
     </View>
   );
@@ -179,16 +225,193 @@ function ScanLoadingDots() {
   );
 }
 
+// ── Unified Calorie + Macro Card ─────────────────────────────────────────────
+
+interface CalorieMacroCardProps {
+  totalCalories: number;
+  calorieTarget: number;
+  totalProtein: number;
+  proteinTarget: number;
+  totalCarbs: number;
+  carbsTarget: number;
+  totalFat: number;
+  fatTarget: number;
+}
+
+function CalorieMacroCard({
+  totalCalories, calorieTarget,
+  totalProtein, proteinTarget,
+  totalCarbs, carbsTarget,
+  totalFat, fatTarget,
+}: CalorieMacroCardProps) {
+  const { theme } = useTheme();
+
+  const RING_SIZE = 140;
+  const STROKE_W = 14;
+  const radius = (RING_SIZE - STROKE_W) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const cx = RING_SIZE / 2;
+  const cy = RING_SIZE / 2;
+
+  const pct = calorieTarget > 0 ? totalCalories / calorieTarget : 0;
+  const fillPct = Math.min(pct, 1);
+  const strokeDashoffset = circumference * (1 - fillPct);
+
+  const ringColor = pct > 1 ? '#c0392b' : pct >= 0.9 ? '#e67e22' : '#e0e0e0';
+  const isOver = totalCalories > calorieTarget;
+  const diff = Math.abs(Math.round(totalCalories - calorieTarget));
+
+  return (
+    <View style={{ backgroundColor: '#1a1a1a', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#2a2a2a', marginBottom: 16 }}>
+      {/* Calorie ring */}
+      <View style={{ alignItems: 'center', paddingTop: 4 }}>
+        <View style={{ width: RING_SIZE, height: RING_SIZE }}>
+          <Svg width={RING_SIZE} height={RING_SIZE}>
+            {/* Track */}
+            <Circle
+              cx={cx} cy={cy} r={radius}
+              stroke="#2a2a2a" strokeWidth={STROKE_W} fill="none"
+            />
+            {/* Fill */}
+            <Circle
+              cx={cx} cy={cy} r={radius}
+              stroke={ringColor} strokeWidth={STROKE_W} fill="none"
+              strokeDasharray={`${circumference} ${circumference}`}
+              strokeDashoffset={strokeDashoffset}
+              strokeLinecap="round"
+              transform={`rotate(-90 ${cx} ${cy})`}
+            />
+          </Svg>
+          {/* Center text */}
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 28, fontWeight: '700', color: '#fff', lineHeight: 32 }}>
+              {Math.round(totalCalories)}
+            </Text>
+            <Text style={{ fontSize: 12, color: theme.text.muted, marginTop: 1 }}>kcal</Text>
+            <Text style={{ fontSize: 11, color: isOver ? '#c0392b' : theme.text.muted, marginTop: 3 }}>
+              {isOver ? `${diff}kcal over` : `${diff}kcal left`}
+            </Text>
+          </View>
+        </View>
+        {/* Below ring */}
+        <Text style={{ fontSize: 12, color: theme.text.muted, marginTop: 10 }}>
+          Daily goal: {calorieTarget}kcal
+        </Text>
+        <View style={{
+          marginTop: 6, paddingHorizontal: 10, paddingVertical: 3,
+          borderRadius: 10, backgroundColor: `${ringColor}22`,
+          borderWidth: 1, borderColor: `${ringColor}55`,
+        }}>
+          <Text style={{ fontSize: 11, fontWeight: '700', color: ringColor }}>
+            {Math.round(fillPct * 100)}%
+          </Text>
+        </View>
+      </View>
+
+      {/* Divider */}
+      <View style={{ height: 1, backgroundColor: '#2a2a2a', marginTop: 20, marginBottom: 20 }} />
+
+      {/* Macro circles */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' }}>
+        <MacroCircle label="Protein" value={totalProtein} target={proteinTarget} unit="g" color={theme.accent} />
+        <MacroCircle label="Carbs" value={totalCarbs} target={carbsTarget} unit="g" color="#888888" />
+        <MacroCircle label="Fat" value={totalFat} target={fatTarget} unit="g" color="#FF6B35" />
+      </View>
+    </View>
+  );
+}
+
+// ── Weekly Calorie Trend ──────────────────────────────────────────────────────
+
+interface WeeklyCalorieTrendProps {
+  days: { date: string; calories_logged: number; target: number; day_label: string }[];
+}
+
+function WeeklyCalorieTrend({ days }: WeeklyCalorieTrendProps) {
+  const { theme } = useTheme();
+
+  if (!days.length) return null;
+
+  const CHART_H = 56; // bar area height
+  const target = days[0]?.target ?? 2000;
+  const avg = days.length ? Math.round(days.reduce((s, d) => s + d.calories_logged, 0) / days.length) : 0;
+
+  // Max bar height: cap at 120% of target for visual scale
+  const maxCal = target * 1.2;
+
+  return (
+    <View style={{ backgroundColor: '#1a1a1a', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#2a2a2a', marginBottom: 16 }}>
+      {/* Header */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <Text style={{ fontSize: 10, fontWeight: '600', color: theme.text.muted, textTransform: 'uppercase', letterSpacing: 1 }}>
+          THIS WEEK
+        </Text>
+        <Text style={{ fontSize: 12, color: theme.text.muted }}>
+          Avg {avg}kcal
+        </Text>
+      </View>
+
+      {/* Bar chart */}
+      <View style={{ height: CHART_H + 18 }}>
+        {/* Target dashed line — positioned at target height */}
+        <View style={{
+          position: 'absolute',
+          top: CHART_H * (1 - target / maxCal),
+          left: 0, right: 0, height: 1,
+          borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)',
+          borderStyle: 'dashed',
+        }} />
+
+        {/* Bars + labels */}
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: CHART_H, gap: 4 }}>
+          {days.map((d, i) => {
+            const barH = d.calories_logged > 0
+              ? Math.max(3, Math.round((d.calories_logged / maxCal) * CHART_H))
+              : 0;
+            const ratio = target > 0 ? d.calories_logged / target : 0;
+            const barColor = d.calories_logged === 0 ? '#2a2a2a'
+              : ratio > 1 ? '#e67e22'
+              : ratio >= 0.9 ? '#e0e0e0'
+              : '#555';
+            return (
+              <View key={i} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: CHART_H }}>
+                <View style={{
+                  width: '70%', height: barH,
+                  backgroundColor: barColor,
+                  borderRadius: 3,
+                }} />
+              </View>
+            );
+          })}
+        </View>
+
+        {/* Day labels */}
+        <View style={{ flexDirection: 'row', gap: 4, marginTop: 4 }}>
+          {days.map((d, i) => (
+            <View key={i} style={{ flex: 1, alignItems: 'center' }}>
+              <Text style={{ fontSize: 10, color: theme.text.muted }}>{d.day_label}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function NutritionScreen() {
   const { theme } = useTheme();
   const s = useMemo(() => createStyles(theme), [theme]);
 
-  // Existing state
+  // Nutrition state
   const [todayLogs, setTodayLogs] = useState<NutritionLog[]>([]);
+  const [targets, setTargets] = useState<NutritionTargets | null>(null);
+  const [summary, setSummary] = useState<DailyNutritionSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  // Meal modification banner
+  const [mealModifiedBanner, setMealModifiedBanner] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showFoodSearchModal, setShowFoodSearchModal] = useState(false);
   const [showExtra, setShowExtra] = useState(false);
@@ -215,6 +438,26 @@ export default function NutritionScreen() {
   const chatScrollRef = useRef<ScrollView>(null);
   const [mealPlanError, setMealPlanError] = useState<string | null>(null);
 
+  // Micronutrients expand state
+  const [microsExpanded, setMicrosExpanded] = useState(false);
+
+  // Water tracking state
+  const [waterAmountMl, setWaterAmountMl] = useState(0);
+  const [waterTargetMl, setWaterTargetMl] = useState(2500);
+  const [waterContainerSizeMl, setWaterContainerSizeMl] = useState(250);
+  const [waterRecommendedMl, setWaterRecommendedMl] = useState(2500);
+  const [waterInputMode, setWaterInputMode] = useState<'glasses' | 'ml'>('glasses');
+  const [waterLoading, setWaterLoading] = useState(false);
+  // Water settings sheet
+  const [waterSettingsOpen, setWaterSettingsOpen] = useState(false);
+  const [settingsTargetInput, setSettingsTargetInput] = useState('');
+  const [settingsContainerSize, setSettingsContainerSize] = useState(250);
+  const [settingsInputMode, setSettingsInputMode] = useState<'glasses' | 'ml'>('glasses');
+
+  // Weekly summary state
+  const [weeklySummary, setWeeklySummary] = useState<WeeklyNutritionSummary | null>(null);
+  const [weeklyCalorieDays, setWeeklyCalorieDays] = useState<WeeklyCalorieDay[]>([]);
+
   // Scan state
   const [scanLoading, setScanLoading] = useState(false);
   const [scanResult, setScanResult] = useState<FoodScanResult | null>(null);
@@ -230,8 +473,25 @@ export default function NutritionScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const logs = await getTodayNutrition();
-      setTodayLogs(logs);
+      const [todayData, tgts, waterData, weeklyData, calDays] = await Promise.all([
+        getTodayNutrition(),
+        getNutritionTargets().catch(() => null),
+        getWaterToday().catch(() => null),
+        getWeeklyNutritionSummary().catch(() => null),
+        getWeeklyCalories().catch(() => [] as WeeklyCalorieDay[]),
+      ]);
+      setTodayLogs(todayData.logs);
+      setSummary(todayData.summary);
+      if (todayData.targets) setTargets(todayData.targets);
+      else if (tgts) setTargets(tgts);
+      if (waterData) {
+        setWaterAmountMl(waterData.amount_ml);
+        setWaterTargetMl(waterData.target_ml);
+        setWaterContainerSizeMl(waterData.container_size_ml);
+        setWaterRecommendedMl(waterData.recommended_ml);
+      }
+      if (weeklyData) setWeeklySummary(weeklyData);
+      if (calDays?.length) setWeeklyCalorieDays(calDays);
     } catch {
       // Silent — show empty state
     } finally {
@@ -317,6 +577,7 @@ export default function NutritionScreen() {
       resetForm();
       setShowAddModal(false);
       setShowExtra(false);
+      getTodayNutrition().then((d) => setSummary(d.summary)).catch(() => {});
     } catch {
       Alert.alert('Error', 'Could not log meal. Please try again.');
     } finally {
@@ -333,6 +594,7 @@ export default function NutritionScreen() {
           try {
             await deleteNutritionLog(id);
             setTodayLogs((prev) => prev.filter((n) => n.id !== id));
+            getTodayNutrition().then((d) => setSummary(d.summary)).catch(() => {});
           } catch {
             Alert.alert('Error', 'Could not delete entry.');
           }
@@ -344,10 +606,9 @@ export default function NutritionScreen() {
   // ── Meal plan handlers ────────────────────────────────────────────────────
 
   const handleRegenerateMealPlan = () => {
-    const left = 3 - (mealPlan?.regeneration_count ?? 0);
     Alert.alert(
       'Regenerate Meal Plan',
-      `You have ${left} regeneration${left === 1 ? '' : 's'} left today. Continue?`,
+      'Generate a new meal plan for today?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -359,12 +620,8 @@ export default function NutritionScreen() {
               setMealPlan(newPlan);
               setExpandedMealId(null);
               setGroceryChecked({});
-            } catch (err: any) {
-              if (err?.response?.status === 429) {
-                Alert.alert('Limit Reached', "You've used all 3 regenerations for today. Try again tomorrow.");
-              } else {
-                Alert.alert('Error', 'Could not regenerate meal plan. Try again.');
-              }
+            } catch {
+              Alert.alert('Error', 'Could not regenerate meal plan. Try again.');
             } finally {
               setRegenerating(false);
             }
@@ -382,10 +639,20 @@ export default function NutritionScreen() {
         protein_g: meal.protein_g,
         carbs_g: meal.carbs_g,
         fat_g: meal.fat_g,
+        fibre_g:      meal.fibre_g,
+        sugar_g:      meal.sugar_g,
+        sodium_mg:    meal.sodium_mg,
+        vitamin_d_iu: meal.vitamin_d_iu,
+        magnesium_mg: meal.magnesium_mg,
+        iron_mg:      meal.iron_mg,
+        calcium_mg:   meal.calcium_mg,
+        zinc_mg:      meal.zinc_mg,
+        omega3_g:     meal.omega3_g,
         source: 'manual',
         notes: `From meal plan · ${meal.time}`,
       });
       setTodayLogs((prev) => [...prev, saved]);
+      getTodayNutrition().then((d) => setSummary(d.summary)).catch(() => {});
       Alert.alert('Logged', `${meal.meal_name} added to today's food diary.`);
     } catch {
       Alert.alert('Error', 'Could not log meal.');
@@ -447,8 +714,16 @@ export default function NutritionScreen() {
     setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 50);
     try {
       const reply = await askNutritionAssistant(text, updated.slice(0, -1));
-      const assistantMsg: ChatMessage = { role: 'assistant', content: reply };
+      const assistantMsg: ChatMessage = { role: 'assistant', content: reply.response_text };
       setChatMessages(prev => [...prev.slice(-9), assistantMsg]);
+
+      // Handle meal modification
+      if (reply.meal_modified && reply.modified_meal) {
+        setMealModifiedBanner('Meal updated in your plan');
+        setTimeout(() => setMealModifiedBanner(null), 3500);
+        // Refresh meal plan to reflect the change
+        getTodayMealPlan().then(setMealPlan).catch(() => {});
+      }
     } catch {
       setChatMessages(prev => [
         ...prev.slice(-9),
@@ -559,14 +834,23 @@ export default function NutritionScreen() {
       const saved = await logNutrition({
         meal_name: scanForm.meal_name.trim(),
         description: scanResult?.description,
-        calories: parseOpt(scanForm.calories),
-        protein_g: parseOpt(scanForm.protein_g),
-        carbs_g: parseOpt(scanForm.carbs_g),
-        fat_g: parseOpt(scanForm.fat_g),
-        fibre_g: parseOpt(scanForm.fibre_g),
+        calories:     parseOpt(scanForm.calories),
+        protein_g:    parseOpt(scanForm.protein_g),
+        carbs_g:      parseOpt(scanForm.carbs_g),
+        fat_g:        parseOpt(scanForm.fat_g),
+        fibre_g:      parseOpt(scanForm.fibre_g),
+        sugar_g:      scanResult?.sugar_g ?? undefined,
+        sodium_mg:    scanResult?.sodium_mg ?? undefined,
+        vitamin_d_iu: scanResult?.vitamin_d_iu ?? undefined,
+        magnesium_mg: scanResult?.magnesium_mg ?? undefined,
+        iron_mg:      scanResult?.iron_mg ?? undefined,
+        calcium_mg:   scanResult?.calcium_mg ?? undefined,
+        zinc_mg:      scanResult?.zinc_mg ?? undefined,
+        omega3_g:     scanResult?.omega3_g ?? undefined,
         source: 'scan',
       });
       setTodayLogs((prev) => [...prev, saved]);
+      getTodayNutrition().then((d) => setSummary(d.summary)).catch(() => {});
       resetScan();
     } catch {
       Alert.alert('Error', 'Could not log meal. Try again.');
@@ -575,20 +859,53 @@ export default function NutritionScreen() {
     }
   };
 
+  // ── Water settings handler ────────────────────────────────────────────────
+
+  const handleSaveWaterSettings = async () => {
+    setWaterLoading(true);
+    try {
+      const targetOverride = settingsTargetInput.trim()
+        ? parseInt(settingsTargetInput, 10)
+        : null; // null = reset to recommended
+      const result = await patchWaterSettings({
+        target_ml: targetOverride,
+        container_size_ml: settingsContainerSize,
+        water_input_mode: settingsInputMode,
+      } as WaterSettingsPayload);
+      // Use response directly — no second round-trip needed
+      setWaterTargetMl(result.target_ml);
+      setWaterContainerSizeMl(result.container_size_ml);
+      setWaterRecommendedMl(result.recommended_ml);
+      setWaterInputMode(settingsInputMode);
+      setWaterSettingsOpen(false);
+    } catch {
+      Alert.alert('Error', 'Could not save water settings.');
+    } finally {
+      setWaterLoading(false);
+    }
+  };
+
   // ── Computed ──────────────────────────────────────────────────────────────
 
-  const totalCalories = todayLogs.reduce((s, n) => s + (n.calories ?? 0), 0);
-  const totalProtein  = todayLogs.reduce((s, n) => s + (n.protein_g ?? 0), 0);
-  const totalCarbs    = todayLogs.reduce((s, n) => s + (n.carbs_g ?? 0), 0);
-  const totalFat      = todayLogs.reduce((s, n) => s + (n.fat_g ?? 0), 0);
+  // Use summary for totals (most accurate), fall back to computing from logs
+  const totalCalories = summary?.calories_consumed ?? todayLogs.reduce((s, n) => s + (n.calories ?? 0), 0);
+  const totalProtein  = summary?.protein_consumed_g ?? todayLogs.reduce((s, n) => s + (n.protein_g ?? 0), 0);
+  const totalCarbs    = summary?.carbs_consumed_g ?? todayLogs.reduce((s, n) => s + (n.carbs_g ?? 0), 0);
+  const totalFat      = summary?.fat_consumed_g ?? todayLogs.reduce((s, n) => s + (n.fat_g ?? 0), 0);
 
-  const isOverGoal = totalCalories > DAILY_TARGETS.calories;
-  const calorieDiff = Math.abs(Math.round(totalCalories - DAILY_TARGETS.calories));
-  const calorieBarPct = Math.min(totalCalories / DAILY_TARGETS.calories, 1);
+  const calorieTarget = targets?.daily_calorie_target ?? 2000;
+  const proteinTarget = targets?.protein_g ?? 125;
+  const carbsTarget   = targets?.carbs_g ?? 225;
+  const fatTarget     = targets?.fat_g ?? 56;
 
-  const mockFibre = Math.min(totalCalories * 0.014, DAILY_TARGETS.fibre);
-  const weekLabels = getPast7DayLabels();
-  const mockWeeklyCalories = [1840, 2100, 1950, 2300, 1780, 2050, Math.round(totalCalories) || 0];
+  // Water computed
+  const dropCount = Math.max(4, Math.min(10, Math.round(waterTargetMl / waterContainerSizeMl)));
+  const currentGlasses = Math.round(waterAmountMl / waterContainerSizeMl);
+  // Progress: in glasses mode use drops/dropCount so 10/10 = 100%; in ml mode use exact ml/target
+  const waterPct = waterInputMode === 'ml'
+    ? (waterTargetMl > 0 ? waterAmountMl / waterTargetMl : 0)
+    : (dropCount > 0 ? currentGlasses / dropCount : 0);
+  const waterColor = waterPct >= 0.8 ? '#27ae60' : waterPct >= 0.5 ? '#e67e22' : '#e0e0e0';
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -630,61 +947,22 @@ export default function NutritionScreen() {
           </View>
         </SafeAreaView>
 
-        {/* ── Calorie Counter ── */}
-        <View style={s.calorieCard}>
-          <View style={s.calorieHeaderRow}>
-            <View>
-              <Text style={s.calorieTitle}>
-                {Math.round(totalCalories)}<Text style={s.calorieSuffix}> kcal</Text>
-              </Text>
-              <Text style={[s.calorieSubtitle, isOverGoal && { color: '#FF6B6B' }]}>
-                {isOverGoal ? `${calorieDiff} kcal over goal` : `${calorieDiff} kcal remaining`}
-              </Text>
-            </View>
-            <View style={[s.caloriePct, { borderColor: isOverGoal ? '#FF6B6B' : '#27ae60' }]}>
-              <Text style={[s.caloriePctText, { color: isOverGoal ? '#FF6B6B' : '#27ae60' }]}>
-                {Math.round(calorieBarPct * 100)}%
-              </Text>
-            </View>
-          </View>
-          <View style={s.calorieProgressBg}>
-            <View style={[
-              s.calorieProgressFill,
-              { width: `${Math.round(calorieBarPct * 100)}%` as any,
-                backgroundColor: isOverGoal ? '#FF6B6B' : '#27ae60' }
-            ]} />
-          </View>
-          <Text style={s.calorieGoalLabel}>Daily goal: {DAILY_TARGETS.calories} kcal</Text>
-          <LineChart
-            data={{
-              labels: weekLabels,
-              datasets: [
-                { data: mockWeeklyCalories, color: () => '#27ae60', strokeWidth: 2 },
-                { data: [DAILY_TARGETS.calories], withDots: false, color: () => 'rgba(255,255,255,0.3)', strokeWidth: 1 },
-              ],
-            }}
-            width={CARD_WIDTH - 8}
-            height={100}
-            withDots
-            withInnerLines={false}
-            withOuterLines={false}
-            withHorizontalLabels={false}
-            withVerticalLabels={true}
-            chartConfig={{
-              backgroundColor: '#1a1a1a',
-              backgroundGradientFrom: '#1a1a1a',
-              backgroundGradientTo: '#1a1a1a',
-              color: () => '#27ae60',
-              labelColor: () => theme.text.muted,
-              strokeWidth: 2,
-              propsForBackgroundLines: { stroke: 'transparent' },
-              propsForDots: { r: '3', strokeWidth: '0', fill: '#27ae60' },
-              propsForLabels: { fontSize: 10 },
-            }}
-            bezier
-            style={s.lineChart}
-          />
-        </View>
+        {/* ── Unified Calorie + Macro Card ── */}
+        <CalorieMacroCard
+          totalCalories={totalCalories}
+          calorieTarget={calorieTarget}
+          totalProtein={totalProtein}
+          proteinTarget={proteinTarget}
+          totalCarbs={totalCarbs}
+          carbsTarget={carbsTarget}
+          totalFat={totalFat}
+          fatTarget={fatTarget}
+        />
+
+        {/* ── Weekly Calorie Trend ── */}
+        {weeklyCalorieDays.length > 0 && (
+          <WeeklyCalorieTrend days={weeklyCalorieDays} />
+        )}
 
         {/* ── AI Food Scanner ── */}
         <TouchableOpacity style={s.scanCard} onPress={handleScanPhoto} activeOpacity={0.85}>
@@ -764,46 +1042,308 @@ export default function NutritionScreen() {
           </View>
         )}
 
-        {/* ── Macro Circles ── */}
-        <Text style={s.sectionLabel}>TODAY'S MACROS</Text>
-        <View style={s.macroCirclesCard}>
-          <MacroCircle label="Protein" value={totalProtein} target={DAILY_TARGETS.protein} unit="g" color={theme.accent} />
-          <MacroCircle label="Carbs" value={totalCarbs} target={DAILY_TARGETS.carbs} unit="g" color="#888888" />
-          <MacroCircle label="Fat" value={totalFat} target={DAILY_TARGETS.fat} unit="g" color="#FF6B35" />
+        {/* ── Meal Modified Banner ── */}
+        {mealModifiedBanner && (
+          <View style={s.mealModifiedBanner}>
+            <Ionicons name="checkmark-circle" size={16} color="#27ae60" />
+            <Text style={s.mealModifiedBannerText}>{mealModifiedBanner}</Text>
+          </View>
+        )}
+
+        {/* ── Water Tracking ── */}
+        <Text style={s.sectionLabel}>HYDRATION</Text>
+        <View style={s.card}>
+          {/* Top row: amount display + settings */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <View>
+              <Text style={{ fontSize: 22, fontWeight: '700', color: waterColor, lineHeight: 26 }}>
+                {waterInputMode === 'ml'
+                  ? `${waterAmountMl}ml`
+                  : `${currentGlasses} / ${dropCount}`}
+              </Text>
+              <Text style={{ fontSize: 11, color: theme.text.muted, marginTop: 2 }}>
+                Target: {(waterTargetMl / 1000).toFixed(1)}L · {Math.round(waterPct * 100)}%
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                setSettingsTargetInput('');
+                setSettingsContainerSize(waterContainerSizeMl);
+                setSettingsInputMode(waterInputMode);
+                setWaterSettingsOpen(true);
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="settings-outline" size={16} color={theme.text.muted} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Drops row — glasses mode */}
+          {waterInputMode !== 'ml' && (
+            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12 }}>
+              {Array.from({ length: dropCount }).map((_, i) => {
+                const filled = i < currentGlasses;
+                return (
+                  <TouchableOpacity
+                    key={i}
+                    onPress={async () => {
+                      if (waterLoading) return;
+                      const newGlasses = i < currentGlasses ? i : i + 1;
+                      const newAmountMl = newGlasses * waterContainerSizeMl;
+                      setWaterAmountMl(newAmountMl);
+                      setWaterLoading(true);
+                      try {
+                        const res = await patchWaterToday({ amount_ml: newAmountMl, container_size_ml: waterContainerSizeMl });
+                        setWaterAmountMl(res.amount_ml);
+                        setWaterTargetMl(res.target_ml);
+                        setWaterContainerSizeMl(res.container_size_ml);
+                      } catch {} finally { setWaterLoading(false); }
+                    }}
+                    activeOpacity={0.7}
+                    style={{ flex: 1, alignItems: 'center' }}
+                  >
+                    <Ionicons
+                      name={filled ? 'water' : 'water-outline'}
+                      size={22}
+                      color={filled ? waterColor : theme.border}
+                    />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
+          {/* +/- buttons — ml mode */}
+          {waterInputMode === 'ml' && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+              <TouchableOpacity
+                onPress={async () => {
+                  if (waterLoading) return;
+                  const newVal = Math.max(0, waterAmountMl - waterContainerSizeMl);
+                  setWaterAmountMl(newVal);
+                  setWaterLoading(true);
+                  try {
+                    const res = await patchWaterToday({ amount_ml: newVal, container_size_ml: waterContainerSizeMl });
+                    setWaterAmountMl(res.amount_ml);
+                    setWaterTargetMl(res.target_ml);
+                    setWaterContainerSizeMl(res.container_size_ml);
+                  } catch {} finally { setWaterLoading(false); }
+                }}
+                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#252525', borderWidth: 1, borderColor: '#333', alignItems: 'center', justifyContent: 'center' }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="remove" size={20} color={theme.text.primary} />
+              </TouchableOpacity>
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: waterColor }}>{waterAmountMl}ml</Text>
+                <Text style={{ fontSize: 10, color: theme.text.muted, marginTop: 1 }}>+{waterContainerSizeMl}ml per tap</Text>
+              </View>
+              <TouchableOpacity
+                onPress={async () => {
+                  if (waterLoading) return;
+                  const newVal = waterAmountMl + waterContainerSizeMl;
+                  setWaterAmountMl(newVal);
+                  setWaterLoading(true);
+                  try {
+                    const res = await patchWaterToday({ amount_ml: newVal, container_size_ml: waterContainerSizeMl });
+                    setWaterAmountMl(res.amount_ml);
+                    setWaterTargetMl(res.target_ml);
+                    setWaterContainerSizeMl(res.container_size_ml);
+                  } catch {} finally { setWaterLoading(false); }
+                }}
+                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#252525', borderWidth: 1, borderColor: '#333', alignItems: 'center', justifyContent: 'center' }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="add" size={20} color={theme.text.primary} />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Progress bar */}
+          <View style={{ height: 5, backgroundColor: theme.border, borderRadius: 3, overflow: 'hidden', marginBottom: 6 }}>
+            <View style={{
+              width: `${Math.round(Math.min(waterPct, 1) * 100)}%` as any,
+              height: '100%', backgroundColor: waterColor, borderRadius: 3,
+            }} />
+          </View>
+
+          {/* Recommended note if target has been overridden */}
+          {waterRecommendedMl > 0 && Math.abs(waterTargetMl - waterRecommendedMl) > 50 && (
+            <Text style={{ fontSize: 10, color: theme.text.muted, marginTop: 4 }}>
+              Recommended: {(waterRecommendedMl / 1000).toFixed(1)}L based on your profile
+            </Text>
+          )}
         </View>
+
+        {/* ── Water Settings Modal ── */}
+        <Modal
+          visible={waterSettingsOpen}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setWaterSettingsOpen(false)}
+        >
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}
+            activeOpacity={1}
+            onPress={() => setWaterSettingsOpen(false)}
+          />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
+          >
+            <View style={{ backgroundColor: '#1a1a1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40, borderTopWidth: 1, borderTopColor: '#2a2a2a' }}>
+              {/* Sheet header */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text.primary }}>Water Settings</Text>
+                <TouchableOpacity onPress={() => setWaterSettingsOpen(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close" size={20} color={theme.text.muted} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Input mode toggle */}
+              <Text style={{ fontSize: 11, color: theme.text.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Input Mode</Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+                {(['glasses', 'ml'] as const).map(mode => (
+                  <TouchableOpacity
+                    key={mode}
+                    onPress={() => setSettingsInputMode(mode)}
+                    style={{
+                      flex: 1, paddingVertical: 9, borderRadius: 10, borderWidth: 1, alignItems: 'center',
+                      borderColor: settingsInputMode === mode ? theme.accent : '#333',
+                      backgroundColor: settingsInputMode === mode ? `${theme.accent}22` : 'transparent',
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: settingsInputMode === mode ? theme.accent : theme.text.muted }}>
+                      {mode === 'glasses' ? 'Glasses' : 'Millilitres'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Container size pills */}
+              <Text style={{ fontSize: 11, color: theme.text.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Container Size</Text>
+              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 20 }}>
+                {[200, 250, 330, 400, 500].map(ml => (
+                  <TouchableOpacity
+                    key={ml}
+                    onPress={() => setSettingsContainerSize(ml)}
+                    style={{
+                      flex: 1, paddingVertical: 7, borderRadius: 8, borderWidth: 1, alignItems: 'center',
+                      borderColor: settingsContainerSize === ml ? theme.accent : '#333',
+                      backgroundColor: settingsContainerSize === ml ? `${theme.accent}22` : 'transparent',
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: settingsContainerSize === ml ? theme.accent : theme.text.muted }}>
+                      {ml}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Daily target override */}
+              <Text style={{ fontSize: 11, color: theme.text.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Daily Target (ml)</Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6 }}>
+                <TextInput
+                  style={{ flex: 1, height: 44, backgroundColor: '#252525', borderRadius: 10, borderWidth: 1, borderColor: '#333', paddingHorizontal: 12, fontSize: 15, color: theme.text.primary }}
+                  placeholder={`${waterTargetMl} (current)`}
+                  placeholderTextColor={theme.text.muted}
+                  value={settingsTargetInput}
+                  onChangeText={setSettingsTargetInput}
+                  keyboardType="number-pad"
+                />
+                <TouchableOpacity
+                  onPress={() => setSettingsTargetInput('')}
+                  style={{ height: 44, paddingHorizontal: 14, backgroundColor: '#252525', borderRadius: 10, borderWidth: 1, borderColor: '#333', alignItems: 'center', justifyContent: 'center' }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ fontSize: 12, color: theme.text.muted }}>Reset</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={{ fontSize: 11, color: theme.text.muted, marginBottom: 22 }}>
+                Recommended: {(waterRecommendedMl / 1000).toFixed(1)}L · leave blank to use recommendation
+              </Text>
+
+              {/* Save */}
+              <TouchableOpacity
+                onPress={handleSaveWaterSettings}
+                style={{ height: 48, backgroundColor: theme.accent, borderRadius: 12, alignItems: 'center', justifyContent: 'center', opacity: waterLoading ? 0.6 : 1 }}
+                disabled={waterLoading}
+                activeOpacity={0.85}
+              >
+                {waterLoading
+                  ? <ActivityIndicator size="small" color={theme.bg.primary} />
+                  : <Text style={{ fontSize: 15, fontWeight: '700', color: theme.bg.primary }}>Save Settings</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
 
         {/* ── Fibre & Micronutrients ── */}
         <Text style={s.sectionLabel}>FIBRE & MICRONUTRIENTS</Text>
         <View style={s.card}>
-          <View style={s.microRow}>
-            <View style={s.microLabelBlock}>
-              <Text style={s.microLabel}>Fibre</Text>
-              <Text style={s.microTarget}>Goal: {DAILY_TARGETS.fibre}g</Text>
-            </View>
-            <View style={s.microBarGroup}>
-              <ProgressBar value={mockFibre / DAILY_TARGETS.fibre} color={theme.status.success} />
-              <Text style={s.microValue}>{mockFibre.toFixed(1)}g</Text>
-            </View>
-          </View>
-          <View style={s.microDivider} />
-          {MICROS.map((micro, idx) => (
-            <View key={micro.label}>
-              {idx > 0 && <View style={s.microDivider} />}
-              <View style={s.microRow}>
-                <View style={s.microLabelBlock}>
-                  <Text style={s.microLabel}>{micro.label}</Text>
-                  <Text style={s.microTarget}>Goal: {micro.target}</Text>
-                </View>
-                <View style={s.microBarGroup}>
-                  <ProgressBar value={micro.value} color={micro.color} />
-                  <Text style={s.microValue}>{Math.round(micro.value * 100)}%</Text>
-                </View>
-              </View>
-            </View>
-          ))}
           <Text style={s.microNote}>
-            Micronutrient data is estimated. Log detailed meals for better accuracy.
+            Fibre, sugar & sodium are tracked from logged meals. Other targets are shown for reference.
           </Text>
+          {(() => {
+            // Determine "lowest-pct micro" from items 3-8 (after fibre, sugar, sodium)
+            const rest = MICRO_DEFS.slice(3);
+            let lowestIdx = 3;
+            let lowestPct = Infinity;
+            rest.forEach((micro, i) => {
+              const consumed = micro.consumedKey != null ? (summary?.[micro.consumedKey] as number | undefined ?? null) : null;
+              const goalVal = targets ? (targets[micro.key] as number | null) : null;
+              if (consumed != null && goalVal != null && goalVal > 0) {
+                const pct = consumed / goalVal;
+                if (pct < lowestPct) { lowestPct = pct; lowestIdx = i + 3; }
+              }
+            });
+            const defaultVisible = new Set([0, 1, 2, lowestIdx]);
+            const visibleMicros = microsExpanded ? MICRO_DEFS : MICRO_DEFS.filter((_, i) => defaultVisible.has(i));
+            return visibleMicros.map((micro, idx) => {
+              const consumed = micro.consumedKey != null
+                ? (summary?.[micro.consumedKey] as number | undefined ?? null)
+                : null;
+              const goalVal = targets ? (targets[micro.key] as number | null) : null;
+              const goalText = targets ? micro.goalLabel(targets) : '—';
+              const barValue = (consumed != null && goalVal != null && goalVal > 0)
+                ? Math.min(consumed / goalVal, 1)
+                : 0;
+              const hasData = consumed != null;
+              const valStr = hasData ? `${Math.round(consumed!)}${micro.unit}` : '—';
+              return (
+                <View key={micro.key}>
+                  {idx > 0 && <View style={s.microDivider} />}
+                  <View style={s.microRow}>
+                    <View style={s.microLabelBlock}>
+                      <Text style={s.microLabel} numberOfLines={1}>{micro.label}</Text>
+                      <Text style={s.microTarget} numberOfLines={1}>{goalText}</Text>
+                    </View>
+                    <View style={s.microBarGroup}>
+                      {hasData
+                        ? <ProgressBar value={barValue} color={theme.status.success} />
+                        : <View style={{ flex: 1, height: 5, backgroundColor: theme.border, borderRadius: 3, opacity: 0.4 }} />
+                      }
+                      <Text style={[s.microValue, !hasData && { color: theme.text.muted }]} numberOfLines={1}>
+                        {valStr}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            });
+          })()}
+          <TouchableOpacity
+            style={s.microExpandBtn}
+            onPress={() => setMicrosExpanded(v => !v)}
+            activeOpacity={0.7}
+          >
+            <Text style={s.microExpandText}>{microsExpanded ? 'Show less' : 'Show all'}</Text>
+            <Ionicons name={microsExpanded ? 'chevron-up' : 'chevron-down'} size={12} color={theme.text.muted} />
+          </TouchableOpacity>
         </View>
 
         {/* ── Meals Section ── */}
@@ -919,16 +1459,11 @@ export default function NutritionScreen() {
                 <Text style={s.mpTitle}>Today's Meal Plan</Text>
                 {mealPlan.is_cheat_day && <View style={s.cheatDot} />}
               </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                {mealPlan.total_calories !== null && (
-                  <Text style={s.mpCals}>{Math.round(mealPlan.total_calories).toLocaleString()} kcal</Text>
-                )}
-                <Ionicons
-                  name={mealPlanExpanded ? 'chevron-up' : 'chevron-down'}
-                  size={15}
-                  color={theme.text.muted}
-                />
-              </View>
+              <Ionicons
+                name={mealPlanExpanded ? 'chevron-up' : 'chevron-down'}
+                size={15}
+                color={theme.text.muted}
+              />
             </TouchableOpacity>
             {mealPlan.is_cheat_day && mealPlanExpanded && (
               <Text style={s.cheatDayLine}>Cheat day — enjoy it.</Text>
@@ -946,6 +1481,28 @@ export default function NutritionScreen() {
                       onPress={() => setExpandedMealId(isExpanded ? null : meal.meal_name)}
                       activeOpacity={0.7}
                     >
+                      {(() => {
+                        // Parse meal.time e.g. "8:00 AM", "12:30 PM"
+                        const now2 = new Date();
+                        const match = /^(\d+):(\d+)\s*(AM|PM)$/i.exec(meal.time?.trim() ?? '');
+                        let dotColor: string = '#333';
+                        if (match) {
+                          let h = parseInt(match[1], 10);
+                          const m = parseInt(match[2], 10);
+                          if (match[3].toUpperCase() === 'PM' && h !== 12) h += 12;
+                          if (match[3].toUpperCase() === 'AM' && h === 12) h = 0;
+                          const mealMinutes = h * 60 + m;
+                          const nowMinutes = now2.getHours() * 60 + now2.getMinutes();
+                          const diff = Math.abs(nowMinutes - mealMinutes);
+                          if (diff <= 30) dotColor = '#27ae60';       // current window
+                          else if (mealMinutes < nowMinutes) dotColor = '#444'; // past
+                          else dotColor = '#555';                               // upcoming
+                        }
+                        const isCurrent = dotColor === '#27ae60';
+                        return (
+                          <View style={[s.mpTimingDot, { backgroundColor: dotColor }, isCurrent && { opacity: 1 }]} />
+                        );
+                      })()}
                       <Text style={s.mpMealTime}>{meal.time}</Text>
                       <Text style={s.mpMealName} numberOfLines={1}>{meal.meal_name}</Text>
                       <Text style={s.mpMealCals}>{meal.calories}</Text>
@@ -986,17 +1543,15 @@ export default function NutritionScreen() {
             {/* Regenerate button */}
             <TouchableOpacity
               onPress={handleRegenerateMealPlan}
-              disabled={regenerating || mealPlan.regeneration_count >= 3}
-              style={[s.regenBtn, (regenerating || mealPlan.regeneration_count >= 3) && { opacity: 0.35 }]}
+              disabled={regenerating}
+              style={[s.regenBtn, regenerating && { opacity: 0.35 }]}
               activeOpacity={0.7}
             >
               {regenerating
                 ? <ActivityIndicator size="small" color={theme.text.secondary} />
                 : <>
                     <Ionicons name="refresh-outline" size={13} color={theme.text.secondary} />
-                    <Text style={s.regenBtnText}>
-                      Regenerate{mealPlan.regeneration_count > 0 ? ` (${3 - mealPlan.regeneration_count} left)` : ''}
-                    </Text>
+                    <Text style={s.regenBtnText}>Regenerate</Text>
                   </>
               }
             </TouchableOpacity>
@@ -1103,6 +1658,38 @@ export default function NutritionScreen() {
             </>}
           </>
         ) : null}
+
+        {/* ── Weekly Nutrition Summary ── */}
+        {weeklySummary && (
+          <>
+            <Text style={[s.sectionLabel, { marginTop: 12 }]}>THIS WEEK</Text>
+            <View style={s.weeklyCard}>
+              <View style={s.weeklyGrid}>
+                <View style={s.weeklyCell}>
+                  <Text style={s.weeklyCellValue}>{Math.round(weeklySummary.avg_daily_calories)}</Text>
+                  <Text style={s.weeklyCellLabel}>Avg kcal/day</Text>
+                </View>
+                <View style={[s.weeklyCell, s.weeklyCellBorderLeft]}>
+                  <Text style={s.weeklyCellValue}>{Math.round(weeklySummary.avg_daily_protein)}g</Text>
+                  <Text style={s.weeklyCellLabel}>Avg protein</Text>
+                </View>
+                <View style={[s.weeklyCell, s.weeklyCellBorderTop]}>
+                  <Text style={s.weeklyCellValue}>{weeklySummary.days_calorie_target_hit}/7</Text>
+                  <Text style={s.weeklyCellLabel}>Calorie days</Text>
+                </View>
+                <View style={[s.weeklyCell, s.weeklyCellBorderLeft, s.weeklyCellBorderTop]}>
+                  <Text style={s.weeklyCellValue}>{weeklySummary.days_protein_target_hit}/7</Text>
+                  <Text style={s.weeklyCellLabel}>Protein days</Text>
+                </View>
+              </View>
+              {weeklySummary.last_week_avg_calories > 0 && (
+                <Text style={s.weeklyCompare}>
+                  Last week: {Math.round(weeklySummary.last_week_avg_calories)} kcal avg · {Math.round(weeklySummary.last_week_avg_protein)}g protein
+                </Text>
+              )}
+            </View>
+          </>
+        )}
 
         <View style={s.bottomPadding} />
       </ScrollView>
@@ -1520,21 +2107,17 @@ function createStyles(t: ThemeColors) {
       alignItems: 'center', justifyContent: 'center',
     },
 
-    // Calorie counter card
-    calorieCard: {
+    // Unified calorie + macro card
+    unifiedCard: {
       backgroundColor: '#1a1a1a', borderRadius: 16, padding: 20,
       borderWidth: 1, borderColor: '#2a2a2a', marginBottom: 16,
     },
-    calorieHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 },
-    calorieTitle: { fontSize: 36, fontWeight: '800', color: t.text.primary },
-    calorieSuffix: { fontSize: 16, fontWeight: '400', color: t.text.muted },
-    calorieSubtitle: { fontSize: 13, color: t.text.muted, marginTop: 2 },
-    caloriePct: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1 },
-    caloriePctText: { fontSize: 14, fontWeight: '700' },
-    calorieProgressBg: { height: 6, backgroundColor: t.border, borderRadius: 3, overflow: 'hidden', marginBottom: 6 },
-    calorieProgressFill: { height: '100%', borderRadius: 3 },
-    calorieGoalLabel: { fontSize: 11, color: t.text.muted, marginBottom: 14 },
-    lineChart: { borderRadius: 10, marginLeft: -8 },
+
+    // Weekly calorie trend card
+    weeklyTrendCard: {
+      backgroundColor: '#1a1a1a', borderRadius: 14, padding: 16,
+      borderWidth: 1, borderColor: '#2a2a2a', marginBottom: 16,
+    },
 
     // Scan card
     scanCard: {
@@ -1551,15 +2134,9 @@ function createStyles(t: ThemeColors) {
     scanCardTitle: { fontSize: 15, fontWeight: '600', color: t.text.primary },
     scanCardSubtitle: { fontSize: 12, color: t.text.muted, marginTop: 1 },
 
-    // Macro circles
     sectionLabel: {
       fontSize: 11, fontWeight: '600', color: t.text.muted,
       textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12, marginTop: 4,
-    },
-    macroCirclesCard: {
-      backgroundColor: t.bg.elevated, borderRadius: 20, padding: 20,
-      borderWidth: 1, borderColor: t.border, marginBottom: 20,
-      flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center',
     },
 
     // Fibre & Micros
@@ -1572,9 +2149,14 @@ function createStyles(t: ThemeColors) {
     microLabel: { fontSize: 14, color: t.text.primary, fontWeight: '500' },
     microTarget: { fontSize: 11, color: t.text.muted, marginTop: 1 },
     microBarGroup: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
-    microValue: { fontSize: 12, color: t.text.secondary, width: 36, textAlign: 'right' },
+    microValue: { fontSize: 12, color: t.text.secondary, width: 52, textAlign: 'right' },
     microDivider: { height: 1, backgroundColor: t.border },
-    microNote: { fontSize: 11, color: t.text.muted, marginTop: 12, lineHeight: 16 },
+    microNote: { fontSize: 11, color: t.text.muted, marginBottom: 10, lineHeight: 16 },
+    microExpandBtn: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
+      paddingTop: 10, marginTop: 4, borderTopWidth: 1, borderTopColor: t.border,
+    },
+    microExpandText: { fontSize: 12, color: t.text.muted },
 
     // Meals section
     mealsSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
@@ -1674,6 +2256,37 @@ function createStyles(t: ThemeColors) {
     scanErrorTitle: { fontSize: 16, fontWeight: '600', color: t.text.primary, marginTop: 4 },
     scanErrorDetail: { fontSize: 13, color: t.text.secondary, textAlign: 'center', lineHeight: 18 },
 
+    // Calorie breakdown bar
+    breakdownCard: {
+      backgroundColor: t.bg.elevated, borderRadius: 14, padding: 14,
+      borderWidth: 1, borderColor: t.border, marginBottom: 16,
+    },
+    breakdownBar: {
+      height: 10, borderRadius: 5, overflow: 'hidden',
+      flexDirection: 'row', marginBottom: 10,
+      backgroundColor: t.border,
+    },
+    breakdownLegend: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    breakdownLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    breakdownDot: { width: 8, height: 8, borderRadius: 4 },
+    breakdownLegendText: { fontSize: 11, color: t.text.muted },
+
+    // Weekly nutrition summary
+    weeklyCard: {
+      backgroundColor: t.bg.elevated, borderRadius: 16,
+      borderWidth: 1, borderColor: t.border, marginBottom: 20, overflow: 'hidden',
+    },
+    weeklyGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+    weeklyCell: { width: '50%', padding: 16, alignItems: 'center' },
+    weeklyCellBorderLeft: { borderLeftWidth: 1, borderLeftColor: t.border },
+    weeklyCellBorderTop: { borderTopWidth: 1, borderTopColor: t.border },
+    weeklyCellValue: { fontSize: 22, fontWeight: '700', color: t.text.primary, marginBottom: 4 },
+    weeklyCellLabel: { fontSize: 11, color: t.text.muted, textAlign: 'center' },
+    weeklyCompare: {
+      fontSize: 11, color: t.text.muted, textAlign: 'center',
+      paddingVertical: 10, borderTopWidth: 1, borderTopColor: t.border,
+    },
+
     // Compact meal plan
     mpRow: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -1702,6 +2315,7 @@ function createStyles(t: ThemeColors) {
     },
     mpLogBtnText: { fontSize: 12, fontWeight: '700', color: t.bg.primary },
     mpNote: { fontSize: 12, color: t.text.muted, fontStyle: 'italic', marginTop: 10, marginBottom: 4, lineHeight: 17 },
+    mpTimingDot: { width: 7, height: 7, borderRadius: 3.5, marginRight: 2 },
     regenBtn: {
       flexDirection: 'row', alignItems: 'center', gap: 6,
       alignSelf: 'flex-start', marginTop: 10, marginBottom: 4,
@@ -1712,6 +2326,14 @@ function createStyles(t: ThemeColors) {
     mpErrorWrap: { paddingVertical: 20, alignItems: 'center', gap: 8, marginBottom: 8 },
     mpErrorText: { fontSize: 13, color: t.text.muted, textAlign: 'center' },
     mpErrorRetry: { fontSize: 13, color: t.text.secondary, textDecorationLine: 'underline' },
+
+    // Meal modified banner
+    mealModifiedBanner: {
+      flexDirection: 'row', alignItems: 'center', gap: 8,
+      backgroundColor: 'rgba(39,174,96,0.12)', borderRadius: 10, padding: 12,
+      borderWidth: 1, borderColor: 'rgba(39,174,96,0.3)', marginBottom: 12,
+    },
+    mealModifiedBannerText: { fontSize: 14, color: '#27ae60', fontWeight: '600' },
 
     // Ask ORYX chat
     chatCollapsed: {

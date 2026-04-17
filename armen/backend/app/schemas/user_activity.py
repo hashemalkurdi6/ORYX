@@ -64,6 +64,7 @@ class WeeklyLoadOut(BaseModel):
     status: str  # "normal" | "elevated" | "high"
     acwr: float | None
     acwr_status: str  # "undertraining" | "optimal" | "caution" | "high_risk" | "insufficient_data"
+    days_until_acwr: int | None = None  # days remaining until ACWR unlocks (None when already unlocked)
 
 
 class ReadinessOut(BaseModel):

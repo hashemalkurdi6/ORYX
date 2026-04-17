@@ -23,6 +23,11 @@ from app.models import food as food_model  # noqa: F401
 from app.models import diagnosis as diagnosis_model  # noqa: F401
 from app.models import nutrition_profile as nutrition_profile_model  # noqa: F401
 from app.models import meal_plan as meal_plan_model  # noqa: F401
+from app.models import readiness_cache as readiness_cache_model  # noqa: F401
+from app.models import nutrition_targets as nutrition_targets_model  # noqa: F401
+from app.models import daily_nutrition_summary as daily_nutrition_summary_model  # noqa: F401
+from app.models import daily_water_intake as daily_water_intake_model  # noqa: F401
+from app.models import weight_log as weight_log_model  # noqa: F401
 
 from app.routers import auth, strava, health, diagnosis
 from app.routers import whoop, oura, wellness, nutrition
@@ -34,6 +39,7 @@ from app.routers import warmup as warmup_router
 from app.routers import food as food_router
 from app.routers import home as home_router
 from app.routers import meal_plan as meal_plan_router
+from app.routers import weight as weight_router
 
 
 _USER_COLUMN_MIGRATIONS = [
@@ -56,6 +62,15 @@ _USER_COLUMN_MIGRATIONS = [
     "ALTER TABLE user_activities ADD COLUMN IF NOT EXISTS rpe INTEGER",
     "ALTER TABLE user_activities ADD COLUMN IF NOT EXISTS training_load INTEGER",
     "ALTER TABLE user_activities ADD COLUMN IF NOT EXISTS is_rest_day BOOLEAN NOT NULL DEFAULT FALSE",
+    # Wellness — Hooper Index fields (1-7 scale, all nullable for backward compat)
+    "ALTER TABLE wellness_checkins ADD COLUMN IF NOT EXISTS sleep_quality INTEGER",
+    "ALTER TABLE wellness_checkins ADD COLUMN IF NOT EXISTS fatigue INTEGER",
+    "ALTER TABLE wellness_checkins ADD COLUMN IF NOT EXISTS stress INTEGER",
+    "ALTER TABLE wellness_checkins ADD COLUMN IF NOT EXISTS muscle_soreness INTEGER",
+    # Make legacy wellness fields nullable (existing data stays; new clients send Hooper fields)
+    "ALTER TABLE wellness_checkins ALTER COLUMN mood DROP NOT NULL",
+    "ALTER TABLE wellness_checkins ALTER COLUMN energy DROP NOT NULL",
+    "ALTER TABLE wellness_checkins ALTER COLUMN soreness DROP NOT NULL",
     # Nutrition profile — foods_disliked + foods_loved JSON migration
     "ALTER TABLE nutrition_profiles ADD COLUMN IF NOT EXISTS foods_disliked JSON",
     """DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='nutrition_profiles' AND column_name='foods_loved' AND udt_name='text') THEN ALTER TABLE nutrition_profiles ALTER COLUMN foods_loved TYPE JSON USING NULL; END IF; END $$""",
@@ -76,6 +91,105 @@ _USER_COLUMN_MIGRATIONS = [
         ALTER TABLE meal_plans ADD CONSTRAINT uq_meal_plans_user_date UNIQUE (user_id, date);
       END IF;
     END $$
+    """,
+    # NutritionLog micronutrient fields
+    "ALTER TABLE nutrition_logs ADD COLUMN IF NOT EXISTS sugar_g FLOAT",
+    "ALTER TABLE nutrition_logs ADD COLUMN IF NOT EXISTS sodium_mg FLOAT",
+    "ALTER TABLE nutrition_logs ADD COLUMN IF NOT EXISTS vitamin_d_iu FLOAT",
+    "ALTER TABLE nutrition_logs ADD COLUMN IF NOT EXISTS magnesium_mg FLOAT",
+    "ALTER TABLE nutrition_logs ADD COLUMN IF NOT EXISTS iron_mg FLOAT",
+    "ALTER TABLE nutrition_logs ADD COLUMN IF NOT EXISTS calcium_mg FLOAT",
+    "ALTER TABLE nutrition_logs ADD COLUMN IF NOT EXISTS zinc_mg FLOAT",
+    "ALTER TABLE nutrition_logs ADD COLUMN IF NOT EXISTS omega3_g FLOAT",
+    # DailyNutritionSummary micronutrient consumed fields
+    "ALTER TABLE daily_nutrition_summaries ADD COLUMN IF NOT EXISTS vitamin_d_consumed_iu FLOAT NOT NULL DEFAULT 0",
+    "ALTER TABLE daily_nutrition_summaries ADD COLUMN IF NOT EXISTS magnesium_consumed_mg FLOAT NOT NULL DEFAULT 0",
+    "ALTER TABLE daily_nutrition_summaries ADD COLUMN IF NOT EXISTS iron_consumed_mg FLOAT NOT NULL DEFAULT 0",
+    "ALTER TABLE daily_nutrition_summaries ADD COLUMN IF NOT EXISTS calcium_consumed_mg FLOAT NOT NULL DEFAULT 0",
+    "ALTER TABLE daily_nutrition_summaries ADD COLUMN IF NOT EXISTS zinc_consumed_mg FLOAT NOT NULL DEFAULT 0",
+    "ALTER TABLE daily_nutrition_summaries ADD COLUMN IF NOT EXISTS omega3_consumed_g FLOAT NOT NULL DEFAULT 0",
+    # FoodCache micronutrient fields
+    "ALTER TABLE foods_cache ADD COLUMN IF NOT EXISTS vitamin_d_100g FLOAT",
+    "ALTER TABLE foods_cache ADD COLUMN IF NOT EXISTS magnesium_100g FLOAT",
+    "ALTER TABLE foods_cache ADD COLUMN IF NOT EXISTS iron_100g FLOAT",
+    "ALTER TABLE foods_cache ADD COLUMN IF NOT EXISTS calcium_100g FLOAT",
+    "ALTER TABLE foods_cache ADD COLUMN IF NOT EXISTS zinc_100g FLOAT",
+    "ALTER TABLE foods_cache ADD COLUMN IF NOT EXISTS omega3_100g FLOAT",
+    # CustomFood micronutrient fields
+    "ALTER TABLE custom_foods ADD COLUMN IF NOT EXISTS vitamin_d_100g FLOAT",
+    "ALTER TABLE custom_foods ADD COLUMN IF NOT EXISTS magnesium_100g FLOAT",
+    "ALTER TABLE custom_foods ADD COLUMN IF NOT EXISTS iron_100g FLOAT",
+    "ALTER TABLE custom_foods ADD COLUMN IF NOT EXISTS calcium_100g FLOAT",
+    "ALTER TABLE custom_foods ADD COLUMN IF NOT EXISTS zinc_100g FLOAT",
+    "ALTER TABLE custom_foods ADD COLUMN IF NOT EXISTS omega3_100g FLOAT",
+    # MealPlan modifications history
+    "ALTER TABLE meal_plans ADD COLUMN IF NOT EXISTS modifications JSON",
+    # Water tracking table
+    """
+    CREATE TABLE IF NOT EXISTS daily_water_intake (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        date DATE NOT NULL,
+        glasses_count INTEGER NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE (user_id, date)
+    )
+    """,
+    # Ensure the unique constraint exists (in case table was created by create_all without it)
+    """
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'daily_water_intake'
+          AND constraint_name = 'daily_water_intake_user_id_date_key'
+          AND constraint_type = 'UNIQUE'
+      ) THEN
+        ALTER TABLE daily_water_intake ADD CONSTRAINT daily_water_intake_user_id_date_key UNIQUE (user_id, date);
+      END IF;
+    END $$
+    """,
+    # Water tracking — new ml-based columns
+    "ALTER TABLE daily_water_intake ADD COLUMN IF NOT EXISTS amount_ml INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE daily_water_intake ADD COLUMN IF NOT EXISTS container_size_ml INTEGER NOT NULL DEFAULT 250",
+    # Migrate legacy glasses_count → amount_ml (250ml per glass)
+    "UPDATE daily_water_intake SET amount_ml = glasses_count * 250 WHERE amount_ml = 0 AND glasses_count > 0",
+    # Nutrition targets — personalized water target
+    "ALTER TABLE nutrition_targets ADD COLUMN IF NOT EXISTS water_target_ml INTEGER",
+    # Nutrition profile — water preferences
+    "ALTER TABLE nutrition_profiles ADD COLUMN IF NOT EXISTS water_target_override_ml INTEGER",
+    "ALTER TABLE nutrition_profiles ADD COLUMN IF NOT EXISTS container_size_ml INTEGER",
+    "ALTER TABLE nutrition_profiles ADD COLUMN IF NOT EXISTS water_input_mode VARCHAR(20)",
+    # Dedup existing rest day entries — keep oldest per (user_id, date)
+    """
+    DELETE FROM user_activities ua1
+    USING user_activities ua2
+    WHERE ua1.user_id = ua2.user_id
+      AND ua1.is_rest_day = TRUE
+      AND ua2.is_rest_day = TRUE
+      AND DATE(ua1.logged_at) = DATE(ua2.logged_at)
+      AND ua1.logged_at > ua2.logged_at
+    """,
+    # Weight tracking
+    """
+    CREATE TABLE IF NOT EXISTS weight_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        weight_kg FLOAT NOT NULL,
+        logged_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        note TEXT,
+        source VARCHAR(50) DEFAULT 'manual'
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_weight_logs_user_logged_at ON weight_logs (user_id, logged_at DESC)",
+    # User weight_unit column
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS weight_unit VARCHAR(10) DEFAULT 'kg'",
+    # Seed weight_logs from onboarding weight_kg for users who have it set but no log yet
+    """
+    INSERT INTO weight_logs (id, user_id, weight_kg, logged_at, source)
+    SELECT gen_random_uuid(), id, weight_kg, created_at, 'onboarding'
+    FROM users
+    WHERE weight_kg IS NOT NULL
+      AND id NOT IN (SELECT DISTINCT user_id FROM weight_logs)
     """,
 ]
 
@@ -137,6 +251,7 @@ app.include_router(warmup_router.router)
 app.include_router(food_router.router)
 app.include_router(home_router.router)
 app.include_router(meal_plan_router.router)
+app.include_router(weight_router.router)
 
 
 @app.get("/", tags=["health-check"])

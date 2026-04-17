@@ -34,6 +34,10 @@ class NutritionProfile(Base):
     weekly_budget: Mapped[str | None] = mapped_column(String(50), nullable=True)
     kitchen_access: Mapped[str | None] = mapped_column(String(100), nullable=True)
     region: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Water tracking preferences
+    water_target_override_ml: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    container_size_ml: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    water_input_mode: Mapped[str | None] = mapped_column(String(20), nullable=True)  # 'glasses' | 'ml'
     nutrition_survey_complete: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

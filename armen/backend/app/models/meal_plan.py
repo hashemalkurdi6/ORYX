@@ -19,6 +19,7 @@ class MealPlan(Base):
     generated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     is_cheat_day: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
     regeneration_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0")
+    modifications: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)
 
 class SavedMeal(Base):
     __tablename__ = "saved_meals"

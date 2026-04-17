@@ -38,7 +38,13 @@ _USDA_NUTRIENTS = {
     1004: "fat_100g",
     1079: "fibre_100g",
     2000: "sugar_100g",
-    1093: "sodium_mg",   # converted → g below
+    1093: "sodium_mg",      # converted → g below
+    1114: "vitamin_d_iu",   # IU (stays as IU)
+    1090: "magnesium_mg",   # mg per 100g
+    1089: "iron_mg",        # mg per 100g
+    1087: "calcium_mg",     # mg per 100g
+    1095: "zinc_mg",        # mg per 100g
+    1404: "omega3_g",       # g per 100g
 }
 
 
@@ -81,6 +87,12 @@ def _parse_off_product(product: dict) -> FoodItem | None:
         fibre_100g=_f("fiber_100g"),
         sugar_100g=_f("sugars_100g"),
         sodium_100g=round(_f("sodium_100g"), 4),
+        vitamin_d_100g=_f("vitamin-d_100g"),
+        magnesium_100g=_f("magnesium_100g"),
+        iron_100g=_f("iron_100g"),
+        calcium_100g=_f("calcium_100g"),
+        zinc_100g=_f("zinc_100g"),
+        omega3_100g=_f("omega-3-fat_100g"),
         serving_size_g=serving_g,
         serving_unit=serving_unit,
     )
@@ -102,7 +114,7 @@ def _parse_usda_food(food: dict) -> FoodItem | None:
             except (TypeError, ValueError):
                 pass
 
-    # Sodium comes in mg → convert to g
+    # Sodium comes in mg → convert to g for FoodItem consistency
     sodium_g = round(nutrients.pop("sodium_mg", 0.0) / 1000, 4)
 
     serving_g: float | None = food.get("servingSize")
@@ -122,6 +134,12 @@ def _parse_usda_food(food: dict) -> FoodItem | None:
         fibre_100g=nutrients.get("fibre_100g", 0.0),
         sugar_100g=nutrients.get("sugar_100g", 0.0),
         sodium_100g=sodium_g,
+        vitamin_d_100g=nutrients.get("vitamin_d_iu", 0.0),
+        magnesium_100g=nutrients.get("magnesium_mg", 0.0),
+        iron_100g=nutrients.get("iron_mg", 0.0),
+        calcium_100g=nutrients.get("calcium_mg", 0.0),
+        zinc_100g=nutrients.get("zinc_mg", 0.0),
+        omega3_100g=nutrients.get("omega3_g", 0.0),
         serving_size_g=float(serving_g) if serving_g else None,
         serving_unit=serving_unit,
     )
@@ -188,6 +206,12 @@ async def _get_cached_barcode(barcode: str, db: AsyncSession) -> FoodItem | None
         fibre_100g=row.fibre_100g or 0.0,
         sugar_100g=row.sugar_100g or 0.0,
         sodium_100g=row.sodium_100g or 0.0,
+        vitamin_d_100g=row.vitamin_d_100g or 0.0,
+        magnesium_100g=row.magnesium_100g or 0.0,
+        iron_100g=row.iron_100g or 0.0,
+        calcium_100g=row.calcium_100g or 0.0,
+        zinc_100g=row.zinc_100g or 0.0,
+        omega3_100g=row.omega3_100g or 0.0,
         serving_size_g=row.serving_size_g,
         serving_unit=row.serving_unit,
     )
@@ -214,6 +238,12 @@ async def _save_food_cache(item: FoodItem, db: AsyncSession) -> None:
             fibre_100g=item.fibre_100g,
             sugar_100g=item.sugar_100g,
             sodium_100g=item.sodium_100g,
+            vitamin_d_100g=item.vitamin_d_100g,
+            magnesium_100g=item.magnesium_100g,
+            iron_100g=item.iron_100g,
+            calcium_100g=item.calcium_100g,
+            zinc_100g=item.zinc_100g,
+            omega3_100g=item.omega3_100g,
             serving_size_g=item.serving_size_g,
             serving_unit=item.serving_unit,
         ))
@@ -503,6 +533,12 @@ async def create_custom_food(user_id: str, data: CustomFoodIn, db: AsyncSession)
         fibre_100g=data.fibre_100g,
         sugar_100g=data.sugar_100g,
         sodium_100g=data.sodium_100g,
+        vitamin_d_100g=data.vitamin_d_100g,
+        magnesium_100g=data.magnesium_100g,
+        iron_100g=data.iron_100g,
+        calcium_100g=data.calcium_100g,
+        zinc_100g=data.zinc_100g,
+        omega3_100g=data.omega3_100g,
         serving_size_g=data.serving_size_g,
         serving_unit=data.serving_unit,
     )

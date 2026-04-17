@@ -157,6 +157,91 @@ function loadColor(load: number): string {
   return '#c0392b';
 }
 
+function getStravaActivityIcon(sportType: string): string {
+  const iconMap: Record<string, string> = {
+    Run: 'walk-outline',
+    TrailRun: 'trail-sign-outline',
+    Ride: 'bicycle-outline',
+    MountainBikeRide: 'bicycle-outline',
+    GravelRide: 'bicycle-outline',
+    EBikeRide: 'bicycle-outline',
+    VirtualRide: 'bicycle-outline',
+    Swim: 'water-outline',
+    Walk: 'footsteps-outline',
+    Hike: 'trail-sign-outline',
+    WeightTraining: 'barbell-outline',
+    Workout: 'fitness-outline',
+    Yoga: 'leaf-outline',
+    Crossfit: 'flame-outline',
+    Soccer: 'football-outline',
+    Tennis: 'tennisball-outline',
+    Basketball: 'basketball-outline',
+    Golf: 'golf-outline',
+    Rowing: 'boat-outline',
+    Kayaking: 'boat-outline',
+    Skiing: 'snow-outline',
+    Snowboard: 'snow-outline',
+    IceSkate: 'snow-outline',
+    RockClimbing: 'triangle-outline',
+    Surfing: 'water-outline',
+    Skateboard: 'flash-outline',
+    Football: 'football-outline',
+    Rugby: 'football-outline',
+    Volleyball: 'stats-chart-outline',
+    AlpineSki: 'snow-outline',
+    NordicSki: 'snow-outline',
+    BackcountrySki: 'snow-outline',
+    Snowshoe: 'snow-outline',
+    Elliptical: 'sync-outline',
+    StairStepper: 'trending-up-outline',
+  };
+  return iconMap[sportType] ?? 'stats-chart-outline';
+}
+
+function formatPace(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const stripped = raw.replace(/\s*\/km$/, '').trim();
+  const parts = stripped.split(':');
+  if (parts.length === 2) {
+    const totalSec = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+    if (isNaN(totalSec) || totalSec > 1800) return 'N/A /km';
+  }
+  return stripped + ' /km';
+}
+
+function getWeekKey(dateStr: string): string {
+  const d = new Date(dateStr);
+  const day = d.getDay();
+  const diff = day === 0 ? 6 : day - 1; // days since Monday
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - diff);
+  return monday.toISOString().split('T')[0];
+}
+
+function getWeekLabel(weekKey: string): string {
+  const monday = new Date(weekKey + 'T00:00:00');
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${fmt(monday)} – ${fmt(sunday)}`;
+}
+
+const FILTER_EMPTY: Record<FilterType, { icon: string; title: string; subtitle: string; action?: string }> = {
+  All: { icon: 'barbell-outline', title: 'No activities yet', subtitle: 'Tap + to record your first session' },
+  Strength: { icon: 'barbell-outline', title: 'No strength sessions yet', subtitle: 'Tap + to log a workout' },
+  Cardio: { icon: 'walk-outline', title: 'No cardio sessions yet', subtitle: 'Log a run or connect Strava' },
+  Sport: { icon: 'football-outline', title: 'No sport sessions yet', subtitle: 'Tap + to log a sport session' },
+  Strava: { icon: 'bicycle-outline', title: 'No Strava activities', subtitle: 'Connect Strava in Settings to sync' },
+  Hevy: { icon: 'barbell-outline', title: 'No Hevy workouts', subtitle: 'Connect Hevy in Settings to sync' },
+};
+
+// ListRow type for grouped FlatList
+type ListRow =
+  | { type: 'weekHeader'; weekKey: string; weekLabel: string; itemCount: number }
+  | { type: 'feedItem'; item: FeedItem }
+  | { type: 'showMore'; weekKey: string; remaining: number }
+  | { type: 'loadEarlier' };
+
 function decodePolyline(encoded: string): { latitude: number; longitude: number }[] {
   const coords: { latitude: number; longitude: number }[] = [];
   let index = 0, lat = 0, lng = 0;
@@ -946,6 +1031,29 @@ const PostSessionView = ({
 const FeedCard = ({ item, onPress }: { item: FeedItem; onPress: () => void }) => {
   if (item.kind === 'manual') {
     const a = item.data;
+
+    // Rest day — minimal distinct card
+    if (a.is_rest_day) {
+      return (
+        <TouchableOpacity style={[styles.feedCard, styles.feedCardRest]} onPress={onPress} activeOpacity={0.8}>
+          <View style={styles.feedCardTop}>
+            <View style={[styles.feedIconWrap, { backgroundColor: '#1a1a1a' }]}>
+              <Ionicons name="moon-outline" size={22} color="#555555" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.feedCardTitleRow}>
+                <Text style={[styles.feedCardTitle, { color: '#555555' }]} numberOfLines={1}>{a.activity_type}</Text>
+                <View style={[styles.sourceBadge, { borderColor: '#2a2a2a' }]}>
+                  <Text style={[styles.sourceBadgeText, { color: '#444444' }]}>REST DAY</Text>
+                </View>
+              </View>
+              <Text style={styles.feedCardMeta}>{fmtDate(a.logged_at)}</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+      );
+    }
+
     const muscles = a.muscle_groups ?? (a.exercise_data ? uniqueMuscles(a.exercise_data as any) : []);
     return (
       <TouchableOpacity style={styles.feedCard} onPress={onPress} activeOpacity={0.8}>
@@ -1029,11 +1137,12 @@ const FeedCard = ({ item, onPress }: { item: FeedItem; onPress: () => void }) =>
   // strava
   const s = item.data;
   const dist = s.distance_meters ? `${(s.distance_meters / 1000).toFixed(1)} km` : null;
+  const paceStr = formatPace(s.pace_per_km_str);
   return (
     <TouchableOpacity style={styles.feedCard} onPress={onPress} activeOpacity={0.8}>
       <View style={styles.feedCardTop}>
         <View style={[styles.feedIconWrap, { backgroundColor: '#111111' }]}>
-          <Ionicons name="bicycle-outline" size={22} color="#FC4C02" />
+          <Ionicons name={getStravaActivityIcon(s.sport_type) as any} size={22} color="#FC4C02" />
         </View>
         <View style={{ flex: 1 }}>
           <View style={styles.feedCardTitleRow}>
@@ -1047,7 +1156,7 @@ const FeedCard = ({ item, onPress }: { item: FeedItem; onPress: () => void }) =>
       </View>
       <View style={styles.feedCardStats}>
         {dist && <View style={styles.feedStatItem}><Ionicons name="map-outline" size={12} color="#FC4C02" /><Text style={styles.feedStatText}>{dist}</Text></View>}
-        {s.pace_per_km_str && <View style={styles.feedStatItem}><Ionicons name="speedometer-outline" size={12} color="#FC4C02" /><Text style={styles.feedStatText}>{s.pace_per_km_str} /km</Text></View>}
+        {paceStr && paceStr !== 'N/A /km' && <View style={styles.feedStatItem}><Ionicons name="speedometer-outline" size={12} color="#FC4C02" /><Text style={styles.feedStatText}>{paceStr}</Text></View>}
         {s.avg_heart_rate && <View style={styles.feedStatItem}><Ionicons name="heart-outline" size={12} color="#FC4C02" /><Text style={styles.feedStatText}>{Math.round(s.avg_heart_rate)} bpm</Text></View>}
       </View>
       {s.autopsy_text && <Text style={styles.feedAutopsy} numberOfLines={2}>{s.autopsy_text}</Text>}
@@ -1366,7 +1475,11 @@ const WeeklyLoadCard = ({ data }: { data: WeeklyLoad }) => {
             </View>
           </>
         ) : (
-          <Text style={styles.acwrInsufficient}>Not enough data yet</Text>
+          <Text style={styles.acwrInsufficient}>
+            {data.days_until_acwr
+              ? `ACWR unlocks in ${Math.ceil(data.days_until_acwr / 7)} week${Math.ceil(data.days_until_acwr / 7) === 1 ? '' : 's'}`
+              : 'Not enough data yet'}
+          </Text>
         )}
       </View>
       <Text style={styles.acwrExplanation}>{acwrExplanation[data.acwr_status]}</Text>
@@ -1478,6 +1591,14 @@ export default function ActivityScreen() {
   const [readiness, setReadiness] = useState<ReadinessScore | null>(null);
   const [showRestDayModal, setShowRestDayModal] = useState(false);
 
+  // Weekly journal grouping
+  const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set());
+  const [weekShowAll, setWeekShowAll] = useState<Set<string>>(new Set());
+  const [stravaPage, setStravaPage] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [journalSearch, setJournalSearch] = useState('');
+  const weekGroupsInitialized = useRef(false);
+
   // ── Load Data ────────────────────────────────────────────────────────────────
 
   const loadData = useCallback(async () => {
@@ -1529,6 +1650,30 @@ export default function ActivityScreen() {
       setLoading(false);
     }
   }, []);
+
+  const handleLoadEarlier = useCallback(async () => {
+    setLoadingMore(true);
+    try {
+      const nextPage = stravaPage + 1;
+      const more = await getActivities(nextPage, 20);
+      if (more.length > 0) {
+        setFeed(prev => {
+          const existingIds = new Set(
+            prev.filter(f => f.kind === 'strava').map(f => (f.data as Activity).id)
+          );
+          const newItems: FeedItem[] = more
+            .filter(s => !existingIds.has(s.id))
+            .map(s => ({ kind: 'strava' as const, sortKey: s.start_date, data: s }));
+          return [...prev, ...newItems].sort(
+            (a, b) => new Date(b.sortKey).getTime() - new Date(a.sortKey).getTime()
+          );
+        });
+        setStravaPage(nextPage);
+      }
+    } catch { /* non-fatal */ } finally {
+      setLoadingMore(false);
+    }
+  }, [stravaPage]);
 
   const handleOutdoorSave = useCallback(async (activity: SavedOutdoorActivity) => {
     setShowOutdoorTracker(false);
@@ -1746,17 +1891,28 @@ export default function ActivityScreen() {
   // ── Filtered Feed ─────────────────────────────────────────────────────────────
 
   const filteredFeed = useMemo(() => {
-    if (filter === 'All') return feed;
-    if (filter === 'Hevy') return feed.filter(f => f.kind === 'hevy');
-    if (filter === 'Strava') return feed.filter(f => f.kind === 'strava');
-    if (filter === 'Strength') return feed.filter(f => f.kind === 'manual' && f.data.sport_category === 'strength' || f.kind === 'hevy');
-    if (filter === 'Cardio') return feed.filter(f =>
+    let result = feed;
+    if (filter === 'Hevy') result = feed.filter(f => f.kind === 'hevy');
+    else if (filter === 'Strava') result = feed.filter(f => f.kind === 'strava');
+    else if (filter === 'Strength') result = feed.filter(f => (f.kind === 'manual' && f.data.sport_category === 'strength') || f.kind === 'hevy');
+    else if (filter === 'Cardio') result = feed.filter(f =>
       (f.kind === 'manual' && (f.data.sport_category === 'cardio' || f.data.sport_category === 'other')) ||
       f.kind === 'strava'
     );
-    if (filter === 'Sport') return feed.filter(f => f.kind === 'manual' && (f.data.sport_category === 'sport' || f.data.sport_category === 'combat'));
-    return feed;
-  }, [feed, filter]);
+    else if (filter === 'Sport') result = feed.filter(f => f.kind === 'manual' && (f.data.sport_category === 'sport' || f.data.sport_category === 'combat'));
+
+    if (journalSearch.trim()) {
+      const q = journalSearch.toLowerCase();
+      result = result.filter(f => {
+        if (f.kind === 'manual') return f.data.activity_type.toLowerCase().includes(q);
+        if (f.kind === 'hevy') return f.data.title.toLowerCase().includes(q);
+        if (f.kind === 'strava') return f.data.name.toLowerCase().includes(q) || f.data.sport_type.toLowerCase().includes(q);
+        return false;
+      });
+    }
+
+    return result;
+  }, [feed, filter, journalSearch]);
 
   // ── Goals (computed from this week's data) ────────────────────────────────────
 
@@ -1822,10 +1978,12 @@ export default function ActivityScreen() {
 
   const sportBreakdown = useMemo(() => {
     const counts: Record<string, number> = {};
-    feed.forEach(f => {
-      const key = f.kind === 'hevy' ? 'strength' : f.kind === 'strava' ? 'cardio' : (f.data as UserActivity).sport_category ?? 'other';
-      counts[key] = (counts[key] ?? 0) + 1;
-    });
+    feed
+      .filter(f => !(f.kind === 'manual' && (f.data as UserActivity).is_rest_day))
+      .forEach(f => {
+        const key = f.kind === 'hevy' ? 'strength' : f.kind === 'strava' ? 'cardio' : (f.data as UserActivity).sport_category ?? 'other';
+        counts[key] = (counts[key] ?? 0) + 1;
+      });
     const total = Object.values(counts).reduce((s, n) => s + n, 0);
     const colors: Record<string, string> = { strength: '#e0e0e0', cardio: '#27ae60', combat: '#c0392b', sport: '#888888', mindBody: '#888888', other: '#888888' };
     return Object.entries(counts)
@@ -1833,6 +1991,95 @@ export default function ActivityScreen() {
       .slice(0, 4)
       .map(([key, count]) => ({ label: key.charAt(0).toUpperCase() + key.slice(1), pct: total > 0 ? Math.round(count / total * 100) : 0, color: colors[key] ?? '#888888' }));
   }, [feed]);
+
+  // ── Weekly Groups ─────────────────────────────────────────────────────────────
+
+  const weeklyGroups = useMemo(() => {
+    const groups = new Map<string, FeedItem[]>();
+    filteredFeed.forEach(item => {
+      const key = getWeekKey(item.sortKey);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(item);
+    });
+    return Array.from(groups.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [filteredFeed]);
+
+  // Auto-expand most recent week on first load
+  useEffect(() => {
+    if (weeklyGroups.length > 0 && !weekGroupsInitialized.current) {
+      weekGroupsInitialized.current = true;
+      setExpandedWeeks(new Set([weeklyGroups[0][0]]));
+    }
+  }, [weeklyGroups]);
+
+  const flatListData = useMemo((): ListRow[] => {
+    if (!journalExpanded) return [];
+    const rows: ListRow[] = [];
+    const MAX_WEEKS = 8;
+    weeklyGroups.slice(0, MAX_WEEKS).forEach(([weekKey, items]) => {
+      const isExpanded = expandedWeeks.has(weekKey);
+      const showAll = weekShowAll.has(weekKey);
+      rows.push({ type: 'weekHeader', weekKey, weekLabel: getWeekLabel(weekKey), itemCount: items.length });
+      if (isExpanded) {
+        const toShow = showAll ? items : items.slice(0, 10);
+        toShow.forEach(item => rows.push({ type: 'feedItem', item }));
+        if (!showAll && items.length > 10) {
+          rows.push({ type: 'showMore', weekKey, remaining: items.length - 10 });
+        }
+      }
+    });
+    // Show load-more button if there are more weeks OR if we might have more Strava data
+    if (weeklyGroups.length > MAX_WEEKS || feed.some(f => f.kind === 'strava')) {
+      rows.push({ type: 'loadEarlier' });
+    }
+    return rows;
+  }, [journalExpanded, weeklyGroups, expandedWeeks, weekShowAll, feed]);
+
+  const renderListRow = ({ item }: { item: ListRow }) => {
+    if (item.type === 'weekHeader') {
+      const isExpanded = expandedWeeks.has(item.weekKey);
+      return (
+        <TouchableOpacity
+          style={styles.weekHeader}
+          onPress={() => setExpandedWeeks(prev => {
+            const next = new Set(prev);
+            if (next.has(item.weekKey)) next.delete(item.weekKey); else next.add(item.weekKey);
+            return next;
+          })}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.weekHeaderLabel}>{item.weekLabel}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.weekHeaderCount}>{item.itemCount} sessions</Text>
+            <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={14} color="#555" />
+          </View>
+        </TouchableOpacity>
+      );
+    }
+    if (item.type === 'feedItem') {
+      return <FeedCard item={item.item} onPress={() => setExpandedItem(item.item)} />;
+    }
+    if (item.type === 'showMore') {
+      return (
+        <TouchableOpacity
+          style={styles.showMoreBtn}
+          onPress={() => setWeekShowAll(prev => new Set([...prev, item.weekKey]))}
+        >
+          <Text style={styles.showMoreText}>Show {item.remaining} more</Text>
+        </TouchableOpacity>
+      );
+    }
+    if (item.type === 'loadEarlier') {
+      return (
+        <TouchableOpacity style={styles.loadEarlierBtn} onPress={handleLoadEarlier} disabled={loadingMore}>
+          {loadingMore
+            ? <ActivityIndicator size="small" color="#555555" />
+            : <Text style={styles.loadEarlierText}>Load Earlier Sessions</Text>}
+        </TouchableOpacity>
+      );
+    }
+    return null;
+  };
 
   // ── List Header ───────────────────────────────────────────────────────────────
 
@@ -1876,24 +2123,34 @@ export default function ActivityScreen() {
         </View>
       </View>
 
-      {/* Stats Bar */}
-      {stats && (
-        <View style={styles.statsBar}>
-          {[
-            { val: stats.total_workouts, label: 'Workouts' },
-            { val: `${stats.total_hours}h`, label: 'Total Hours' },
-            { val: `${stats.current_streak}d`, label: 'Streak' },
-            { val: `${stats.longest_streak}d`, label: 'Best Streak' },
-            { val: weeklySessionCount, label: 'This Week' },
-            { val: weeklyHoursFormatted, label: 'Week Hours' },
-          ].map((s, i) => (
-            <View key={i} style={styles.statItem}>
-              <Text style={styles.statVal}>{s.val}</Text>
-              <Text style={styles.statLabel}>{s.label}</Text>
-            </View>
-          ))}
-        </View>
-      )}
+      {/* Stats Bar — two rows of 3 */}
+      {stats && (() => {
+        const allStats = [
+          { val: stats.total_workouts, label: 'Workouts' },
+          { val: `${stats.total_hours}h`, label: 'Total Hours' },
+          { val: `${stats.current_streak}d`, label: 'Streak' },
+          { val: `${stats.longest_streak}d`, label: 'Best Streak' },
+          { val: weeklySessionCount, label: 'This Week' },
+          { val: weeklyHoursFormatted, label: 'Week Hours' },
+        ];
+        return (
+          <View style={styles.statsBar}>
+            {[allStats.slice(0, 3), allStats.slice(3, 6)].map((row, ri) => (
+              <View key={ri} style={[styles.statsRow, ri === 0 && styles.statsRowBorder]}>
+                {row.map((s, i) => (
+                  <React.Fragment key={i}>
+                    <View style={styles.statItem}>
+                      <Text style={styles.statVal}>{s.val}</Text>
+                      <Text style={styles.statLabel}>{s.label}</Text>
+                    </View>
+                    {i < 2 && <View style={styles.statDivider} />}
+                  </React.Fragment>
+                ))}
+              </View>
+            ))}
+          </View>
+        );
+      })()}
 
       {weeklyLoad && <WeeklyLoadCard data={weeklyLoad} />}
 
@@ -1927,8 +2184,13 @@ export default function ActivityScreen() {
             <View style={styles.badgesGrid}>
               {badges.map(b => (
                 <View key={b.id} style={[styles.badgeTile, !b.unlocked && styles.badgeLocked]}>
-                  <Ionicons name={b.icon as any} size={24} color={b.unlocked ? '#888888' : '#2a2a2a'} />
+                  <Ionicons name={b.icon as any} size={28} color={b.unlocked ? '#e0e0e0' : '#333333'} />
                   <Text style={[styles.badgeLabel, !b.unlocked && styles.badgeLabelLocked]}>{b.label}</Text>
+                  {!b.unlocked && (
+                    <View style={{ position: 'absolute', top: 6, right: 6 }}>
+                      <Ionicons name="lock-closed" size={10} color="#333333" />
+                    </View>
+                  )}
                 </View>
               ))}
             </View>
@@ -1951,6 +2213,7 @@ export default function ActivityScreen() {
                   {done && <Ionicons name="checkmark-circle" size={16} color="#27ae60" />}
                 </View>
               </View>
+              {done && <Text style={styles.goalReachedText}>Goal reached</Text>}
               <View style={styles.goalBarBg}>
                 <View style={[styles.goalBarFill, { width: `${pct}%` as any, backgroundColor: done ? '#27ae60' : g.color }]} />
               </View>
@@ -1959,7 +2222,7 @@ export default function ActivityScreen() {
         })}
       </View>
 
-      {/* Journal header + filter */}
+      {/* Journal header + search + filter */}
       <TouchableOpacity
         style={styles.journalHeader}
         onPress={() => setJournalExpanded(v => !v)}
@@ -1977,17 +2240,34 @@ export default function ActivityScreen() {
       </TouchableOpacity>
 
       {journalExpanded && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterContent}>
-          {FILTERS.map(f => (
-            <TouchableOpacity
-              key={f}
-              style={[styles.filterChip, filter === f && styles.filterChipActive]}
-              onPress={() => setFilter(f)}
-            >
-              <Text style={[styles.filterChipText, filter === f && styles.filterChipTextActive]}>{f}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <>
+          <View style={styles.journalSearchWrap}>
+            <Ionicons name="search-outline" size={15} color="#555555" />
+            <TextInput
+              style={styles.journalSearchInput}
+              placeholder="Search sessions..."
+              placeholderTextColor="#555555"
+              value={journalSearch}
+              onChangeText={setJournalSearch}
+            />
+            {journalSearch.length > 0 && (
+              <TouchableOpacity onPress={() => setJournalSearch('')}>
+                <Ionicons name="close-circle" size={16} color="#555555" />
+              </TouchableOpacity>
+            )}
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterContent}>
+            {FILTERS.map(f => (
+              <TouchableOpacity
+                key={f}
+                style={[styles.filterChip, filter === f && styles.filterChipActive]}
+                onPress={() => setFilter(f)}
+              >
+                <Text style={[styles.filterChipText, filter === f && styles.filterChipTextActive]}>{f}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </>
       )}
     </>
     );
@@ -2005,19 +2285,22 @@ export default function ActivityScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <FlatList
-        data={journalExpanded ? filteredFeed : []}
-        keyExtractor={(item, i) => `${item.kind}-${i}`}
-        renderItem={({ item }) => (
-          <FeedCard item={item} onPress={() => setExpandedItem(item)} />
-        )}
+      <FlatList<ListRow>
+        data={flatListData}
+        keyExtractor={(item, i) => {
+          if (item.type === 'weekHeader') return `wh-${item.weekKey}`;
+          if (item.type === 'feedItem') return `fi-${item.item.kind}-${item.item.sortKey}-${i}`;
+          if (item.type === 'showMore') return `sm-${item.weekKey}`;
+          return 'loadEarlier';
+        }}
+        renderItem={renderListRow}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={
           journalExpanded ? (
             <View style={styles.emptyState}>
-              <Ionicons name="barbell-outline" size={40} color="#2a2a2a" />
-              <Text style={styles.emptyText}>No activities yet</Text>
-              <Text style={styles.emptySubText}>Tap Log to record your first session</Text>
+              <Ionicons name={FILTER_EMPTY[filter].icon as any} size={40} color="#2a2a2a" />
+              <Text style={styles.emptyText}>{FILTER_EMPTY[filter].title}</Text>
+              <Text style={styles.emptySubText}>{FILTER_EMPTY[filter].subtitle}</Text>
             </View>
           ) : null
         }
@@ -2201,9 +2484,12 @@ const styles = StyleSheet.create({
   stepsBarBg: { height: 6, backgroundColor: '#1a1a1a', borderRadius: 3 },
   stepsBarFill: { height: 6, backgroundColor: '#27ae60', borderRadius: 3 },
 
-  // Stats bar
-  statsBar: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 12, backgroundColor: '#111111', borderRadius: 12, padding: 14 },
+  // Stats bar — two rows of 3
+  statsBar: { marginHorizontal: 16, marginBottom: 12, backgroundColor: '#111111', borderRadius: 12, paddingVertical: 4, paddingHorizontal: 14 },
+  statsRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
+  statsRowBorder: { borderBottomWidth: 1, borderBottomColor: '#1a1a1a' },
   statItem: { flex: 1, alignItems: 'center' },
+  statDivider: { width: 1, height: 28, backgroundColor: '#1a1a1a' },
   statVal: { fontSize: 17, fontWeight: '700', color: '#f0f0f0' },
   statLabel: { fontSize: 10, color: '#555555', marginTop: 2, textAlign: 'center' },
 
@@ -2230,9 +2516,9 @@ const styles = StyleSheet.create({
 
   // Badges
   badgesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  badgeTile: { width: (SCREEN_W - 80) / 4, alignItems: 'center', backgroundColor: '#1a1a1a', borderRadius: 10, padding: 10, gap: 4 },
-  badgeLocked: { opacity: 0.35 },
-  badgeLabel: { fontSize: 9, color: '#888888', textAlign: 'center' },
+  badgeTile: { width: 100, height: 100, alignItems: 'center', justifyContent: 'center', backgroundColor: '#1a1a1a', borderRadius: 12, padding: 10, gap: 6, position: 'relative' },
+  badgeLocked: { opacity: 0.3 },
+  badgeLabel: { fontSize: 9, color: '#888888', textAlign: 'center', lineHeight: 12 },
   badgeLabelLocked: { color: '#555555' },
 
   // Goals
@@ -2470,6 +2756,27 @@ const styles = StyleSheet.create({
   restModalBody: { fontSize: 14, color: '#888888', lineHeight: 21, textAlign: 'center', marginBottom: 20 },
   restModalDismiss: { backgroundColor: '#2a2a2a', paddingHorizontal: 32, paddingVertical: 12, borderRadius: 10 },
   restModalDismissText: { fontSize: 14, fontWeight: '600', color: '#f0f0f0' },
+
+  // Goals — reached label
+  goalReachedText: { fontSize: 11, color: '#27ae60', fontWeight: '600', marginTop: 2, marginBottom: 4 },
+
+  // Feed card — rest day variant
+  feedCardRest: { backgroundColor: '#141414' },
+
+  // Journal search bar
+  journalSearchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, backgroundColor: '#111111', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: '#1a1a1a' },
+  journalSearchInput: { flex: 1, fontSize: 13, color: '#f0f0f0' },
+
+  // Weekly journal group headers
+  weekHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 10, marginTop: 4 },
+  weekHeaderLabel: { fontSize: 13, fontWeight: '600', color: '#888888' },
+  weekHeaderCount: { fontSize: 11, color: '#555555' },
+
+  // Show more / load earlier
+  showMoreBtn: { marginHorizontal: 16, marginBottom: 4, paddingVertical: 10, alignItems: 'center', backgroundColor: '#111111', borderRadius: 10, borderWidth: 1, borderColor: '#1a1a1a' },
+  showMoreText: { fontSize: 13, color: '#888888', fontWeight: '500' },
+  loadEarlierBtn: { marginHorizontal: 16, marginTop: 8, marginBottom: 16, paddingVertical: 14, alignItems: 'center', backgroundColor: '#111111', borderRadius: 10, borderWidth: 1, borderColor: '#2a2a2a' },
+  loadEarlierText: { fontSize: 13, color: '#555555', fontWeight: '500' },
 
   // Weekly load card
   weeklyLoadCard: { marginHorizontal: 16, marginBottom: 12, backgroundColor: '#1a1a1a', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#2a2a2a' },

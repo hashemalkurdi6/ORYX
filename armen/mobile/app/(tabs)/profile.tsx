@@ -16,13 +16,19 @@ import {
   getActivities,
   getHealthSnapshots,
   getWhoopData,
+  getWeightHistory,
+  getWeightSummary,
   Activity,
   HealthSnapshot,
   WhoopData,
+  WeightHistory,
+  WeightSummary,
+  WeightLogResult,
 } from '@/services/api';
 import { useAuthStore } from '@/services/authStore';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ThemeColors } from '@/services/theme';
+import WeightLogSheet from '@/components/WeightLogSheet';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - 40;
@@ -302,17 +308,23 @@ export default function ProfileScreen() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [healthSnapshots, setHealthSnapshots] = useState<HealthSnapshot[]>([]);
   const [whoopData, setWhoopData] = useState<WhoopData[]>([]);
+  const [weightHistory, setWeightHistory] = useState<WeightHistory | null>(null);
+  const [weightSummary, setWeightSummary] = useState<WeightSummary | null>(null);
+  const [showWeightSheet, setShowWeightSheet] = useState(false);
+  const [weightRange, setWeightRange] = useState<string>('1m');
   const [loading, setLoading] = useState(true);
 
   // ── Load data ──────────────────────────────────────────────────────────────
 
   const loadData = useCallback(async () => {
     try {
-      const [activitiesResult, snapshotsResult, whoopResult] =
+      const [activitiesResult, snapshotsResult, whoopResult, weightHistResult, weightSumResult] =
         await Promise.allSettled([
           getActivities(1, 20),
           getHealthSnapshots(30),
           getWhoopData(30),
+          getWeightHistory(30, '1m'),
+          getWeightSummary(),
         ]);
 
       if (activitiesResult.status === 'fulfilled') {
@@ -324,12 +336,32 @@ export default function ProfileScreen() {
       if (whoopResult.status === 'fulfilled') {
         setWhoopData(whoopResult.value);
       }
+      if (weightHistResult.status === 'fulfilled') {
+        setWeightHistory(weightHistResult.value);
+      }
+      if (weightSumResult.status === 'fulfilled') {
+        setWeightSummary(weightSumResult.value);
+      }
     } catch {
       // Non-fatal
     } finally {
       setLoading(false);
     }
   }, []);
+
+  function handleWeightLogged(result: WeightLogResult) {
+    Promise.allSettled([getWeightHistory(30, weightRange), getWeightSummary()]).then(
+      ([histRes, sumRes]) => {
+        if (histRes.status === 'fulfilled') setWeightHistory(histRes.value);
+        if (sumRes.status === 'fulfilled') setWeightSummary(sumRes.value);
+      }
+    );
+  }
+
+  function handleWeightRangeChange(range: string) {
+    setWeightRange(range);
+    getWeightHistory(30, range).then(setWeightHistory).catch(() => {});
+  }
 
   useEffect(() => {
     loadData();
@@ -555,7 +587,269 @@ export default function ProfileScreen() {
         <WorkoutHeatmap activities={activities} />
       </View>
 
-      {/* 6. RECOVERY TRENDS */}
+      {/* 6. WEIGHT */}
+      <Text style={s.sectionLabel}>WEIGHT</Text>
+
+      {/* Weight chart card */}
+      <View style={s.card}>
+        {/* Header row: title + log button */}
+        <View style={s.weightChartHeader}>
+          <Text style={s.cardInnerLabel}>Weight Trend</Text>
+          <TouchableOpacity
+            style={[s.logWeightBtn, weightSummary?.logged_today && s.logWeightBtnDone]}
+            onPress={() => setShowWeightSheet(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={weightSummary?.logged_today ? 'checkmark' : 'add'}
+              size={14}
+              color={weightSummary?.logged_today ? '#27ae60' : '#fff'}
+            />
+            <Text style={[s.logWeightBtnText, weightSummary?.logged_today && { color: '#27ae60' }]}>
+              {weightSummary?.logged_today ? 'Logged today' : 'Log weight'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Time range pill selector */}
+        {(() => {
+          const RANGES = [
+            { key: '7d', label: '7D' },
+            { key: '1m', label: '1M' },
+            { key: '3m', label: '3M' },
+            { key: '6m', label: '6M' },
+            { key: '1y', label: '1Y' },
+            { key: 'all', label: 'All' },
+          ];
+          return (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={s.rangePillRow}
+              style={s.rangePillScroll}
+            >
+              {RANGES.map((r) => {
+                const active = weightRange === r.key;
+                return (
+                  <TouchableOpacity
+                    key={r.key}
+                    style={[s.rangePill, active && s.rangePillActive]}
+                    onPress={() => handleWeightRangeChange(r.key)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[s.rangePillText, active && s.rangePillTextActive]}>
+                      {r.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          );
+        })()}
+
+        {/* Fell-back notice */}
+        {weightHistory?.fell_back_to_all && weightHistory.first_log_date ? (
+          <Text style={s.weightFallbackNote}>
+            Showing all available data — not enough logs for this range yet.
+          </Text>
+        ) : null}
+
+        {/* Chart or empty state */}
+        {weightHistory && weightHistory.entries.length >= 2 ? (() => {
+          const unit = weightHistory.display_unit;
+          const factor = unit === 'lbs' ? 2.20462 : 1.0;
+          const rollingVals = weightHistory.rolling_avg.map((e) => e.rolling_avg * factor);
+          const minVal = Math.floor(Math.min(...rollingVals) - 0.5);
+          const maxVal = Math.ceil(Math.max(...rollingVals) + 0.5);
+
+          // X-axis labels based on range
+          const n = rollingVals.length;
+          let labels: string[] = [];
+          if (weightRange === '7d') {
+            const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            labels = weightHistory.entries.map((e) => DAY_SHORT[new Date(e.date).getDay()]);
+          } else if (weightRange === '1m') {
+            // ~4 evenly spaced labels
+            labels = Array(n).fill('');
+            const step = Math.floor(n / 4) || 1;
+            for (let i = 0; i < n; i += step) {
+              const d = new Date(weightHistory.entries[i].date);
+              labels[i] = `${d.getMonth() + 1}/${d.getDate()}`;
+            }
+          } else {
+            // Month labels at month boundaries
+            labels = Array(n).fill('');
+            const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            let lastMonth = -1;
+            weightHistory.entries.forEach((e, i) => {
+              const m = new Date(e.date).getMonth();
+              if (m !== lastMonth) { labels[i] = MONTHS[m]; lastMonth = m; }
+            });
+          }
+          // Trim labels to avoid overcrowding — keep max 6
+          const labelCount = labels.filter(Boolean).length;
+          if (labelCount > 6) {
+            let kept = 0;
+            labels = labels.map((l) => { if (!l) return ''; if (kept < 6) { kept++; return l; } return ''; });
+          }
+
+          const confidence = weightSummary?.data_confidence ?? 'insufficient';
+          const rateInsufficent = confidence === 'insufficient' || confidence === 'early';
+
+          return (
+            <>
+              <LineChart
+                data={{ labels, datasets: [{ data: rollingVals, color: () => '#5b9cf6', strokeWidth: 2 }] }}
+                width={CARD_WIDTH - 32}
+                height={110}
+                withDots={false}
+                withInnerLines={false}
+                withOuterLines={false}
+                withHorizontalLabels={false}
+                withVerticalLabels={labels.some(Boolean)}
+                fromZero={false}
+                chartConfig={{
+                  backgroundColor: theme.bg.elevated,
+                  backgroundGradientFrom: theme.bg.elevated,
+                  backgroundGradientTo: theme.bg.elevated,
+                  color: () => '#5b9cf6',
+                  strokeWidth: 2,
+                  propsForBackgroundLines: { stroke: 'transparent' },
+                  propsForLabels: { fontSize: 9, fill: '#666' },
+                  min: minVal,
+                  max: maxVal,
+                }}
+                bezier
+                style={s.chartStyle}
+              />
+
+              {/* Stats row */}
+              <View style={s.weightStatsRow}>
+                <View style={s.weightStatItem}>
+                  <Text style={s.weightStatValue}>
+                    {weightSummary?.current_weight_display ?? '--'}
+                  </Text>
+                  <Text style={s.weightStatLabel}>NOW ({unit.toUpperCase()})</Text>
+                </View>
+                <View style={s.statBarDivider} />
+                <View style={s.weightStatItem}>
+                  {rateInsufficent ? (
+                    <>
+                      <Text style={[s.weightStatValue, { color: theme.text.muted }]}>N/A</Text>
+                      <Text style={s.weightStatLabel}>PER WEEK</Text>
+                      <Text style={s.weightStatDisclaimer}>Not enough data yet</Text>
+                    </>
+                  ) : weightSummary?.weekly_change_display !== null && weightSummary?.weekly_change_display !== undefined ? (
+                    <>
+                      <Text style={[s.weightStatValue, {
+                        color: weightSummary.goal_alignment === 'on_track'
+                          ? theme.status.success
+                          : weightSummary.goal_alignment === 'off_track'
+                          ? theme.status.danger
+                          : theme.text.primary,
+                      }]}>
+                        {weightSummary.weekly_change_display > 0 ? '+' : ''}
+                        {weightSummary.weekly_change_display}/{unit}
+                      </Text>
+                      <Text style={s.weightStatLabel}>PER WEEK</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={s.weightStatValue}>--</Text>
+                      <Text style={s.weightStatLabel}>PER WEEK</Text>
+                    </>
+                  )}
+                </View>
+                <View style={s.statBarDivider} />
+                <View style={s.weightStatItem}>
+                  <Text style={s.weightStatValue}>{weightSummary?.current_streak ?? 0}</Text>
+                  <Text style={s.weightStatLabel}>DAY STREAK</Text>
+                </View>
+              </View>
+            </>
+          );
+        })() : (
+          <View style={s.emptyChartState}>
+            <Ionicons name="scale-outline" size={24} color={theme.border} />
+            <Text style={s.emptyChartText}>
+              Log your weight for 2+ days to see trends
+            </Text>
+          </View>
+        )}
+
+        {/* Goal alignment card — gated by data_confidence */}
+        {(() => {
+          const confidence = weightSummary?.data_confidence;
+          if (!confidence || confidence === 'insufficient') {
+            // < 3 logs — neutral encouragement
+            return (
+              <View style={s.alignmentNeutral}>
+                <Text style={s.alignmentNeutralText}>
+                  Log your weight a few more times to see your trend. We need at least a week of data to give you meaningful insights.
+                </Text>
+              </View>
+            );
+          }
+          if (confidence === 'early') {
+            // 3–6 logs — early data only
+            return (
+              <View style={s.alignmentNeutral}>
+                <Text style={s.alignmentNeutralText}>
+                  Early data only. Keep logging daily for a more accurate trend.
+                </Text>
+              </View>
+            );
+          }
+          if (confidence === 'limited') {
+            // 7–13 logs — light judgment with disclaimer
+            const alignment = weightSummary?.goal_alignment;
+            if (!alignment || alignment === 'neutral') return null;
+            return (
+              <View style={[s.alignmentPill, alignment === 'on_track' ? s.alignmentPillGreen : s.alignmentPillRed]}>
+                <Ionicons
+                  name={alignment === 'on_track' ? 'checkmark-circle' : 'alert-circle'}
+                  size={13}
+                  color={alignment === 'on_track' ? '#27ae60' : theme.status.danger}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.alignmentPillText, { color: alignment === 'on_track' ? '#27ae60' : theme.status.danger }]}>
+                    {alignment === 'on_track' ? 'Trending toward your goal' : 'Not aligned with your goal'}
+                  </Text>
+                  <Text style={s.alignmentDisclaimer}>
+                    Based on limited data. Accuracy improves with more logs.
+                  </Text>
+                </View>
+              </View>
+            );
+          }
+          // sufficient — full judgment
+          const alignment = weightSummary?.goal_alignment;
+          if (!alignment || alignment === 'neutral') return null;
+          return (
+            <View style={[s.alignmentPill, alignment === 'on_track' ? s.alignmentPillGreen : s.alignmentPillRed]}>
+              <Ionicons
+                name={alignment === 'on_track' ? 'checkmark-circle' : 'alert-circle'}
+                size={13}
+                color={alignment === 'on_track' ? '#27ae60' : theme.status.danger}
+              />
+              <Text style={[s.alignmentPillText, { color: alignment === 'on_track' ? '#27ae60' : theme.status.danger }]}>
+                {alignment === 'on_track' ? 'Trending toward your goal' : 'Not aligned with your goal'}
+              </Text>
+            </View>
+          );
+        })()}
+      </View>
+
+      {/* Weight log sheet */}
+      <WeightLogSheet
+        visible={showWeightSheet}
+        onClose={() => setShowWeightSheet(false)}
+        onLogged={handleWeightLogged}
+        currentWeightKg={weightSummary?.current_weight_kg ?? undefined}
+        displayUnit={weightSummary?.display_unit ?? 'kg'}
+      />
+
+      {/* 7. RECOVERY TRENDS */}
       <Text style={s.sectionLabel}>RECOVERY TRENDS</Text>
 
       <View style={s.card}>
@@ -935,6 +1229,133 @@ function createStyles(t: ThemeColors) {
       color: t.text.muted,
       textTransform: 'uppercase',
       letterSpacing: 0.4,
+    },
+
+    weightChartHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 10,
+    },
+    logWeightBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: 'rgba(255,255,255,0.12)',
+      borderRadius: 20,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+    },
+    logWeightBtnDone: {
+      backgroundColor: 'rgba(39,174,96,0.12)',
+    },
+    logWeightBtnText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: '#fff',
+    },
+    // Range pill row
+    rangePillScroll: {
+      marginBottom: 10,
+    },
+    rangePillRow: {
+      flexDirection: 'row',
+      gap: 6,
+      paddingVertical: 2,
+    },
+    rangePill: {
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: '#2a2a2a',
+    },
+    rangePillActive: {
+      borderColor: '#e0e0e0',
+    },
+    rangePillText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: '#888888',
+    },
+    rangePillTextActive: {
+      color: '#ffffff',
+    },
+    // Fallback note
+    weightFallbackNote: {
+      fontSize: 11,
+      color: t.text.muted,
+      fontStyle: 'italic',
+      marginBottom: 8,
+    },
+    // Stats row
+    weightStatsRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginTop: 10,
+      paddingTop: 10,
+      borderTopWidth: 1,
+      borderTopColor: t.border,
+    },
+    weightStatItem: {
+      flex: 1,
+      alignItems: 'center',
+      gap: 3,
+    },
+    weightStatValue: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: t.text.primary,
+    },
+    weightStatLabel: {
+      fontSize: 10,
+      color: t.text.muted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    weightStatDisclaimer: {
+      fontSize: 9,
+      color: t.text.muted,
+      textAlign: 'center',
+      marginTop: 1,
+    },
+    // Alignment cards
+    alignmentPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      marginTop: 10,
+    },
+    alignmentPillGreen: {
+      backgroundColor: 'rgba(39,174,96,0.12)',
+    },
+    alignmentPillRed: {
+      backgroundColor: 'rgba(231,76,60,0.10)',
+    },
+    alignmentPillText: {
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    alignmentDisclaimer: {
+      fontSize: 11,
+      color: t.text.muted,
+      marginTop: 2,
+    },
+    // Neutral encouragement card
+    alignmentNeutral: {
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginTop: 10,
+      backgroundColor: 'rgba(255,255,255,0.04)',
+    },
+    alignmentNeutralText: {
+      fontSize: 12,
+      color: t.text.muted,
+      lineHeight: 18,
     },
 
     bottomPadding: {

@@ -40,6 +40,7 @@ class User(Base):
     oura_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
     hevy_api_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    weight_unit: Mapped[str | None] = mapped_column(String(10), nullable=True, default="kg")
     # Onboarding fields
     display_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     sport_tags: Mapped[list | None] = mapped_column(JSON, nullable=True)

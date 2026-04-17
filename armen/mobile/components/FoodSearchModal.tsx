@@ -60,11 +60,19 @@ function calcMacros(food: FoodItem | SelectedQuickFood, grams: number, servings:
   const totalG = grams * servings;
   const factor = totalG / 100;
   return {
-    calories: Math.round((food.calories_100g ?? 0) * factor),
-    protein:  Math.round((food.protein_100g  ?? 0) * factor * 10) / 10,
-    carbs:    Math.round((food.carbs_100g    ?? 0) * factor * 10) / 10,
-    fat:      Math.round((food.fat_100g      ?? 0) * factor * 10) / 10,
-    fibre:    Math.round((food.fibre_100g    ?? 0) * factor * 10) / 10,
+    calories:   Math.round((food.calories_100g  ?? 0) * factor),
+    protein:    Math.round((food.protein_100g   ?? 0) * factor * 10) / 10,
+    carbs:      Math.round((food.carbs_100g     ?? 0) * factor * 10) / 10,
+    fat:        Math.round((food.fat_100g       ?? 0) * factor * 10) / 10,
+    fibre:      Math.round((food.fibre_100g     ?? 0) * factor * 10) / 10,
+    sugar:      Math.round((food.sugar_100g     ?? 0) * factor * 10) / 10,
+    sodium_mg:  Math.round((food.sodium_100g    ?? 0) * factor * 1000 * 10) / 10,
+    vitamin_d:  Math.round((food.vitamin_d_100g ?? 0) * factor * 10) / 10,
+    magnesium:  Math.round((food.magnesium_100g ?? 0) * factor * 10) / 10,
+    iron:       Math.round((food.iron_100g      ?? 0) * factor * 100) / 100,
+    calcium:    Math.round((food.calcium_100g   ?? 0) * factor * 10) / 10,
+    zinc:       Math.round((food.zinc_100g      ?? 0) * factor * 100) / 100,
+    omega3:     Math.round((food.omega3_100g    ?? 0) * factor * 100) / 100,
   };
 }
 
@@ -76,6 +84,14 @@ interface SelectedQuickFood {
   carbs_100g: number;
   fat_100g: number;
   fibre_100g: number;
+  sugar_100g: number;
+  sodium_100g: number;
+  vitamin_d_100g: number;
+  magnesium_100g: number;
+  iron_100g: number;
+  calcium_100g: number;
+  zinc_100g: number;
+  omega3_100g: number;
   serving_size_g?: number | null;
 }
 
@@ -83,11 +99,19 @@ function quickFoodFromRecent(r: RecentFoodItem): SelectedQuickFood {
   // Back-calculate per-100g values from the logged amounts (assume 100g serving if unknown)
   return {
     name: r.meal_name,
-    calories_100g: r.calories ?? 0,
-    protein_100g:  r.protein_g ?? 0,
-    carbs_100g:    r.carbs_g ?? 0,
-    fat_100g:      r.fat_g ?? 0,
-    fibre_100g:    r.fibre_g ?? 0,
+    calories_100g:  r.calories ?? 0,
+    protein_100g:   r.protein_g ?? 0,
+    carbs_100g:     r.carbs_g ?? 0,
+    fat_100g:       r.fat_g ?? 0,
+    fibre_100g:     r.fibre_g ?? 0,
+    sugar_100g:     0,
+    sodium_100g:    0,
+    vitamin_d_100g: 0,
+    magnesium_100g: 0,
+    iron_100g:      0,
+    calcium_100g:   0,
+    zinc_100g:      0,
+    omega3_100g:    0,
     serving_size_g: 100,
   };
 }
@@ -300,13 +324,19 @@ export default function FoodSearchModal({ visible, onClose, onLogged }: Props) {
       name: qf.name,
       brand: qf.brand ?? null,
       source: 'openfoodfacts',
-      calories_100g: qf.calories_100g,
-      protein_100g: qf.protein_100g,
-      carbs_100g: qf.carbs_100g,
-      fat_100g: qf.fat_100g,
-      fibre_100g: qf.fibre_100g,
-      sugar_100g: 0,
-      sodium_100g: 0,
+      calories_100g:  qf.calories_100g,
+      protein_100g:   qf.protein_100g,
+      carbs_100g:     qf.carbs_100g,
+      fat_100g:       qf.fat_100g,
+      fibre_100g:     qf.fibre_100g,
+      sugar_100g:     qf.sugar_100g,
+      sodium_100g:    qf.sodium_100g,
+      vitamin_d_100g: qf.vitamin_d_100g,
+      magnesium_100g: qf.magnesium_100g,
+      iron_100g:      qf.iron_100g,
+      calcium_100g:   qf.calcium_100g,
+      zinc_100g:      qf.zinc_100g,
+      omega3_100g:    qf.omega3_100g,
       serving_size_g: qf.serving_size_g ?? null,
       serving_unit: null,
     };
@@ -327,11 +357,19 @@ export default function FoodSearchModal({ visible, onClose, onLogged }: Props) {
         meal_name: selectedFood.brand
           ? `${selectedFood.name} (${selectedFood.brand})`
           : selectedFood.name,
-        calories: macros.calories,
-        protein_g: macros.protein,
-        carbs_g:   macros.carbs,
-        fat_g:     macros.fat,
-        fibre_g:   macros.fibre,
+        calories:     macros.calories,
+        protein_g:    macros.protein,
+        carbs_g:      macros.carbs,
+        fat_g:        macros.fat,
+        fibre_g:      macros.fibre,
+        sugar_g:      macros.sugar,
+        sodium_mg:    macros.sodium_mg,
+        vitamin_d_iu: macros.vitamin_d,
+        magnesium_mg: macros.magnesium,
+        iron_mg:      macros.iron,
+        calcium_mg:   macros.calcium,
+        zinc_mg:      macros.zinc,
+        omega3_g:     macros.omega3,
         meal_type: mealType.toLowerCase().replace('-', '_'),
         source:    selectedFood.source,
         notes:     `${grams * servings}g · ${selectedFood.source}`,

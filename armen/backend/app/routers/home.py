@@ -17,7 +17,9 @@ from app.models.nutrition import NutritionLog
 from app.models.user import User
 from app.models.user_activity import UserActivity
 from app.models.wellness import WellnessCheckin
+from app.models.weight_log import WeightLog
 from app.routers.auth import get_current_user
+from app.services.readiness_service import calculate_readiness
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/home", tags=["home"])
@@ -49,84 +51,6 @@ def _parse_weekly_training_days(weekly_training_days: str | None) -> int | None:
         return None
     nums = re.findall(r"\d+", weekly_training_days)
     return int(nums[0]) if nums else None
-
-
-def _compute_readiness(
-    sleep_hours: float | None,
-    days_since_rest: int,
-    yesterday_load: int,
-    soreness: int | None,
-    energy: int | None,
-    acwr: float | None,
-) -> dict:
-    deductions: dict[str, int] = {}
-
-    # Sleep
-    if sleep_hours is not None:
-        if sleep_hours < 6:
-            deductions["Poor sleep last night"] = 25
-        elif sleep_hours < 7:
-            deductions["Below-average sleep"] = 15
-        elif sleep_hours < 8:
-            deductions["Slightly short sleep"] = 5
-
-    # Rest day streak
-    if days_since_rest >= 6:
-        deductions[f"No rest in {days_since_rest} days"] = 30
-    elif days_since_rest == 5:
-        deductions[f"No rest in {days_since_rest} days"] = 20
-    elif days_since_rest == 4:
-        deductions[f"No rest in {days_since_rest} days"] = 10
-    elif days_since_rest == 3:
-        deductions[f"No rest in {days_since_rest} days"] = 5
-
-    # Yesterday's load
-    if yesterday_load > 400:
-        deductions["High training load yesterday"] = 20
-    elif yesterday_load > 200:
-        deductions["Moderate training load yesterday"] = 10
-
-    # Soreness (1–5 scale, 1=none, 5=severe)
-    if soreness is not None:
-        if soreness >= 4:
-            deductions["High muscle soreness"] = 25
-        elif soreness == 3:
-            deductions["Moderate muscle soreness"] = 15
-        elif soreness == 2:
-            deductions["Mild muscle soreness"] = 5
-
-    # Energy (1–5 scale, 1=very low)
-    if energy is not None:
-        if energy <= 2:
-            deductions["Low energy levels"] = 15
-        elif energy == 3:
-            deductions["Medium energy levels"] = 5
-
-    score = max(0, min(100, 100 - sum(deductions.values())))
-
-    # Rule 2: ACWR > 1.3 → cap at caution zone (59 max)
-    if acwr is not None and acwr > 1.3 and score >= 60:
-        extra = score - 59
-        deductions["High training load spike (ACWR)"] = extra
-        score = max(0, min(100, 100 - sum(deductions.values())))
-
-    primary_factor = "Well-balanced recovery"
-    if deductions:
-        primary_factor = max(deductions, key=lambda k: deductions[k])
-
-    if score >= 80:
-        label, color = "Ready to Train", "green"
-    elif score >= 60:
-        label, color = "Train with Caution", "amber"
-    else:
-        label, color = "Rest Recommended", "red"
-
-    return {
-        "readiness_score": score,
-        "readiness_label": label,
-        "readiness_color": color,
-        "readiness_primary_factor": primary_factor,
-    }
 
 
 def _build_diagnosis_prompt(data: dict) -> str:
@@ -211,6 +135,29 @@ def _build_diagnosis_prompt(data: dict) -> str:
             lines.append(f"- Mood: {data['mood_today']}/5")
         lines.append("")
 
+    # Weight section
+    if data.get("current_weight_kg") is not None:
+        lines.append("WEIGHT:")
+        unit = data.get("weight_unit", "kg")
+        factor = 2.20462 if unit == "lbs" else 1.0
+        display = round(data["current_weight_kg"] * factor, 1)
+        lines.append(f"- Current weight: {display} {unit}")
+        if data.get("weight_trend"):
+            trend = data["weight_trend"]
+            change = data.get("weekly_weight_change_kg")
+            change_disp = round(abs(change) * factor, 2) if change is not None else None
+            direction = "losing" if trend == "losing" else ("gaining" if trend == "gaining" else "stable")
+            if change_disp is not None:
+                lines.append(f"- Trend: {direction} (~{change_disp} {unit}/week over last 28 days)")
+            else:
+                lines.append(f"- Trend: {direction}")
+            align = data.get("weight_goal_alignment", "neutral")
+            if align == "on_track":
+                lines.append("- Weight trend is aligned with stated goal ✓")
+            elif align == "off_track":
+                lines.append("- ⚠️ Weight trend is not aligned with stated goal")
+        lines.append("")
+
     lines.append(f"READINESS SCORE: {data['readiness_score']} — {data['readiness_label']}")
     lines.append(f"Primary readiness factor: {data['readiness_primary_factor']}")
     lines.append("")
@@ -218,7 +165,8 @@ def _build_diagnosis_prompt(data: dict) -> str:
         "Based on ALL of this data together, explain why this athlete is performing and recovering "
         "the way they are today. Explicitly connect nutrition to training performance where relevant. "
         "Explicitly connect sleep to recovery where relevant. Explicitly connect training load to "
-        "soreness and readiness where relevant."
+        "soreness and readiness where relevant. If weight trend data is present and misaligned with "
+        "their goal, call that out specifically."
     )
     return "\n".join(lines)
 
@@ -331,6 +279,16 @@ async def get_dashboard(
     )
     sessions_this_week = sw_count_res.scalar() or 0
 
+    # Distinct active days this week (for "days active" fallback when streak = 0)
+    active_days_res = await db.execute(
+        select(func.count(func.distinct(date_col))).where(
+            UserActivity.user_id == current_user.id,
+            UserActivity.is_rest_day.is_(False),
+            date_col >= week_start,
+        )
+    )
+    active_days_this_week = int(active_days_res.scalar() or 0)
+
     tw_load_res = await db.execute(
         select(func.coalesce(func.sum(UserActivity.training_load), 0)).where(
             UserActivity.user_id == current_user.id,
@@ -349,6 +307,22 @@ async def get_dashboard(
         )
     )
     last_week_load = int(lw_load_res.scalar() or 0)
+
+    # 4-week average load (4 complete weeks before this week)
+    four_week_loads = []
+    for i in range(4):
+        ws = week_start - timedelta(weeks=i + 1)
+        we = week_start - timedelta(weeks=i)
+        wl_res = await db.execute(
+            select(func.coalesce(func.sum(UserActivity.training_load), 0)).where(
+                UserActivity.user_id == current_user.id,
+                UserActivity.is_rest_day.is_(False),
+                date_col >= ws,
+                date_col < we,
+            )
+        )
+        four_week_loads.append(int(wl_res.scalar() or 0))
+    four_week_avg_load = round(sum(four_week_loads) / 4.0, 1)
 
     yday_load_res = await db.execute(
         select(func.coalesce(func.sum(UserActivity.training_load), 0)).where(
@@ -498,16 +472,77 @@ async def get_dashboard(
     energy_today = today_wellness.energy if today_wellness else None
     soreness_today = today_wellness.soreness if today_wellness else None
     mood_today = today_wellness.mood if today_wellness else None
-
-    # ── Readiness ─────────────────────────────────────────────────────────────
-    readiness = _compute_readiness(
-        sleep_hours=sleep_hours,
-        days_since_rest=days_since_rest,
-        yesterday_load=yesterday_load,
-        soreness=soreness_today,
-        energy=energy_today,
-        acwr=acwr,
+    # Hooper Index fields
+    sleep_quality_today = today_wellness.sleep_quality if today_wellness else None
+    fatigue_today = today_wellness.fatigue if today_wellness else None
+    stress_today = today_wellness.stress if today_wellness else None
+    muscle_soreness_today = today_wellness.muscle_soreness if today_wellness else None
+    wellness_logged_today = (
+        today_wellness is not None
+        and all(
+            getattr(today_wellness, f) is not None
+            for f in ("sleep_quality", "fatigue", "stress", "muscle_soreness")
+        )
     )
+
+    # ── Weight ────────────────────────────────────────────────────────────────
+    wt_date_col = cast(WeightLog.logged_at, Date)
+    latest_weight_res = await db.execute(
+        select(WeightLog).where(
+            WeightLog.user_id == current_user.id,
+        ).order_by(WeightLog.logged_at.desc()).limit(1)
+    )
+    latest_weight_row = latest_weight_res.scalar_one_or_none()
+    current_weight_kg = latest_weight_row.weight_kg if latest_weight_row else current_user.weight_kg
+
+    # 28-day trend for rate and weekly change
+    weight_trend: str | None = None
+    weekly_weight_change_kg: float | None = None
+    weight_goal_alignment: str = "neutral"
+    since_28 = today - timedelta(days=28)
+    wt_logs_res = await db.execute(
+        select(WeightLog).where(
+            WeightLog.user_id == current_user.id,
+            wt_date_col >= since_28,
+        ).order_by(WeightLog.logged_at.asc())
+    )
+    wt_logs = wt_logs_res.scalars().all()
+    if len(wt_logs) >= 2:
+        xs = list(range(len(wt_logs)))
+        ys = [w.weight_kg for w in wt_logs]
+        n = len(xs)
+        mean_x = sum(xs) / n
+        mean_y = sum(ys) / n
+        num = sum((xs[i] - mean_x) * (ys[i] - mean_y) for i in range(n))
+        den = sum((xs[i] - mean_x) ** 2 for i in range(n))
+        slope_per_day = (num / den) if den != 0 else 0.0
+        rate_per_week = slope_per_day * 7
+        weekly_weight_change_kg = round(rate_per_week, 3)
+        if rate_per_week < -0.05:
+            weight_trend = "losing"
+        elif rate_per_week > 0.05:
+            weight_trend = "gaining"
+        else:
+            weight_trend = "stable"
+        goal = (primary_goal or "").lower()
+        if any(k in goal for k in ["fat", "loss", "cut", "lose", "lean"]):
+            weight_goal_alignment = "on_track" if weight_trend == "losing" else "off_track"
+        elif any(k in goal for k in ["muscle", "gain", "bulk", "build", "mass"]):
+            weight_goal_alignment = "on_track" if weight_trend == "gaining" else "off_track"
+        else:
+            weight_goal_alignment = "neutral"
+
+    # Logged weight today?
+    weight_logged_today_res = await db.execute(
+        select(WeightLog).where(
+            WeightLog.user_id == current_user.id,
+            wt_date_col == today,
+        )
+    )
+    weight_logged_today = weight_logged_today_res.scalar_one_or_none() is not None
+
+    # ── Readiness — single source of truth via readiness_service ──────────────
+    readiness = await calculate_readiness(current_user.id, db)
 
     last_session_out = None
     if last_session:
@@ -527,12 +562,22 @@ async def get_dashboard(
         "primary_goal": primary_goal,
         "sport_tags": sport_tags,
         "weekly_training_goal": weekly_training_goal,
-        **readiness,
+        # Readiness (from single shared service — same score used everywhere)
+        "readiness_score": readiness["score"],
+        "readiness_label": readiness["label"],
+        "readiness_color": readiness["color"],
+        "readiness_primary_factor": readiness["primary_factor"],
+        "data_confidence": readiness["data_confidence"],
+        "components_used": readiness["components_used"],
+        "breakdown": readiness["breakdown"],
+        "hardware_available": readiness["hardware_available"],
         "last_session": last_session_out,
         "sessions_this_week": sessions_this_week,
         "weekly_load": weekly_load,
         "last_week_load": last_week_load,
-        "days_since_rest": days_since_rest,
+        "days_since_rest": max(0, days_since_rest),
+        "active_days_this_week": active_days_this_week,
+        "four_week_avg_load": four_week_avg_load,
         "current_streak": current_streak,
         "weekly_goal_progress": sessions_this_week,
         "acwr": acwr,
@@ -552,9 +597,23 @@ async def get_dashboard(
         "hrv_ms": hrv_ms,
         "resting_heart_rate": resting_heart_rate,
         "steps_today": steps_today,
+        # Wellness — legacy fields
         "energy_today": energy_today,
         "soreness_today": soreness_today,
         "mood_today": mood_today,
+        # Hooper Index fields
+        "sleep_quality_today": sleep_quality_today,
+        "fatigue_today": fatigue_today,
+        "stress_today": stress_today,
+        "muscle_soreness_today": muscle_soreness_today,
+        "wellness_logged_today": wellness_logged_today,
+        # Weight
+        "current_weight_kg": current_weight_kg,
+        "weight_trend": weight_trend,
+        "weekly_weight_change_kg": weekly_weight_change_kg,
+        "weight_goal_alignment": weight_goal_alignment,
+        "weight_logged_today": weight_logged_today,
+        "weight_unit": getattr(current_user, "weight_unit", "kg") or "kg",
     }
 
 
@@ -620,17 +679,15 @@ async def get_diagnosis(
         }
 
     system_prompt = (
-        "You are ORYX, an elite personal performance coach with expertise in sports science, "
-        "nutrition, and recovery. You have access to a complete picture of the athlete's day and "
-        "recent history. Your job is to explain in plain English why their body is performing the "
-        "way it is, connecting all available data sources together. Always look for relationships "
-        "between nutrition and training performance, between sleep and recovery, between training "
-        "load and soreness. Never analyze data in isolation. Be direct, specific, and personalized. "
-        "Use the athlete's name. Keep the diagnosis to 3 to 4 sentences maximum. End with one "
-        "specific actionable recommendation. After the diagnosis return a raw JSON object on a new "
-        "line — no markdown, no code fences, just the plain JSON object — with keys: "
-        "diagnosis (string), main_factors (array of strings max 3), recommendation (string), "
-        "tone (positive, cautionary, or warning)."
+        "You are ORYX, an elite performance coach. Your job is to give the athlete one sharp, "
+        "specific insight about their body today in plain English. Be direct. Be specific. Use their "
+        "name. Connect the data. Maximum 2 sentences for the diagnosis. One sentence for the "
+        "recommendation. No filler words. No generic advice. No phrases like it is important to or "
+        "make sure to or you should consider. Just tell them exactly what is happening and exactly "
+        "what to do about it. Quality over quantity. Every word must matter. "
+        "Return a JSON object with exactly these fields: diagnosis (string, maximum 2 sentences), "
+        "recommendation (string, maximum 1 sentence), main_factors (array of strings maximum 3), "
+        "tone (positive, cautionary, or warning). Nothing else."
     )
     user_message = _build_diagnosis_prompt(dashboard_data)
 
@@ -642,7 +699,7 @@ async def get_diagnosis(
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
             ],
-            max_tokens=1000,
+            max_tokens=300,
         )
         result_text = response.choices[0].message.content or ""
     except Exception as exc:

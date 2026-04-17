@@ -28,23 +28,13 @@ _assistant_rate: dict[str, int] = {}
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-def _compute_macro_targets(calorie_target: int | None, primary_goal: str | None) -> dict:
-    if not calorie_target:
-        return {"protein_target": None, "carbs_target": None, "fat_target": None}
-    goal = (primary_goal or "").lower()
-    if any(k in goal for k in ["muscle", "gain", "bulk", "build", "mass"]):
-        p_pct, c_pct, f_pct = 0.30, 0.45, 0.25
-    elif any(k in goal for k in ["fat", "loss", "cut", "lose", "weight", "lean"]):
-        p_pct, c_pct, f_pct = 0.35, 0.35, 0.30
-    elif any(k in goal for k in ["perform", "athlete", "sport", "endurance"]):
-        p_pct, c_pct, f_pct = 0.25, 0.55, 0.20
-    else:
-        p_pct, c_pct, f_pct = 0.25, 0.50, 0.25
-    return {
-        "protein_target": round(calorie_target * p_pct / 4),
-        "carbs_target": round(calorie_target * c_pct / 4),
-        "fat_target": round(calorie_target * f_pct / 9),
-    }
+async def _get_macro_targets_for_prompt(user_id, db) -> dict:
+    """Get macro targets from the shared service for use in meal plan prompts."""
+    from app.services.nutrition_service import get_cached_targets, calculate_macro_targets
+    targets = await get_cached_targets(user_id, db)
+    if targets is None:
+        targets = await calculate_macro_targets(user_id, db)
+    return targets
 
 
 def _strip_json_fences(s: str) -> str:
@@ -69,12 +59,17 @@ _MEAL_PLAN_SYSTEM_PROMPT = (
     "— these are non-negotiable. Factor in the athlete's training load and recovery state when "
     "determining meal timing, carbohydrate amounts, and total calories. Make meals realistic, simple "
     "to prepare given the cooking skill level and time available, and appropriate for the budget. "
+    "CRITICAL: The sum of all meal calories must never exceed the provided calorie target. "
+    "Aim to land within 3% below the target — at or just under, never over. "
     "Return ONLY a JSON object with no markdown, no code fences, no backticks, no preamble. "
     'The JSON structure must be exactly: {"is_cheat_day": boolean, "cheat_day_note": string_or_null, '
     '"total_calories": number, "total_protein_g": number, "total_carbs_g": number, "total_fat_g": number, '
     '"meals": [{"meal_name": string, "meal_type": "breakfast|lunch|dinner|snack|pre_workout|post_workout", '
     '"time": "HH:MM", "description": string, "ingredients": [string], "prep_time_minutes": number, '
     '"prep_note": string, "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number, '
+    '"fibre_g": number, "sugar_g": number, "sodium_mg": number, '
+    '"vitamin_d_iu": number, "magnesium_mg": number, "iron_mg": number, '
+    '"calcium_mg": number, "zinc_mg": number, "omega3_g": number, '
     '"can_meal_prep": boolean}], '
     '"grocery_items": [string], '
     '"nutrition_note": string} '
@@ -122,17 +117,29 @@ def _build_meal_plan_user_message(
         lines.append(f"Sports: {', '.join(str(t) for t in tags)}")
 
     lines.append("")
-    lines.append("CALORIE & MACRO TARGETS:")
-    if user.daily_calorie_target:
-        lines.append(f"- Daily calories: {user.daily_calorie_target} kcal")
-    else:
-        lines.append("- Daily calories: Not specified")
-    pt = macro_targets.get("protein_target")
-    ct = macro_targets.get("carbs_target")
-    ft = macro_targets.get("fat_target")
-    lines.append(f"- Protein target: {pt}g" if pt else "- Protein target: Not specified")
-    lines.append(f"- Carbs target: {ct}g" if ct else "- Carbs target: Not specified")
-    lines.append(f"- Fat target: {ft}g" if ft else "- Fat target: Not specified")
+    lines.append("EXACT MACRO TARGETS FOR TODAY (your meal plan must hit these):")
+    cal = macro_targets.get("daily_calorie_target") or user.daily_calorie_target
+    pt = macro_targets.get("protein_g")
+    ct = macro_targets.get("carbs_g")
+    ft = macro_targets.get("fat_g")
+    fb = macro_targets.get("fibre_g")
+    sg = macro_targets.get("sugar_max_g")
+    na = macro_targets.get("sodium_max_mg")
+    lines.append(f"- Total calories: {cal} kcal (HARD CEILING — never exceed this)" if cal else "- Total calories: Not specified")
+    lines.append(f"- Protein: {pt}g (non-negotiable, hit this target)" if pt else "- Protein: Not specified")
+    lines.append(f"- Carbs: {ct}g" if ct else "- Carbs: Not specified")
+    lines.append(f"- Fat: {ft}g" if ft else "- Fat: Not specified")
+    lines.append(f"- Fibre: minimum {fb}g" if fb else "- Fibre: at least 25g")
+    lines.append(f"- Added sugar: maximum {sg}g" if sg is not None else "")
+    lines.append(f"- Sodium: maximum {na}mg" if na else "")
+    lines.append(
+        "The total calories of all meals combined must be at or slightly below the calorie target — "
+        f"aim for {round(cal * 0.97) if cal else 'target'} to {cal} kcal. "
+        "Never go over. Macros should be within 5% of their targets without exceeding them."
+    )
+    lines.append("Distribute protein across all meals with at least 25g per main meal.")
+    if macro_targets.get("is_carb_cycling"):
+        lines.append("Carb cycling is enabled — use training day targets for this plan.")
 
     if profile:
         lines.append("")
@@ -219,8 +226,8 @@ async def _generate_meal_plan(current_user: User, db: AsyncSession) -> dict:
     )
     profile = profile_res.scalar_one_or_none()
 
-    # Macro targets
-    macro_targets = _compute_macro_targets(current_user.daily_calorie_target, current_user.primary_goal)
+    # Macro targets from shared service
+    macro_targets = await _get_macro_targets_for_prompt(current_user.id, db)
 
     # Yesterday's training load
     yday_load_res = await db.execute(
@@ -547,11 +554,12 @@ async def regenerate_today_meal_plan(
     )
     existing = existing_res.scalars().first()
 
-    if existing is not None and existing.regeneration_count >= 3:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Daily regeneration limit reached (3/day)",
-        )
+    # Regeneration limit disabled for development
+    # if existing is not None and existing.regeneration_count >= 3:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+    #         detail="Daily regeneration limit reached (3/day)",
+    #     )
 
     plan_data = await _generate_meal_plan(current_user=current_user, db=db)
     now = datetime.utcnow()
@@ -717,7 +725,21 @@ _ASSISTANT_SYSTEM_PROMPT = (
     "If they need a food substitution, suggest something realistic for their region and budget. "
     "If they need to adjust their remaining meals for the day, give specific recommendations based on "
     "how many calories and macros they have left. Keep responses concise — 2–4 sentences maximum "
-    "unless a list is genuinely more helpful. Never be preachy. Be direct and practical."
+    "unless a list is genuinely more helpful. Never be preachy. Be direct and practical.\n\n"
+    "In addition to answering nutrition questions you can also modify the user's meal plan for today "
+    "when they ask. If the user asks to change, swap, replace, or modify any meal or ingredient in "
+    "today's plan, extract the following and return it in a special block at the very end of your "
+    "response after your plain text answer:\n\n"
+    "MEAL_MODIFICATION: {\"action\": \"replace_meal|replace_ingredient|remove_ingredient|add_ingredient\", "
+    "\"meal_type\": \"breakfast|lunch|dinner|snack|pre_workout|post_workout\", "
+    "\"original_item\": \"string\", \"replacement_item\": \"string\", "
+    "\"reason\": \"one sentence explaining the nutritional impact\"}\n\n"
+    "Only include the MEAL_MODIFICATION block if the user is explicitly asking to change something "
+    "in their meal plan. If they are just asking a question, do not include it.\n"
+    "When making replacements always: respect all dietary restrictions and allergies absolutely; "
+    "keep the replacement as close as possible to the original macros; use foods from the user's "
+    "liked foods list when possible; avoid foods from the user's disliked foods list; keep the "
+    "replacement realistic for the user's region, budget, and cooking skill."
 )
 
 
@@ -748,8 +770,11 @@ async def nutrition_assistant(
     )
     profile = profile_res.scalar_one_or_none()
 
-    # Macro targets
-    macro_targets = _compute_macro_targets(current_user.daily_calorie_target, current_user.primary_goal)
+    # Macro targets from shared service
+    from app.services.nutrition_service import get_cached_targets, calculate_macro_targets
+    macro_targets = await get_cached_targets(current_user.id, db)
+    if macro_targets is None:
+        macro_targets = await calculate_macro_targets(current_user.id, db)
 
     # Today's nutrition logs
     now = datetime.utcnow()
@@ -805,10 +830,10 @@ async def nutrition_assistant(
         readiness -= 10
 
     # Build context
-    calorie_target = current_user.daily_calorie_target or 2000
-    pt = macro_targets.get("protein_target") or "?"
-    ct = macro_targets.get("carbs_target") or "?"
-    ft = macro_targets.get("fat_target") or "?"
+    calorie_target = macro_targets.get("daily_calorie_target") or current_user.daily_calorie_target or 2000
+    pt = macro_targets.get("protein_g") or "?"
+    ct = macro_targets.get("carbs_g") or "?"
+    ft = macro_targets.get("fat_g") or "?"
 
     context_lines = [
         "Athlete context:",
@@ -865,4 +890,42 @@ async def nutrition_assistant(
         logger.error("Nutrition assistant OpenAI call failed: %s", exc)
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI assistant temporarily unavailable.")
 
-    return {"response_text": result_text}
+    # Parse meal modification block
+    mod_match = re.search(
+        r"MEAL_MODIFICATION:\s*(\{.*?\})\s*$",
+        result_text,
+        re.DOTALL | re.IGNORECASE,
+    )
+    clean_text = result_text
+    meal_modified = False
+    modified_meal = None
+    updated_daily_totals = None
+
+    if mod_match:
+        # Strip the modification block from the response text
+        clean_text = result_text[: mod_match.start()].strip()
+        try:
+            modification = json.loads(mod_match.group(1))
+            # Load today's meal plan
+            plan_res = await db.execute(
+                select(MealPlan).where(
+                    MealPlan.user_id == current_user.id,
+                    MealPlan.date == today,
+                ).order_by(MealPlan.generated_at.desc())
+            )
+            plan = plan_res.scalars().first()
+            if plan:
+                from app.services.nutrition_service import apply_meal_modification
+                modified_meal, updated_daily_totals = await apply_meal_modification(
+                    current_user.id, modification, plan, db
+                )
+                meal_modified = True
+        except (json.JSONDecodeError, Exception) as exc:
+            logger.warning("Failed to parse/apply MEAL_MODIFICATION: %s", exc)
+
+    return {
+        "response_text": clean_text,
+        "meal_modified": meal_modified,
+        "modified_meal": modified_meal,
+        "updated_daily_totals": updated_daily_totals,
+    }

@@ -584,9 +584,17 @@ FOOD_SCAN_SYSTEM_PROMPT = """You are a nutrition analysis assistant. When given 
   "carbs_g": number,
   "fat_g": number,
   "fibre_g": number,
+  "sugar_g": number,
+  "sodium_mg": number,
+  "vitamin_d_iu": number,
+  "magnesium_mg": number,
+  "iron_mg": number,
+  "calcium_mg": number,
+  "zinc_mg": number,
+  "omega3_g": number,
   "confidence": "low" or "medium" or "high"
 }
-If you cannot identify the food return the same structure with all numeric values as 0 and confidence as "low"."""
+Estimate micronutrients based on known nutritional values for the identified foods. If you cannot identify the food return the same structure with all numeric values as 0 and confidence as "low"."""
 
 
 def _sync_scan_food_image(base64_image: str, media_type: str = "image/jpeg") -> dict:
@@ -655,6 +663,14 @@ def _sync_scan_food_image(base64_image: str, media_type: str = "image/jpeg") -> 
             "carbs_g": 0.0,
             "fat_g": 0.0,
             "fibre_g": 0.0,
+            "sugar_g": 0.0,
+            "sodium_mg": 0.0,
+            "vitamin_d_iu": 0.0,
+            "magnesium_mg": 0.0,
+            "iron_mg": 0.0,
+            "calcium_mg": 0.0,
+            "zinc_mg": 0.0,
+            "omega3_g": 0.0,
             "confidence": "low",
         }
 

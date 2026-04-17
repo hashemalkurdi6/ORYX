@@ -19,6 +19,12 @@ class FoodItem(BaseModel):
     fibre_100g: float = 0.0
     sugar_100g: float = 0.0
     sodium_100g: float = 0.0            # grams (not mg)
+    vitamin_d_100g: float = 0.0         # IU per 100g
+    magnesium_100g: float = 0.0         # mg per 100g
+    iron_100g: float = 0.0              # mg per 100g
+    calcium_100g: float = 0.0           # mg per 100g
+    zinc_100g: float = 0.0              # mg per 100g
+    omega3_100g: float = 0.0            # g per 100g
     serving_size_g: float | None = None
     serving_unit: str | None = None
 
@@ -41,6 +47,12 @@ class CustomFoodIn(BaseModel):
     fibre_100g: float = 0.0
     sugar_100g: float = 0.0
     sodium_100g: float = 0.0
+    vitamin_d_100g: float = 0.0
+    magnesium_100g: float = 0.0
+    iron_100g: float = 0.0
+    calcium_100g: float = 0.0
+    zinc_100g: float = 0.0
+    omega3_100g: float = 0.0
     serving_size_g: float | None = None
     serving_unit: str | None = None
 
@@ -57,6 +69,12 @@ class CustomFoodOut(BaseModel):
     fibre_100g: float
     sugar_100g: float
     sodium_100g: float
+    vitamin_d_100g: float
+    magnesium_100g: float
+    iron_100g: float
+    calcium_100g: float
+    zinc_100g: float
+    omega3_100g: float
     serving_size_g: float | None
     serving_unit: str | None
     created_at: datetime

@@ -48,6 +48,7 @@ async def log_nutrition(
     db: AsyncSession = Depends(get_db),
 ):
     """Insert a new nutrition log entry for the current user."""
+    from app.services.readiness_service import invalidate_readiness_cache
     now = datetime.utcnow()
     entry = NutritionLog(
         id=uuid.uuid4(),
@@ -60,23 +61,37 @@ async def log_nutrition(
         carbs_g=payload.carbs_g,
         fat_g=payload.fat_g,
         fibre_g=payload.fibre_g,
+        sugar_g=payload.sugar_g,
+        sodium_mg=payload.sodium_mg,
+        vitamin_d_iu=payload.vitamin_d_iu,
+        magnesium_mg=payload.magnesium_mg,
+        iron_mg=payload.iron_mg,
+        calcium_mg=payload.calcium_mg,
+        zinc_mg=payload.zinc_mg,
+        omega3_g=payload.omega3_g,
         meal_type=payload.meal_type,
         source=payload.source,
         notes=payload.notes,
         created_at=now,
     )
     db.add(entry)
+    await invalidate_readiness_cache(current_user.id, db)
     await db.flush()
+    from app.services.nutrition_service import update_daily_summary
+    await update_daily_summary(current_user.id, now.date(), db)
     await db.refresh(entry)
     return NutritionLogOut.model_validate(entry)
 
 
-@router.get("/today", response_model=list[NutritionLogOut])
+@router.get("/today")
 async def get_nutrition_today(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return all nutrition log entries for today (UTC) for the current user."""
+    """Return today's logs, daily summary, and nutrition targets."""
+    from app.models.daily_nutrition_summary import DailyNutritionSummary
+    from app.services.nutrition_service import get_cached_targets
+
     now = datetime.utcnow()
     start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
     end_of_day = start_of_day + timedelta(days=1)
@@ -91,7 +106,41 @@ async def get_nutrition_today(
         .order_by(NutritionLog.logged_at.asc())
     )
     entries = result.scalars().all()
-    return [NutritionLogOut.model_validate(e) for e in entries]
+    logs = [NutritionLogOut.model_validate(e) for e in entries]
+
+    # Daily summary
+    today = now.date()
+    summary_res = await db.execute(
+        select(DailyNutritionSummary).where(
+            DailyNutritionSummary.user_id == current_user.id,
+            DailyNutritionSummary.date == today,
+        )
+    )
+    summary_row = summary_res.scalar_one_or_none()
+    summary = {
+        "calories_consumed": summary_row.calories_consumed if summary_row else 0.0,
+        "protein_consumed_g": summary_row.protein_consumed_g if summary_row else 0.0,
+        "carbs_consumed_g": summary_row.carbs_consumed_g if summary_row else 0.0,
+        "fat_consumed_g": summary_row.fat_consumed_g if summary_row else 0.0,
+        "fibre_consumed_g": summary_row.fibre_consumed_g if summary_row else 0.0,
+        "sugar_consumed_g": summary_row.sugar_consumed_g if summary_row else 0.0,
+        "sodium_consumed_mg": summary_row.sodium_consumed_mg if summary_row else 0.0,
+        "vitamin_d_consumed_iu": summary_row.vitamin_d_consumed_iu if summary_row else 0.0,
+        "magnesium_consumed_mg": summary_row.magnesium_consumed_mg if summary_row else 0.0,
+        "iron_consumed_mg": summary_row.iron_consumed_mg if summary_row else 0.0,
+        "calcium_consumed_mg": summary_row.calcium_consumed_mg if summary_row else 0.0,
+        "zinc_consumed_mg": summary_row.zinc_consumed_mg if summary_row else 0.0,
+        "omega3_consumed_g": summary_row.omega3_consumed_g if summary_row else 0.0,
+    }
+
+    # Targets
+    targets = await get_cached_targets(current_user.id, db)
+
+    return {
+        "logs": [log.model_dump() for log in logs],
+        "summary": summary,
+        "targets": targets,
+    }
 
 
 @router.get("/logs", response_model=list[NutritionLogOut])
@@ -134,5 +183,325 @@ async def delete_nutrition_log(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Nutrition log entry not found",
         )
+    log_date = entry.logged_at.date()
     await db.delete(entry)
     await db.flush()
+    from app.services.nutrition_service import update_daily_summary
+    await update_daily_summary(current_user.id, log_date, db)
+
+
+@router.get("/targets")
+async def get_nutrition_targets(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return current nutrition targets for the user. Calculates if not yet stored."""
+    from app.services.nutrition_service import calculate_macro_targets, get_cached_targets
+    targets = await get_cached_targets(current_user.id, db)
+    if targets is None:
+        targets = await calculate_macro_targets(current_user.id, db)
+    return targets
+
+
+@router.post("/targets/recalculate")
+async def recalculate_nutrition_targets(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Recalculate and save nutrition targets from current user profile and body stats."""
+    from app.services.nutrition_service import calculate_macro_targets
+    return await calculate_macro_targets(current_user.id, db)
+
+
+# ── Water tracking ─────────────────────────────────────────────────────────────
+
+from pydantic import BaseModel as _BM
+
+
+async def _get_water_targets(user_id, current_user, db):
+    """Return (effective_target_ml, recommended_ml, container_size_ml) for the user."""
+    from app.models.nutrition_profile import NutritionProfile
+    from app.models.nutrition_targets import NutritionTargets
+    from app.services.nutrition_service import _compute_water_target
+
+    # Recommended = calculated from profile
+    profile_res = await db.execute(select(NutritionProfile).where(NutritionProfile.user_id == user_id))
+    profile = profile_res.scalar_one_or_none()
+    recommended_ml = _compute_water_target(current_user, profile)
+
+    # Effective target = override if set, else stored calculation, else recommended
+    effective_target = recommended_ml
+    if profile and profile.water_target_override_ml:
+        effective_target = profile.water_target_override_ml
+    else:
+        tgt_res = await db.execute(select(NutritionTargets).where(NutritionTargets.user_id == user_id))
+        tgt = tgt_res.scalar_one_or_none()
+        if tgt and tgt.water_target_ml:
+            effective_target = tgt.water_target_ml
+
+    container_size_ml = 250
+    if profile and profile.container_size_ml:
+        container_size_ml = profile.container_size_ml
+
+    return effective_target, recommended_ml, container_size_ml
+
+
+@router.get("/water/today")
+async def get_water_today(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return today's water intake and personalized target."""
+    from app.models.daily_water_intake import DailyWaterIntake
+
+    today = datetime.utcnow().date()
+    result = await db.execute(
+        select(DailyWaterIntake).where(
+            DailyWaterIntake.user_id == current_user.id,
+            DailyWaterIntake.date == today,
+        )
+    )
+    row = result.scalar_one_or_none()
+    amount_ml = row.amount_ml if row else 0
+
+    # Always use profile preference for container size — don't let daily row override it
+    target_ml, recommended_ml, container_size_ml = await _get_water_targets(
+        current_user.id, current_user, db
+    )
+
+    pct = round(amount_ml / target_ml * 100, 1) if target_ml > 0 else 0.0
+    return {
+        "amount_ml": amount_ml,
+        "target_ml": target_ml,
+        "container_size_ml": container_size_ml,
+        "percentage": pct,
+        "recommended_ml": recommended_ml,
+    }
+
+
+class WaterPatchIn(_BM):
+    amount_ml: int
+    container_size_ml: int = 250
+
+
+@router.patch("/water/today")
+async def patch_water_today(
+    payload: WaterPatchIn,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upsert today's water intake (amount_ml)."""
+    from app.models.daily_water_intake import DailyWaterIntake
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    today = datetime.utcnow().date()
+    amount_ml = max(0, payload.amount_ml)
+    container_size_ml = max(50, payload.container_size_ml)
+
+    stmt = pg_insert(DailyWaterIntake).values(
+        user_id=current_user.id,
+        date=today,
+        glasses_count=0,
+        amount_ml=amount_ml,
+        container_size_ml=container_size_ml,
+        updated_at=datetime.utcnow(),
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["user_id", "date"],
+        set_={
+            "amount_ml": amount_ml,
+            "container_size_ml": container_size_ml,
+            "updated_at": datetime.utcnow(),
+        },
+    )
+    await db.execute(stmt)
+    await db.flush()
+
+    target_ml, recommended_ml, _ = await _get_water_targets(current_user.id, current_user, db)
+    pct = round(amount_ml / target_ml * 100, 1) if target_ml > 0 else 0.0
+    return {
+        "amount_ml": amount_ml,
+        "target_ml": target_ml,
+        "container_size_ml": container_size_ml,
+        "percentage": pct,
+        "recommended_ml": recommended_ml,
+    }
+
+
+class WaterSettingsIn(_BM):
+    target_ml: int | None = None   # None = reset to recommended
+    container_size_ml: int | None = None
+    water_input_mode: str | None = None  # 'glasses' | 'ml'
+
+
+@router.patch("/water/settings")
+async def patch_water_settings(
+    payload: WaterSettingsIn,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Save user water preferences (target override, container size, input mode)."""
+    from app.models.nutrition_profile import NutritionProfile
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    now = datetime.utcnow()
+    update_vals: dict = {"updated_at": now}
+    if payload.target_ml is not None:
+        update_vals["water_target_override_ml"] = payload.target_ml
+    elif "target_ml" in payload.model_fields_set:
+        # Explicitly null → reset override
+        update_vals["water_target_override_ml"] = None
+    if payload.container_size_ml is not None:
+        update_vals["container_size_ml"] = max(50, payload.container_size_ml)
+    if payload.water_input_mode is not None:
+        update_vals["water_input_mode"] = payload.water_input_mode
+
+    # Upsert profile row (nutrition profile may or may not exist)
+    profile_res = await db.execute(
+        select(NutritionProfile).where(NutritionProfile.user_id == current_user.id)
+    )
+    profile = profile_res.scalar_one_or_none()
+    if profile:
+        for k, v in update_vals.items():
+            if hasattr(profile, k):
+                setattr(profile, k, v)
+        await db.flush()
+    else:
+        import uuid as _uuid
+        stmt = pg_insert(NutritionProfile).values(
+            id=_uuid.uuid4(),
+            user_id=current_user.id,
+            nutrition_survey_complete=False,
+            created_at=now,
+            **update_vals,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["user_id"],
+            set_={k: stmt.excluded[k] for k in update_vals},
+        )
+        await db.execute(stmt)
+        await db.flush()
+
+    target_ml, recommended_ml, container_size_ml = await _get_water_targets(
+        current_user.id, current_user, db
+    )
+    return {
+        "target_ml": target_ml,
+        "recommended_ml": recommended_ml,
+        "container_size_ml": container_size_ml,
+    }
+
+
+# ── Weekly nutrition summary ───────────────────────────────────────────────────
+
+@router.get("/weekly-summary")
+async def get_weekly_nutrition_summary(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return weekly nutrition stats for the current and previous week."""
+    from sqlalchemy import func
+
+    now = datetime.utcnow()
+    # Current week: Monday to today
+    days_since_monday = now.weekday()  # 0=Mon
+    week_start = (now - timedelta(days=days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
+    # Last week: Mon to Sun
+    last_week_start = week_start - timedelta(days=7)
+    last_week_end = week_start
+
+    async def _daily_stats(start: datetime, end: datetime):
+        res = await db.execute(
+            select(
+                func.date(NutritionLog.logged_at).label("day"),
+                func.sum(NutritionLog.calories).label("cal"),
+                func.sum(NutritionLog.protein_g).label("prot"),
+            ).where(
+                NutritionLog.user_id == current_user.id,
+                NutritionLog.logged_at >= start,
+                NutritionLog.logged_at < end,
+            ).group_by(func.date(NutritionLog.logged_at))
+        )
+        return res.all()
+
+    this_week_rows = await _daily_stats(week_start, now + timedelta(days=1))
+    last_week_rows = await _daily_stats(last_week_start, last_week_end)
+
+    def _avg(rows, col_idx):
+        vals = [r[col_idx] or 0 for r in rows if r[col_idx] is not None]
+        return round(sum(vals) / len(vals), 1) if vals else 0.0
+
+    calorie_target = getattr(current_user, "daily_calorie_target", None) or 2000
+
+    def _days_on_target(rows):
+        count = 0
+        for r in rows:
+            cal = r[1] or 0
+            if cal > 0 and abs(cal - calorie_target) / calorie_target <= 0.10:
+                count += 1
+        return count
+
+    from app.models.nutrition_targets import NutritionTargets
+    tgt_res = await db.execute(select(NutritionTargets).where(NutritionTargets.user_id == current_user.id))
+    tgt = tgt_res.scalar_one_or_none()
+    protein_target = tgt.protein_g if tgt else 125.0
+
+    def _days_protein_hit(rows):
+        count = 0
+        for r in rows:
+            prot = r[2] or 0
+            if prot > 0 and abs(prot - protein_target) / protein_target <= 0.10:
+                count += 1
+        return count
+
+    return {
+        "avg_daily_calories": _avg(this_week_rows, 1),
+        "avg_daily_protein": _avg(this_week_rows, 2),
+        "days_calorie_target_hit": _days_on_target(this_week_rows),
+        "days_protein_target_hit": _days_protein_hit(this_week_rows),
+        "last_week_avg_calories": _avg(last_week_rows, 1),
+        "last_week_avg_protein": _avg(last_week_rows, 2),
+    }
+
+
+@router.get("/weekly-calories")
+async def get_weekly_calories(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return last 7 days of daily calorie totals vs target."""
+    from sqlalchemy import func
+    from app.models.nutrition_targets import NutritionTargets
+
+    tgt_res = await db.execute(select(NutritionTargets).where(NutritionTargets.user_id == current_user.id))
+    tgt = tgt_res.scalar_one_or_none()
+    calorie_target = (
+        tgt.daily_calorie_target if tgt and tgt.daily_calorie_target
+        else getattr(current_user, "daily_calorie_target", None) or 2000
+    )
+
+    now = datetime.utcnow()
+    start = (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    res = await db.execute(
+        select(
+            func.date(NutritionLog.logged_at).label("day"),
+            func.sum(NutritionLog.calories).label("cal"),
+        ).where(
+            NutritionLog.user_id == current_user.id,
+            NutritionLog.logged_at >= start,
+        ).group_by(func.date(NutritionLog.logged_at))
+    )
+    rows = {str(r[0]): (r[1] or 0) for r in res.all()}
+
+    _DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"]
+    result = []
+    for i in range(7):
+        d = (start + timedelta(days=i)).date()
+        result.append({
+            "date": str(d),
+            "calories_logged": round(rows.get(str(d), 0)),
+            "target": calorie_target,
+            "day_label": _DAY_LABELS[d.weekday()],
+        })
+    return result

@@ -143,18 +143,30 @@ export interface WellnessCheckin {
   id: string;
   user_id: string;
   date: string;
-  mood: number;
-  energy: number;
-  soreness: number;
+  // Hooper Index fields (1–7, 1=best)
+  sleep_quality: number | null;
+  fatigue: number | null;
+  stress: number | null;
+  muscle_soreness: number | null;
+  // Legacy fields
+  mood: number | null;
+  energy: number | null;
+  soreness: number | null;
   notes: string | null;
   created_at: string;
 }
 
 export interface WellnessCheckinIn {
   date: string;
-  mood: number;
-  energy: number;
-  soreness: number;
+  // Hooper Index fields (1–7, 1=best)
+  sleep_quality?: number;
+  fatigue?: number;
+  stress?: number;
+  muscle_soreness?: number;
+  // Legacy fields (backward compat)
+  mood?: number;
+  energy?: number;
+  soreness?: number;
   notes?: string;
 }
 
@@ -169,6 +181,14 @@ export interface NutritionLog {
   carbs_g: number | null;
   fat_g: number | null;
   fibre_g: number | null;
+  sugar_g: number | null;
+  sodium_mg: number | null;
+  vitamin_d_iu: number | null;
+  magnesium_mg: number | null;
+  iron_mg: number | null;
+  calcium_mg: number | null;
+  zinc_mg: number | null;
+  omega3_g: number | null;
   meal_type: string | null;
   source: string | null;
   photo_url: string | null;
@@ -184,9 +204,75 @@ export interface NutritionLogIn {
   carbs_g?: number;
   fat_g?: number;
   fibre_g?: number;
+  sugar_g?: number;
+  sodium_mg?: number;
+  vitamin_d_iu?: number;
+  magnesium_mg?: number;
+  iron_mg?: number;
+  calcium_mg?: number;
+  zinc_mg?: number;
+  omega3_g?: number;
   meal_type?: string;
   source?: string;
   notes?: string;
+}
+
+// ── Nutrition Targets & Summary ────────────────────────────────────────────
+
+export interface NutritionTargets {
+  daily_calorie_target: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  fibre_g: number | null;
+  sugar_max_g: number | null;
+  sodium_max_mg: number | null;
+  potassium_mg: number | null;
+  calcium_mg: number | null;
+  iron_mg: number | null;
+  vitamin_d_iu: number | null;
+  magnesium_mg: number | null;
+  zinc_mg: number | null;
+  omega3_g: number | null;
+  is_carb_cycling: boolean;
+  training_day_carbs_g: number | null;
+  rest_day_carbs_g: number | null;
+  is_intermittent_fasting: boolean;
+  calculated_at?: string;
+}
+
+export interface DailyNutritionSummary {
+  calories_consumed: number;
+  protein_consumed_g: number;
+  carbs_consumed_g: number;
+  fat_consumed_g: number;
+  fibre_consumed_g: number;
+  sugar_consumed_g: number;
+  sodium_consumed_mg: number;
+  vitamin_d_consumed_iu: number;
+  magnesium_consumed_mg: number;
+  iron_consumed_mg: number;
+  calcium_consumed_mg: number;
+  zinc_consumed_mg: number;
+  omega3_consumed_g: number;
+}
+
+export interface TodayNutritionResponse {
+  logs: NutritionLog[];
+  summary: DailyNutritionSummary;
+  targets: NutritionTargets | null;
+}
+
+export interface AssistantResponse {
+  response_text: string;
+  meal_modified: boolean;
+  modified_meal: MealPlanMeal | null;
+  updated_daily_totals: {
+    total_calories: number;
+    total_protein_g: number;
+    total_carbs_g: number;
+    total_fat_g: number;
+  } | null;
 }
 
 export interface FoodScanResult {
@@ -198,6 +284,14 @@ export interface FoodScanResult {
   carbs_g: number;
   fat_g: number;
   fibre_g: number;
+  sugar_g: number;
+  sodium_mg: number;
+  vitamin_d_iu: number;
+  magnesium_mg: number;
+  iron_mg: number;
+  calcium_mg: number;
+  zinc_mg: number;
+  omega3_g: number;
   confidence: 'low' | 'medium' | 'high';
   low_confidence: boolean;
 }
@@ -216,6 +310,12 @@ export interface FoodItem {
   fibre_100g: number;
   sugar_100g: number;
   sodium_100g: number;
+  vitamin_d_100g: number;
+  magnesium_100g: number;
+  iron_100g: number;
+  calcium_100g: number;
+  zinc_100g: number;
+  omega3_100g: number;
   serving_size_g: number | null;
   serving_unit: string | null;
 }
@@ -593,8 +693,18 @@ export async function logNutrition(data: NutritionLogIn): Promise<NutritionLog> 
   return response.data;
 }
 
-export async function getTodayNutrition(): Promise<NutritionLog[]> {
-  const response = await apiClient.get<NutritionLog[]>('/nutrition/today');
+export async function getTodayNutrition(): Promise<TodayNutritionResponse> {
+  const response = await apiClient.get<TodayNutritionResponse>('/nutrition/today');
+  return response.data;
+}
+
+export async function getNutritionTargets(): Promise<NutritionTargets> {
+  const response = await apiClient.get<NutritionTargets>('/nutrition/targets');
+  return response.data;
+}
+
+export async function recalculateNutritionTargets(): Promise<NutritionTargets> {
+  const response = await apiClient.post<NutritionTargets>('/nutrition/targets/recalculate');
   return response.data;
 }
 
@@ -685,6 +795,7 @@ export interface WeeklyLoad {
   status: 'normal' | 'elevated' | 'high';
   acwr: number | null;
   acwr_status: 'undertraining' | 'optimal' | 'caution' | 'high_risk' | 'insufficient_data';
+  days_until_acwr?: number | null;
 }
 
 export interface ReadinessScore {
@@ -838,19 +949,44 @@ export interface LastSession {
   autopsy_snippet: string | null;
 }
 
+export interface ReadinessBreakdown {
+  [component: string]: {
+    name: string;
+    score: number;
+    default_weight: number;
+    adjusted_weight: number;
+    data_source: string;
+  };
+}
+
+export interface HardwareAvailable {
+  apple_watch: boolean;
+  whoop: boolean;
+  oura: boolean;
+  hrv_available: boolean;
+  sleep_available: boolean;
+}
+
 export interface DashboardData {
   display_name: string;
   primary_goal: string | null;
   sport_tags: string[];
   weekly_training_goal: number | null;
+  // Readiness — from single shared calculation service
   readiness_score: number;
   readiness_label: string;
   readiness_color: 'green' | 'amber' | 'red';
   readiness_primary_factor: string;
+  data_confidence: string;
+  components_used: string[];
+  breakdown: ReadinessBreakdown;
+  hardware_available: HardwareAvailable;
   last_session: LastSession | null;
   sessions_this_week: number;
+  active_days_this_week: number;
   weekly_load: number;
   last_week_load: number;
+  four_week_avg_load: number;
   days_since_rest: number;
   current_streak: number;
   weekly_goal_progress: number;
@@ -871,9 +1007,23 @@ export interface DashboardData {
   hrv_ms: number | null;
   resting_heart_rate: number | null;
   steps_today: number;
+  // Wellness — Hooper Index
+  sleep_quality_today: number | null;
+  fatigue_today: number | null;
+  stress_today: number | null;
+  muscle_soreness_today: number | null;
+  wellness_logged_today: boolean;
+  // Legacy wellness fields
   energy_today: number | null;
   soreness_today: number | null;
   mood_today: number | null;
+  // Weight
+  current_weight_kg: number | null;
+  weight_trend: 'losing' | 'gaining' | 'stable' | null;
+  weekly_weight_change_kg: number | null;
+  weight_goal_alignment: 'on_track' | 'off_track' | 'neutral';
+  weight_logged_today: boolean;
+  weight_unit: 'kg' | 'lbs';
 }
 
 export interface DiagnosisData {
@@ -947,6 +1097,15 @@ export interface MealPlanMeal {
   protein_g: number;
   carbs_g: number;
   fat_g: number;
+  fibre_g?: number;
+  sugar_g?: number;
+  sodium_mg?: number;
+  vitamin_d_iu?: number;
+  magnesium_mg?: number;
+  iron_mg?: number;
+  calcium_mg?: number;
+  zinc_mg?: number;
+  omega3_g?: number;
   can_meal_prep: boolean;
 }
 
@@ -1024,12 +1183,156 @@ export interface ChatMessage {
 export async function askNutritionAssistant(
   userMessage: string,
   conversationHistory: ChatMessage[],
-): Promise<string> {
-  const response = await apiClient.post<{ response_text: string }>('/nutrition/assistant', {
+): Promise<AssistantResponse> {
+  const response = await apiClient.post<AssistantResponse>('/nutrition/assistant', {
     user_message: userMessage,
     conversation_history: conversationHistory.slice(-5),
   });
-  return response.data.response_text;
+  return response.data;
+}
+
+// ── Water tracking ────────────────────────────────────────────────────────────
+
+export interface WaterStatus {
+  amount_ml: number;
+  target_ml: number;
+  container_size_ml: number;
+  percentage: number;
+  recommended_ml: number;
+}
+
+export interface WaterPatchPayload {
+  amount_ml: number;
+  container_size_ml?: number;
+}
+
+export interface WaterSettingsPayload {
+  target_ml?: number | null;  // null = reset to recommended
+  container_size_ml?: number;
+  water_input_mode?: 'glasses' | 'ml';
+}
+
+export async function getWaterToday(): Promise<WaterStatus> {
+  const response = await apiClient.get<WaterStatus>('/nutrition/water/today');
+  return response.data;
+}
+
+export async function patchWaterToday(payload: WaterPatchPayload): Promise<WaterStatus> {
+  const response = await apiClient.patch<WaterStatus>('/nutrition/water/today', payload);
+  return response.data;
+}
+
+export async function patchWaterSettings(payload: WaterSettingsPayload): Promise<{ target_ml: number; recommended_ml: number; container_size_ml: number }> {
+  const response = await apiClient.patch('/nutrition/water/settings', payload);
+  return response.data;
+}
+
+// ── Weekly calorie chart ──────────────────────────────────────────────────────
+
+export interface WeeklyCalorieDay {
+  date: string;
+  calories_logged: number;
+  target: number;
+  day_label: string;
+}
+
+export async function getWeeklyCalories(): Promise<WeeklyCalorieDay[]> {
+  const response = await apiClient.get<WeeklyCalorieDay[]>('/nutrition/weekly-calories');
+  return response.data;
+}
+
+// ── Weekly nutrition summary ──────────────────────────────────────────────────
+
+export interface WeeklyNutritionSummary {
+  avg_daily_calories: number;
+  avg_daily_protein: number;
+  days_calorie_target_hit: number;
+  days_protein_target_hit: number;
+  last_week_avg_calories: number;
+  last_week_avg_protein: number;
+}
+
+export async function getWeeklyNutritionSummary(): Promise<WeeklyNutritionSummary> {
+  const response = await apiClient.get<WeeklyNutritionSummary>('/nutrition/weekly-summary');
+  return response.data;
+}
+
+// ── Weight Tracking ───────────────────────────────────────────────────────────
+
+export interface WeightLogEntry {
+  date: string;
+  weight_kg: number;
+  display_value: number;
+  note: string | null;
+}
+
+export interface WeightRollingAvgEntry {
+  date: string;
+  rolling_avg: number;
+}
+
+export interface WeightWeeklyAvg {
+  week_start: string;
+  avg_kg: number;
+  display_avg: number;
+  count: number;
+}
+
+export interface WeightHistory {
+  entries: WeightLogEntry[];
+  rolling_avg: WeightRollingAvgEntry[];
+  weekly_averages: WeightWeeklyAvg[];
+  rate_of_change_kg_per_week: number | null;
+  display_unit: 'kg' | 'lbs';
+  days_with_data: number;
+  fell_back_to_all: boolean;
+  first_log_date: string | null;
+}
+
+export interface WeightSummary {
+  current_weight_kg: number | null;
+  current_weight_display: number | null;
+  display_unit: 'kg' | 'lbs';
+  rate_of_change_kg_per_week: number | null;
+  weekly_change_display: number | null;
+  goal_alignment: 'on_track' | 'off_track' | 'neutral' | null;
+  data_confidence: 'insufficient' | 'early' | 'limited' | 'sufficient';
+  days_logged_this_month: number;
+  current_streak: number;
+  longest_streak: number;
+  logged_today: boolean;
+  total_logs: number;
+}
+
+export interface WeightLogResult {
+  id: string;
+  weight_kg: number;
+  display_value: number;
+  display_unit: 'kg' | 'lbs';
+  logged_at: string;
+  note: string | null;
+}
+
+export async function logWeight(weight_kg: number, note?: string, logged_at?: string): Promise<WeightLogResult> {
+  const response = await apiClient.post<WeightLogResult>('/weight/log', { weight_kg, note, logged_at });
+  return response.data;
+}
+
+export async function getWeightHistory(days = 30, range?: string): Promise<WeightHistory> {
+  const params: Record<string, unknown> = { days };
+  if (range) params.range = range;
+  const response = await apiClient.get<WeightHistory>('/weight/history', { params });
+  return response.data;
+}
+
+export async function getWeightSummary(): Promise<WeightSummary> {
+  const response = await apiClient.get<WeightSummary>('/weight/summary');
+  return response.data;
+}
+
+export async function updateWeightSettings(weight_unit: 'kg' | 'lbs'): Promise<{ weight_unit: string }> {
+  const response = await apiClient.post<{ weight_unit: string }>('/weight/settings', { weight_unit });
+  return response.data;
 }
 
 export default apiClient;

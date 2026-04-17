@@ -23,9 +23,18 @@ class WellnessCheckin(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     date: Mapped[date] = mapped_column(Date, nullable=False)
-    mood: Mapped[int] = mapped_column(Integer, nullable=False)
-    energy: Mapped[int] = mapped_column(Integer, nullable=False)
-    soreness: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Legacy fields (kept for backward compatibility)
+    mood: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    energy: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    soreness: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Hooper Index — 1 (best) to 7 (worst), clinically validated
+    sleep_quality: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fatigue: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    stress: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    muscle_soreness: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False

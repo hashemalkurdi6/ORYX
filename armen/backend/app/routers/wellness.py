@@ -23,10 +23,16 @@ async def upsert_wellness_checkin(
     db: AsyncSession = Depends(get_db),
 ):
     """Upsert today's wellness check-in (one per user per day)."""
+    from app.services.readiness_service import invalidate_readiness_cache
+
     row = {
         "id": uuid.uuid4(),
         "user_id": current_user.id,
         "date": payload.date,
+        "sleep_quality": payload.sleep_quality,
+        "fatigue": payload.fatigue,
+        "stress": payload.stress,
+        "muscle_soreness": payload.muscle_soreness,
         "mood": payload.mood,
         "energy": payload.energy,
         "soreness": payload.soreness,
@@ -38,6 +44,10 @@ async def upsert_wellness_checkin(
     stmt = stmt.on_conflict_do_update(
         constraint="uq_wellness_checkin_user_date",
         set_={
+            "sleep_quality": stmt.excluded.sleep_quality,
+            "fatigue": stmt.excluded.fatigue,
+            "stress": stmt.excluded.stress,
+            "muscle_soreness": stmt.excluded.muscle_soreness,
             "mood": stmt.excluded.mood,
             "energy": stmt.excluded.energy,
             "soreness": stmt.excluded.soreness,
@@ -45,6 +55,7 @@ async def upsert_wellness_checkin(
         },
     )
     await db.execute(stmt)
+    await invalidate_readiness_cache(current_user.id, db)
     await db.flush()
 
     # Fetch the upserted row to return it
