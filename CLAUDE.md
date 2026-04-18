@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Token Efficiency Rules
 
@@ -20,21 +20,22 @@ ARMEN is a fitness intelligence app. The backend ingests Strava activities and A
 
 ## Running the App
 
-**Backend** (requires PostgreSQL running and `armen` database created):
+**Backend** (requires PostgreSQL running and `oryx` database created):
 ```bash
 cd armen/backend
-source venv/bin/activate       # macOS/Linux
-venv\Scripts\activate          # Windows
-uvicorn app.main:app --reload --host 0.0.0.0
+source .venv/bin/activate       # macOS/Linux
+.venv\Scripts\activate          # Windows
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 Tables and columns are auto-created/migrated on first startup via `_USER_COLUMN_MIGRATIONS` in `main.py`. API docs at `http://localhost:8000/docs`.
 
 **Mobile** (physical iOS device requires local IP, not localhost):
 ```bash
 cd armen/mobile
+npm install           # first time
+expo start            # or: expo start --ios / --android
 # On Windows with physical device:
 $env:REACT_NATIVE_PACKAGER_HOSTNAME="<your-local-ip>"
-npm start
 ```
 
 **Known Windows gotcha**: the project path contains `&` — if npm breaks, use a path without special characters.
@@ -43,25 +44,33 @@ npm start
 
 ```
 armen/
-  mobile/                   React Native (Expo Router, SDK 54)
-    app/index.tsx           Entry — redirects based on auth token
-    app/(auth)/             Login + Signup screens
-    app/(tabs)/             Main tabs: dashboard, community, activity, nutrition, profile
-    components/             Shared components (PostDetailModal, StoryCreator, etc.)
-    services/api.ts         Axios client with Bearer interceptor + all API functions
-    services/authStore.ts   Zustand store persisted to AsyncStorage
+  mobile/                    React Native (Expo Router, SDK 54)
+    app/index.tsx            Entry — redirects based on auth token
+    app/(auth)/              Login + Signup screens
+    app/(tabs)/              Main tabs: dashboard, community, activity, nutrition, profile, wellness
+    app/onboarding.tsx       First-run flow
+    app/checkin.tsx          Daily check-in screen
+    app/nutrition-survey.tsx Nutrition onboarding survey
+    app/settings.tsx         App settings
+    components/              Shared UI components
+    services/api.ts          Axios client with Bearer interceptor + all API functions
+    services/authStore.ts    Zustand store persisted to AsyncStorage
+    services/healthKit.ts    HealthKit integration (dynamic require, no-op on Android/web)
+    services/locationTracking.ts  GPS tracking for live workouts
+    services/activityMetrics.ts   Metric calculations for activities
 
-  backend/                  FastAPI + SQLAlchemy async + PostgreSQL
-    app/main.py             App setup, CORS, lifespan, auto-migration SQL
-    app/database.py         AsyncSession, auto-commit/rollback in get_db()
-    app/routers/auth.py     JWT signup/login/me (HTTPBearer)
-    app/routers/posts.py    Social posts CRUD + like/unlike endpoints
-    app/routers/stories.py  Stories CRUD + feed (grouped by user, sorted own→unseen→seen)
-    app/routers/strava.py   Full OAuth flow + activity sync
-    app/routers/health.py   Bulk upsert HealthKit snapshots
-    app/routers/diagnosis.py  Daily diagnosis + workout autopsy via Claude
-    app/models/             SQLAlchemy ORM models (one file per table)
+  backend/                   FastAPI + SQLAlchemy async + PostgreSQL
+    app/main.py              App setup, CORS, lifespan, auto-migration SQL
+    app/database.py          AsyncSession, auto-commit/rollback in get_db()
+    app/routers/             One file per domain (25 routers total)
+    app/models/              SQLAlchemy ORM models (one file per table)
+    app/schemas/             Pydantic request/response schemas
+    app/services/            Business logic: claude_service, strava_service,
+                             readiness_service, nutrition_service, food_search_service,
+                             deload_service, warmup_service, oura_service, whoop_service
 ```
+
+**Backend routers**: auth, strava, health, diagnosis, whoop, oura, wellness, nutrition, user_activity, daily_steps, hevy, deload, warmup, food, home, meal_plan, weight, social, posts, feed, clubs, checkin, stories, media, users.
 
 ## Key Patterns
 
@@ -83,9 +92,9 @@ armen/
 
 ## Environment Variables
 
-Backend `.env`:
+Backend `armen/backend/.env`:
 ```
-DATABASE_URL=postgresql+asyncpg://postgres:<password>@localhost:5432/armen
+DATABASE_URL=postgresql+asyncpg://postgres:<password>@localhost:5432/oryx
 SECRET_KEY=<random string>
 ANTHROPIC_API_KEY=<optional>
 STRAVA_CLIENT_ID=<optional>
@@ -93,7 +102,27 @@ STRAVA_CLIENT_SECRET=<optional>
 STRAVA_REDIRECT_URI=http://localhost:8000/strava/callback
 ```
 
-Mobile `.env`:
+Mobile `armen/mobile/.env`:
 ```
 EXPO_PUBLIC_API_URL=http://<local-ip>:8000
 ```
+
+## Skill routing
+
+When the user's request matches an available skill, ALWAYS invoke it using the Skill
+tool as your FIRST action. Do NOT answer directly, do NOT use other tools first.
+The skill has specialized workflows that produce better results than ad-hoc answers.
+
+Key routing rules:
+- Product ideas, "is this worth building", brainstorming → invoke office-hours
+- Bugs, errors, "why is this broken", 500 errors → invoke investigate
+- Ship, deploy, push, create PR → invoke ship
+- QA, test the site, find bugs → invoke qa
+- Code review, check my diff → invoke review
+- Update docs after shipping → invoke document-release
+- Weekly retro → invoke retro
+- Design system, brand → invoke design-consultation
+- Visual audit, design polish → invoke design-review
+- Architecture review → invoke plan-eng-review
+- Save progress, checkpoint, resume → invoke checkpoint
+- Code quality, health check → invoke health
