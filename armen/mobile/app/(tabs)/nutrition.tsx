@@ -57,6 +57,7 @@ import FoodSearchModal from '@/components/FoodSearchModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - 40;
+const NUTRITION_PAGE_W = CARD_WIDTH - 2; // card borderWidth: 1 on each side
 
 // ── Micronutrient metadata ────────────────────────────────────────────────────
 
@@ -308,15 +309,6 @@ function CalorieMacroCard({
         </View>
       </View>
 
-      {/* Divider */}
-      <View style={{ height: 1, backgroundColor: '#2a2a2a', marginTop: 20, marginBottom: 20 }} />
-
-      {/* Macro circles */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' }}>
-        <MacroCircle label="Protein" value={totalProtein} target={proteinTarget} unit="g" color={theme.accent} />
-        <MacroCircle label="Carbs" value={totalCarbs} target={carbsTarget} unit="g" color="#888888" />
-        <MacroCircle label="Fat" value={totalFat} target={fatTarget} unit="g" color="#FF6B35" />
-      </View>
     </View>
   );
 }
@@ -440,6 +432,7 @@ export default function NutritionScreen() {
 
   // Micronutrients expand state
   const [microsExpanded, setMicrosExpanded] = useState(false);
+  const [macroMicroPage, setMacroMicroPage] = useState(0);
 
   // Water tracking state
   const [waterAmountMl, setWaterAmountMl] = useState(0);
@@ -959,6 +952,95 @@ export default function NutritionScreen() {
           fatTarget={fatTarget}
         />
 
+        {/* ── TODAY'S NUTRITION (swipeable: macros ↔ micros) ── */}
+        <Text style={s.sectionLabel}>TODAY'S NUTRITION</Text>
+        <View style={s.nutritionSwipeCard}>
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onMomentumScrollEnd={(e) => {
+              const page = Math.round(e.nativeEvent.contentOffset.x / NUTRITION_PAGE_W);
+              setMacroMicroPage(page);
+            }}
+          >
+            {/* Page 1: Macros */}
+            <View style={[s.nutritionSwipePage, { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' }]}>
+              <MacroCircle label="Protein" value={totalProtein} target={proteinTarget} unit="g" color={theme.accent} />
+              <MacroCircle label="Carbs" value={totalCarbs} target={carbsTarget} unit="g" color="#888888" />
+              <MacroCircle label="Fat" value={totalFat} target={fatTarget} unit="g" color="#FF6B35" />
+            </View>
+            {/* Page 2: Fibre & Micros */}
+            <View style={s.nutritionSwipePage}>
+              <Text style={s.microNote}>
+                Fibre, sugar & sodium are tracked from logged meals. Other targets are shown for reference.
+              </Text>
+              {(() => {
+                const rest = MICRO_DEFS.slice(3);
+                let lowestIdx = 3;
+                let lowestPct = Infinity;
+                rest.forEach((micro, i) => {
+                  const consumed = micro.consumedKey != null ? (summary?.[micro.consumedKey] as number | undefined ?? null) : null;
+                  const goalVal = targets ? (targets[micro.key] as number | null) : null;
+                  if (consumed != null && goalVal != null && goalVal > 0) {
+                    const pct = consumed / goalVal;
+                    if (pct < lowestPct) { lowestPct = pct; lowestIdx = i + 3; }
+                  }
+                });
+                const defaultVisible = new Set([0, 1, 2, lowestIdx]);
+                const visibleMicros = microsExpanded ? MICRO_DEFS : MICRO_DEFS.filter((_, i) => defaultVisible.has(i));
+                return visibleMicros.map((micro, idx) => {
+                  const consumed = micro.consumedKey != null
+                    ? (summary?.[micro.consumedKey] as number | undefined ?? null)
+                    : null;
+                  const goalVal = targets ? (targets[micro.key] as number | null) : null;
+                  const goalText = targets ? micro.goalLabel(targets) : '—';
+                  const barValue = (consumed != null && goalVal != null && goalVal > 0)
+                    ? Math.min(consumed / goalVal, 1)
+                    : 0;
+                  const hasData = consumed != null;
+                  const valStr = hasData ? `${Math.round(consumed!)}${micro.unit}` : '—';
+                  return (
+                    <View key={micro.key}>
+                      {idx > 0 && <View style={s.microDivider} />}
+                      <View style={s.microRow}>
+                        <View style={s.microLabelBlock}>
+                          <Text style={s.microLabel} numberOfLines={1}>{micro.label}</Text>
+                          <Text style={s.microTarget} numberOfLines={1}>{goalText}</Text>
+                        </View>
+                        <View style={s.microBarGroup}>
+                          {hasData
+                            ? <ProgressBar value={barValue} color={theme.status.success} />
+                            : <View style={{ flex: 1, height: 5, backgroundColor: theme.border, borderRadius: 3, opacity: 0.4 }} />
+                          }
+                          <Text style={[s.microValue, !hasData && { color: theme.text.muted }]} numberOfLines={1}>
+                            {valStr}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                });
+              })()}
+              <TouchableOpacity
+                style={s.microExpandBtn}
+                onPress={() => setMicrosExpanded(v => !v)}
+                activeOpacity={0.7}
+              >
+                <Text style={s.microExpandText}>{microsExpanded ? 'Show less' : 'Show all'}</Text>
+                <Ionicons name={microsExpanded ? 'chevron-up' : 'chevron-down'} size={12} color={theme.text.muted} />
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+          {/* Page indicator dots */}
+          <View style={s.swipeDotsRow}>
+            {[0, 1].map(i => (
+              <View key={i} style={[s.swipeDot, macroMicroPage === i && s.swipeDotActive]} />
+            ))}
+          </View>
+        </View>
+
         {/* ── Weekly Calorie Trend ── */}
         {weeklyCalorieDays.length > 0 && (
           <WeeklyCalorieTrend days={weeklyCalorieDays} />
@@ -1281,70 +1363,6 @@ export default function NutritionScreen() {
             </View>
           </KeyboardAvoidingView>
         </Modal>
-
-        {/* ── Fibre & Micronutrients ── */}
-        <Text style={s.sectionLabel}>FIBRE & MICRONUTRIENTS</Text>
-        <View style={s.card}>
-          <Text style={s.microNote}>
-            Fibre, sugar & sodium are tracked from logged meals. Other targets are shown for reference.
-          </Text>
-          {(() => {
-            // Determine "lowest-pct micro" from items 3-8 (after fibre, sugar, sodium)
-            const rest = MICRO_DEFS.slice(3);
-            let lowestIdx = 3;
-            let lowestPct = Infinity;
-            rest.forEach((micro, i) => {
-              const consumed = micro.consumedKey != null ? (summary?.[micro.consumedKey] as number | undefined ?? null) : null;
-              const goalVal = targets ? (targets[micro.key] as number | null) : null;
-              if (consumed != null && goalVal != null && goalVal > 0) {
-                const pct = consumed / goalVal;
-                if (pct < lowestPct) { lowestPct = pct; lowestIdx = i + 3; }
-              }
-            });
-            const defaultVisible = new Set([0, 1, 2, lowestIdx]);
-            const visibleMicros = microsExpanded ? MICRO_DEFS : MICRO_DEFS.filter((_, i) => defaultVisible.has(i));
-            return visibleMicros.map((micro, idx) => {
-              const consumed = micro.consumedKey != null
-                ? (summary?.[micro.consumedKey] as number | undefined ?? null)
-                : null;
-              const goalVal = targets ? (targets[micro.key] as number | null) : null;
-              const goalText = targets ? micro.goalLabel(targets) : '—';
-              const barValue = (consumed != null && goalVal != null && goalVal > 0)
-                ? Math.min(consumed / goalVal, 1)
-                : 0;
-              const hasData = consumed != null;
-              const valStr = hasData ? `${Math.round(consumed!)}${micro.unit}` : '—';
-              return (
-                <View key={micro.key}>
-                  {idx > 0 && <View style={s.microDivider} />}
-                  <View style={s.microRow}>
-                    <View style={s.microLabelBlock}>
-                      <Text style={s.microLabel} numberOfLines={1}>{micro.label}</Text>
-                      <Text style={s.microTarget} numberOfLines={1}>{goalText}</Text>
-                    </View>
-                    <View style={s.microBarGroup}>
-                      {hasData
-                        ? <ProgressBar value={barValue} color={theme.status.success} />
-                        : <View style={{ flex: 1, height: 5, backgroundColor: theme.border, borderRadius: 3, opacity: 0.4 }} />
-                      }
-                      <Text style={[s.microValue, !hasData && { color: theme.text.muted }]} numberOfLines={1}>
-                        {valStr}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              );
-            });
-          })()}
-          <TouchableOpacity
-            style={s.microExpandBtn}
-            onPress={() => setMicrosExpanded(v => !v)}
-            activeOpacity={0.7}
-          >
-            <Text style={s.microExpandText}>{microsExpanded ? 'Show less' : 'Show all'}</Text>
-            <Ionicons name={microsExpanded ? 'chevron-up' : 'chevron-down'} size={12} color={theme.text.muted} />
-          </TouchableOpacity>
-        </View>
 
         {/* ── Meals Section ── */}
         <View style={s.mealsSectionHeader}>
@@ -2137,6 +2155,26 @@ function createStyles(t: ThemeColors) {
     sectionLabel: {
       fontSize: 11, fontWeight: '600', color: t.text.muted,
       textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12, marginTop: 4,
+    },
+
+    // TODAY'S NUTRITION swipeable card
+    nutritionSwipeCard: {
+      backgroundColor: '#1a1a1a', borderRadius: 16,
+      borderWidth: 1, borderColor: '#2a2a2a', marginBottom: 20,
+      overflow: 'hidden',
+    },
+    nutritionSwipePage: {
+      width: NUTRITION_PAGE_W, padding: 16,
+    },
+    swipeDotsRow: {
+      flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+      gap: 6, paddingBottom: 10,
+    },
+    swipeDot: {
+      width: 6, height: 6, borderRadius: 3, backgroundColor: '#555555',
+    },
+    swipeDotActive: {
+      backgroundColor: '#ffffff',
     },
 
     // Fibre & Micros

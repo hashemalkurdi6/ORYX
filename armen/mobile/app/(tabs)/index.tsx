@@ -14,10 +14,11 @@ import {
   Modal,
   TextInput,
   KeyboardAvoidingView,
+  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { router } from 'expo-router';
 import {
   getDashboard,
@@ -26,9 +27,13 @@ import {
   uploadHealthSnapshots,
   upsertDailySteps,
   logRestDay,
+  getWeightHistory,
+  getWeightSummary,
   DashboardData,
   DiagnosisData,
   WeightLogResult,
+  WeightHistory,
+  WeightSummary,
 } from '@/services/api';
 import WeightLogSheet from '@/components/WeightLogSheet';
 import { Pedometer } from 'expo-sensors';
@@ -41,6 +46,8 @@ const CLR_GREEN  = '#27ae60';
 const CLR_AMBER  = '#e67e22';
 const CLR_RED    = '#c0392b';
 const CLR_LOAD   = '#e0e0e0';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
 // ── Ring geometry ─────────────────────────────────────────────────────────────
 const RSIZE   = 140;
@@ -260,6 +267,9 @@ export default function HomeScreen() {
   const [weightLoggedToday, setWeightLoggedToday]   = useState(false);
   const [weightToast, setWeightToast]               = useState<string | null>(null);
   const weightToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [weightHistory7d, setWeightHistory7d]   = useState<WeightHistory | null>(null);
+  const [weightSummary, setWeightSummary]       = useState<WeightSummary | null>(null);
+  const [weightCardLoading, setWeightCardLoading] = useState(false);
   const [wellnessValues, setWellnessValues]         = useState({ sleep_quality: 4, fatigue: 4, stress: 4, muscle_soreness: 4 });
   const [wellnessForm, setWellnessForm]             = useState({ sleep_quality: 4, fatigue: 4, stress: 4, muscle_soreness: 4, notes: '' });
   const [submittingWellness, setSubmittingWellness] = useState(false);
@@ -282,6 +292,12 @@ export default function HomeScreen() {
         setWellnessLogged(false);
       }
       setWeightLoggedToday(data.weight_logged_today ?? false);
+      // Load weight card data in background
+      setWeightCardLoading(true);
+      Promise.allSettled([getWeightHistory(7, '7d'), getWeightSummary()]).then(([histRes, sumRes]) => {
+        if (histRes.status === 'fulfilled') setWeightHistory7d(histRes.value);
+        if (sumRes.status === 'fulfilled') setWeightSummary(sumRes.value);
+      }).finally(() => setWeightCardLoading(false));
     } catch {
       setError('Failed to load dashboard. Pull down to retry.');
     } finally {
@@ -363,6 +379,11 @@ export default function HomeScreen() {
     setWeightToast(msg);
     if (weightToastTimer.current) clearTimeout(weightToastTimer.current);
     weightToastTimer.current = setTimeout(() => setWeightToast(null), 2800);
+    // Refresh weight card
+    Promise.allSettled([getWeightHistory(7, '7d'), getWeightSummary()]).then(([histRes, sumRes]) => {
+      if (histRes.status === 'fulfilled') setWeightHistory7d(histRes.value);
+      if (sumRes.status === 'fulfilled') setWeightSummary(sumRes.value);
+    });
   }, []);
 
   const openWellnessModal = () => {
@@ -937,6 +958,93 @@ export default function HomeScreen() {
                   }]} />
                 </View>
               </>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {/* ─── WEIGHT CARD ─────────────────────────────────────────────────── */}
+        <Text style={s.sectionLabel}>WEIGHT</Text>
+        {weightCardLoading && !weightSummary ? (
+          <View style={[s.card, { gap: 8 }]}>
+            <SkeletonBlock width="100%" height={10} />
+            <SkeletonBlock width="100%" height={24} />
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={s.card}
+            activeOpacity={0.85}
+            onPress={() => router.push('/weight')}
+          >
+            {/* Header row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: 2 }}>WEIGHT</Text>
+                {weightSummary?.current_weight_display != null && (
+                  <>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>
+                      {weightSummary.current_weight_display}{weightSummary.display_unit}
+                    </Text>
+                    {(() => {
+                      const goal = weightSummary.goal_alignment;
+                      const rate = weightSummary.rate_of_change_kg_per_week;
+                      if (!rate || Math.abs(rate) < 0.05) return <Text style={{ fontSize: 12, color: '#888' }}>→</Text>;
+                      if (goal === 'on_track') return <Text style={{ fontSize: 12, color: CLR_GREEN }}>{rate < 0 ? '↓' : '↑'}</Text>;
+                      if (goal === 'off_track') return <Text style={{ fontSize: 12, color: '#c0392b' }}>{rate < 0 ? '↓' : '↑'}</Text>;
+                      return <Text style={{ fontSize: 12, color: '#888' }}>{rate < 0 ? '↓' : '↑'}</Text>;
+                    })()}
+                  </>
+                )}
+              </View>
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: weightLoggedToday ? 'rgba(39,174,96,0.12)' : 'rgba(255,255,255,0.08)', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 }}
+                onPress={(e) => { e.stopPropagation(); setShowWeightSheet(true); }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name={weightLoggedToday ? 'checkmark' : 'add'} size={12} color={weightLoggedToday ? CLR_GREEN : '#ccc'} />
+                <Text style={{ fontSize: 11, fontWeight: '600', color: weightLoggedToday ? CLR_GREEN : '#ccc' }}>
+                  {weightLoggedToday ? 'Logged' : 'Log Weight'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Sparkline or empty state */}
+            {weightHistory7d && weightHistory7d.entries.length >= 3 ? (() => {
+              const unit = weightHistory7d.display_unit;
+              const factor = unit === 'lbs' ? 2.20462 : 1.0;
+              const vals = weightHistory7d.entries.map(e => e.weight_kg * factor);
+              const minV = Math.min(...vals);
+              const maxV = Math.max(...vals);
+              const range = maxV - minV || 1;
+              const H = 24;
+              const W = SCREEN_WIDTH - 64;
+              const pts = vals.map((v, i) => {
+                const x = vals.length === 1 ? W / 2 : (i / (vals.length - 1)) * W;
+                const y = H - ((v - minV) / range) * H;
+                return `${x},${y}`;
+              });
+              const pathD = `M ${pts.join(' L ')}`;
+              const lineColor = weightSummary?.goal_alignment === 'on_track' ? CLR_GREEN : weightSummary?.goal_alignment === 'off_track' ? '#c0392b' : '#555';
+              const weekAvg = vals.reduce((a, b) => a + b, 0) / vals.length;
+              const firstVal = vals[0];
+              const lastVal = vals[vals.length - 1];
+              const change = lastVal - firstVal;
+              return (
+                <>
+                  <Svg width={W} height={H} style={{ marginBottom: 6 }}>
+                    <Path d={pathD} stroke={lineColor} strokeWidth={1.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 11, color: '#555' }}>Avg: {weekAvg.toFixed(1)}{unit}</Text>
+                    <Text style={{ fontSize: 11, color: change === 0 ? '#555' : change < 0 ? CLR_GREEN : '#888' }}>
+                      {change >= 0 ? '+' : ''}{change.toFixed(1)}{unit} this week
+                    </Text>
+                  </View>
+                </>
+              );
+            })() : (
+              <Text style={{ fontSize: 12, color: '#555', fontStyle: 'italic' }}>
+                {(weightHistory7d?.entries.length ?? 0) < 3 ? 'Keep logging to see your trend' : 'No weight data yet'}
+              </Text>
             )}
           </TouchableOpacity>
         )}

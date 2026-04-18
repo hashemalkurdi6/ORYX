@@ -46,6 +46,7 @@ import {
 import { useAuthStore } from '@/services/authStore';
 import WarmUpModal from '@/components/WarmUpModal';
 import OutdoorTracker, { SavedOutdoorActivity } from '@/components/OutdoorTracker';
+import OryxInsightCreator from '@/components/OryxInsightCreator';
 import {
   SPORT_TYPES,
   EXERCISE_LIBRARY,
@@ -1028,11 +1029,11 @@ const PostSessionView = ({
 
 // ── Feed Card ──────────────────────────────────────────────────────────────────
 
-const FeedCard = ({ item, onPress }: { item: FeedItem; onPress: () => void }) => {
+const FeedCard = ({ item, onPress, onShare }: { item: FeedItem; onPress: () => void; onShare: (item: FeedItem) => void }) => {
   if (item.kind === 'manual') {
     const a = item.data;
 
-    // Rest day — minimal distinct card
+    // Rest day — minimal distinct card (no share button)
     if (a.is_rest_day) {
       return (
         <TouchableOpacity style={[styles.feedCard, styles.feedCardRest]} onPress={onPress} activeOpacity={0.8}>
@@ -1065,6 +1066,9 @@ const FeedCard = ({ item, onPress }: { item: FeedItem; onPress: () => void }) =>
             <View style={styles.feedCardTitleRow}>
               <Text style={styles.feedCardTitle} numberOfLines={1}>{a.activity_type}</Text>
               <View style={styles.sourceBadge}><Text style={styles.sourceBadgeText}>manual</Text></View>
+              <TouchableOpacity onPress={() => onShare(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="share-outline" size={16} color="#555555" />
+              </TouchableOpacity>
             </View>
             <Text style={styles.feedCardMeta}>{fmtDate(a.logged_at)} · {formatDuration(a.duration_minutes)}</Text>
           </View>
@@ -1113,6 +1117,9 @@ const FeedCard = ({ item, onPress }: { item: FeedItem; onPress: () => void }) =>
               <View style={[styles.sourceBadge, { backgroundColor: '#1a1a1a', borderColor: '#1a1a1a' }]}>
                 <Text style={[styles.sourceBadgeText, { color: '#888888' }]}>Hevy</Text>
               </View>
+              <TouchableOpacity onPress={() => onShare(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="share-outline" size={16} color="#555555" />
+              </TouchableOpacity>
             </View>
             <Text style={styles.feedCardMeta}>{fmtDate(h.started_at)} · {h.duration_seconds ? formatDuration(Math.round(h.duration_seconds / 60)) : '—'}</Text>
           </View>
@@ -1150,6 +1157,9 @@ const FeedCard = ({ item, onPress }: { item: FeedItem; onPress: () => void }) =>
             <View style={[styles.sourceBadge, { backgroundColor: '#111111', borderColor: '#FC4C02' }]}>
               <Text style={[styles.sourceBadgeText, { color: '#FC4C02' }]}>Strava</Text>
             </View>
+            <TouchableOpacity onPress={() => onShare(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="share-outline" size={16} color="#555555" />
+            </TouchableOpacity>
           </View>
           <Text style={styles.feedCardMeta}>{fmtDate(s.start_date)} · {formatDuration(Math.round(s.elapsed_time_seconds / 60))}</Text>
         </View>
@@ -1590,6 +1600,10 @@ export default function ActivityScreen() {
   const [weeklyLoad, setWeeklyLoad] = useState<WeeklyLoad | null>(null);
   const [readiness, setReadiness] = useState<ReadinessScore | null>(null);
   const [showRestDayModal, setShowRestDayModal] = useState(false);
+
+  // Share activity state
+  const [shareSession, setShareSession] = useState<FeedItem | null>(null);
+  const [showShareCreator, setShowShareCreator] = useState(false);
 
   // Weekly journal grouping
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set());
@@ -2057,7 +2071,13 @@ export default function ActivityScreen() {
       );
     }
     if (item.type === 'feedItem') {
-      return <FeedCard item={item.item} onPress={() => setExpandedItem(item.item)} />;
+      return (
+        <FeedCard
+          item={item.item}
+          onPress={() => setExpandedItem(item.item)}
+          onShare={(feedItem) => { setShareSession(feedItem); setShowShareCreator(true); }}
+        />
+      );
     }
     if (item.type === 'showMore') {
       return (
@@ -2446,6 +2466,24 @@ export default function ActivityScreen() {
           )}
         </View>
       </Modal>
+
+      {/* Share Activity as ORYX Insight */}
+      <OryxInsightCreator
+        visible={showShareCreator}
+        onClose={() => { setShowShareCreator(false); setShareSession(null); }}
+        onBack={() => { setShowShareCreator(false); setShareSession(null); }}
+        onPostCreated={() => { setShowShareCreator(false); setShareSession(null); }}
+        initialSessionId={
+          shareSession?.kind === 'manual'
+            ? (shareSession.data as any).id
+            : shareSession?.kind === 'hevy'
+            ? (shareSession.data as any).id
+            : shareSession?.kind === 'strava'
+            ? (shareSession.data as any).id
+            : undefined
+        }
+        initialSessionData={shareSession?.data}
+      />
     </SafeAreaView>
   );
 }

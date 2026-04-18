@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, DateTime, BigInteger, JSON, Integer, Float, Boolean
+from sqlalchemy import String, Text, DateTime, BigInteger, JSON, Integer, Float, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -27,6 +27,7 @@ class User(Base):
     username: Mapped[str | None] = mapped_column(String(50), unique=True, index=True, nullable=True)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     bio: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     location: Mapped[str | None] = mapped_column(String(255), nullable=True)
     sports: Mapped[list | None] = mapped_column(JSON, nullable=True)
     followers_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0")

@@ -24,11 +24,13 @@ import {
   getOuraData,
   getHealthSnapshots,
   getDailyDiagnosis,
+  getWellnessTrends,
   WellnessCheckin,
   WhoopData,
   OuraData,
   HealthSnapshot,
   DiagnosisResult,
+  WellnessTrends,
 } from '@/services/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -97,17 +99,22 @@ export default function WellnessScreen() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ mood: 3, energy: 3, soreness: 3, notes: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [trends, setTrends] = useState<WellnessTrends | null>(null);
+  const [trendsLoading, setTrendsLoading] = useState(false);
+  const [trendsLoaded, setTrendsLoaded] = useState(false);
+  const [trendRange, setTrendRange] = useState<'7d' | '30d' | '90d'>('30d');
 
   // ── Data loading ──────────────────────────────────────────────────────────
 
   const loadData = useCallback(async () => {
-    const [checkinsRes, whoopRes, ouraRes, snapshotsRes, diagnosisRes] =
+    const [checkinsRes, whoopRes, ouraRes, snapshotsRes, diagnosisRes, trendsRes] =
       await Promise.allSettled([
         getWellnessCheckins(7),
         getWhoopData(7),
         getOuraData(7),
         getHealthSnapshots(7),
         getDailyDiagnosis(),
+        getWellnessTrends(30),
       ]);
 
     if (checkinsRes.status === 'fulfilled') setCheckins(checkinsRes.value);
@@ -115,6 +122,7 @@ export default function WellnessScreen() {
     if (ouraRes.status === 'fulfilled') setOuraData(ouraRes.value);
     if (snapshotsRes.status === 'fulfilled') setSnapshots(snapshotsRes.value);
     if (diagnosisRes.status === 'fulfilled') setDiagnosis(diagnosisRes.value);
+    if (trendsRes.status === 'fulfilled') { setTrends(trendsRes.value); setTrendsLoaded(true); }
 
     setLoading(false);
     setRefreshing(false);
@@ -495,6 +503,203 @@ export default function WellnessScreen() {
             </Text>
           </View>
         )}
+
+        {/* HRV TRENDS */}
+        {trends?.data_availability.has_hrv_data ? (
+          <>
+            <Text style={styles.sectionLabel}>HRV TRENDS</Text>
+            <View style={styles.card}>
+              {/* Stats row */}
+              <View style={{ flexDirection: 'row', marginBottom: 12 }}>
+                {[
+                  { label: 'CURRENT', val: trends.hrv_stats.current_hrv != null ? `${Math.round(trends.hrv_stats.current_hrv)}ms` : '--' },
+                  { label: '7D AVG', val: trends.hrv_stats.seven_day_avg != null ? `${Math.round(trends.hrv_stats.seven_day_avg)}ms` : '--' },
+                  { label: '30D AVG', val: trends.hrv_stats.thirty_day_avg != null ? `${Math.round(trends.hrv_stats.thirty_day_avg)}ms` : '--' },
+                ].map((stat, i) => (
+                  <View key={stat.label} style={{ flex: 1, alignItems: 'center' }}>
+                    {i > 0 && <View style={{ position: 'absolute', left: 0, top: 4, width: 1, height: 28, backgroundColor: '#2a2a2a' }} />}
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#f0f0f0', marginBottom: 2 }}>{stat.val}</Text>
+                    <Text style={{ fontSize: 9, color: '#555', textTransform: 'uppercase', letterSpacing: 0.5 }}>{stat.label}</Text>
+                  </View>
+                ))}
+              </View>
+              {/* Chart */}
+              {trends.hrv_data.length >= 2 && (() => {
+                const pts = trends.hrv_data.slice(-30).map(d => d.hrv_ms);
+                return (
+                  <LineChart
+                    data={{ labels: [], datasets: [{ data: pts, color: () => '#27ae60', strokeWidth: 2 }] }}
+                    width={CARD_WIDTH - 32}
+                    height={100}
+                    withDots={false}
+                    withInnerLines={false}
+                    withOuterLines={false}
+                    withHorizontalLabels={false}
+                    withVerticalLabels={false}
+                    chartConfig={{ backgroundColor: 'transparent', backgroundGradientFrom: '#1a1a1a', backgroundGradientTo: '#1a1a1a', color: () => '#27ae60', strokeWidth: 2, propsForBackgroundLines: { stroke: 'transparent' } }}
+                    bezier
+                    style={styles.chart}
+                  />
+                );
+              })()}
+            </View>
+          </>
+        ) : trends && !trendsLoading ? (
+          <>
+            <Text style={styles.sectionLabel}>HRV TRENDS</Text>
+            <View style={[styles.card, { alignItems: 'center', paddingVertical: 20 }]}>
+              <Ionicons name="heart-outline" size={28} color="#2a2a2a" />
+              <Text style={{ fontSize: 13, color: '#555', marginTop: 8, textAlign: 'center' }}>
+                Connect Apple Watch, Whoop, or Oura to track HRV
+              </Text>
+            </View>
+          </>
+        ) : null}
+
+        {/* SLEEP TRENDS */}
+        {trends?.data_availability.has_sleep_data ? (
+          <>
+            <Text style={styles.sectionLabel}>SLEEP TRENDS</Text>
+            <View style={styles.card}>
+              {/* Stats row */}
+              <View style={{ flexDirection: 'row', marginBottom: 12 }}>
+                {[
+                  { label: 'LAST NIGHT', val: trends.sleep_stats.last_night_hours != null ? `${trends.sleep_stats.last_night_hours.toFixed(1)}h` : '--' },
+                  { label: '7D AVG', val: trends.sleep_stats.seven_day_avg != null ? `${trends.sleep_stats.seven_day_avg.toFixed(1)}h` : '--' },
+                  { label: 'BEST/MO', val: trends.sleep_stats.best_this_month != null ? `${trends.sleep_stats.best_this_month.toFixed(1)}h` : '--' },
+                ].map((stat, i) => (
+                  <View key={stat.label} style={{ flex: 1, alignItems: 'center' }}>
+                    {i > 0 && <View style={{ position: 'absolute', left: 0, top: 4, width: 1, height: 28, backgroundColor: '#2a2a2a' }} />}
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#f0f0f0', marginBottom: 2 }}>{stat.val}</Text>
+                    <Text style={{ fontSize: 9, color: '#555', textTransform: 'uppercase', letterSpacing: 0.5 }}>{stat.label}</Text>
+                  </View>
+                ))}
+              </View>
+              {trends.sleep_data.length >= 2 && (() => {
+                const recentSleep = trends.sleep_data.slice(-14);
+                const sleepVals = recentSleep.map(d => Math.min(d.duration_hours, 12));
+                return (
+                  <LineChart
+                    data={{ labels: [], datasets: [{ data: sleepVals, color: () => '#27ae60', strokeWidth: 2 }] }}
+                    width={CARD_WIDTH - 32}
+                    height={90}
+                    withDots={true}
+                    withInnerLines={false}
+                    withOuterLines={false}
+                    withHorizontalLabels={false}
+                    withVerticalLabels={false}
+                    chartConfig={{ backgroundColor: 'transparent', backgroundGradientFrom: '#1a1a1a', backgroundGradientTo: '#1a1a1a', color: () => '#27ae60', strokeWidth: 2, propsForBackgroundLines: { stroke: 'transparent' }, propsForDots: { r: '3', fill: '#27ae60' } }}
+                    bezier
+                    style={styles.chart}
+                  />
+                );
+              })()}
+              {/* Bedtime consistency */}
+              {trends.sleep_stats.avg_bedtime_variance_minutes != null && (
+                <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#2a2a2a' }}>
+                  <Text style={{ fontSize: 11, color: '#888' }}>
+                    Bedtime consistency: varied by{' '}
+                    <Text style={{ color: trends.sleep_stats.avg_bedtime_variance_minutes < 30 ? '#27ae60' : trends.sleep_stats.avg_bedtime_variance_minutes < 60 ? '#e67e22' : '#c0392b', fontWeight: '600' }}>
+                      ~{Math.round(trends.sleep_stats.avg_bedtime_variance_minutes)} min
+                    </Text>
+                    {' '}over 7 nights
+                  </Text>
+                </View>
+              )}
+            </View>
+          </>
+        ) : null}
+
+        {/* RECOVERY HISTORY */}
+        {trends?.data_availability.has_readiness_history ? (
+          <>
+            <Text style={styles.sectionLabel}>RECOVERY HISTORY</Text>
+            <View style={styles.card}>
+              {trends.readiness_history.length >= 2 && (() => {
+                const pts = trends.readiness_history.slice(-30).map(d => d.score);
+                return (
+                  <LineChart
+                    data={{ labels: [], datasets: [{ data: pts, color: () => '#888888', strokeWidth: 2 }] }}
+                    width={CARD_WIDTH - 32}
+                    height={90}
+                    withDots={false}
+                    withInnerLines={false}
+                    withOuterLines={false}
+                    withHorizontalLabels={false}
+                    withVerticalLabels={false}
+                    chartConfig={{ backgroundColor: 'transparent', backgroundGradientFrom: '#1a1a1a', backgroundGradientTo: '#1a1a1a', color: () => '#888888', strokeWidth: 2, propsForBackgroundLines: { stroke: 'transparent' } }}
+                    bezier
+                    style={{ ...styles.chart, marginBottom: 12 }}
+                  />
+                );
+              })()}
+              <View style={{ flexDirection: 'row' }}>
+                {[
+                  { label: 'BEST DAY', val: trends.readiness_stats.best_day_this_month ? `${trends.readiness_stats.best_day_this_month.score}` : '--', sub: trends.readiness_stats.best_day_this_month?.date ?? '' },
+                  { label: 'WORST DAY', val: trends.readiness_stats.worst_day_this_month ? `${trends.readiness_stats.worst_day_this_month.score}` : '--', sub: trends.readiness_stats.worst_day_this_month?.date ?? '' },
+                  { label: 'MONTHLY AVG', val: trends.readiness_stats.monthly_average != null ? `${Math.round(trends.readiness_stats.monthly_average)}` : '--', sub: '' },
+                ].map((stat, i) => (
+                  <View key={stat.label} style={{ flex: 1, alignItems: 'center' }}>
+                    {i > 0 && <View style={{ position: 'absolute', left: 0, top: 4, width: 1, height: 28, backgroundColor: '#2a2a2a' }} />}
+                    <Text style={{ fontSize: 18, fontWeight: '700', color: '#f0f0f0' }}>{stat.val}</Text>
+                    <Text style={{ fontSize: 9, color: '#555', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>{stat.label}</Text>
+                    {stat.sub ? <Text style={{ fontSize: 9, color: '#444', marginTop: 1 }}>{stat.sub}</Text> : null}
+                  </View>
+                ))}
+              </View>
+            </View>
+          </>
+        ) : null}
+
+        {/* WELLNESS HISTORY (Hooper) */}
+        {trends?.data_availability.has_hooper_history ? (
+          <>
+            <Text style={styles.sectionLabel}>WELLNESS HISTORY</Text>
+            <View style={styles.card}>
+              {trends.hooper_history.length >= 5 ? (() => {
+                const recent = trends.hooper_history.slice(-14);
+                const totals = recent.map(d => d.total);
+                return (
+                  <>
+                    <LineChart
+                      data={{ labels: [], datasets: [{ data: totals, color: () => '#888888', strokeWidth: 2 }] }}
+                      width={CARD_WIDTH - 32}
+                      height={90}
+                      withDots={true}
+                      withInnerLines={false}
+                      withOuterLines={false}
+                      withHorizontalLabels={false}
+                      withVerticalLabels={false}
+                      chartConfig={{ backgroundColor: 'transparent', backgroundGradientFrom: '#1a1a1a', backgroundGradientTo: '#1a1a1a', color: () => '#888888', strokeWidth: 2, propsForBackgroundLines: { stroke: 'transparent' }, propsForDots: { r: '3', fill: '#555' } }}
+                      bezier
+                      style={{ ...styles.chart, marginBottom: 12 }}
+                    />
+                    <View style={{ flexDirection: 'row' }}>
+                      <View style={{ flex: 1, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 18, fontWeight: '700', color: '#f0f0f0' }}>
+                          {trends.hooper_stats.current_total ?? '--'}
+                        </Text>
+                        <Text style={{ fontSize: 9, color: '#555', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>TODAY</Text>
+                      </View>
+                      <View style={{ width: 1, height: 32, backgroundColor: '#2a2a2a' }} />
+                      <View style={{ flex: 1, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 18, fontWeight: '700', color: '#f0f0f0' }}>
+                          {trends.hooper_stats.seven_day_avg != null ? trends.hooper_stats.seven_day_avg.toFixed(1) : '--'}
+                        </Text>
+                        <Text style={{ fontSize: 9, color: '#555', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>7D AVG</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 10, color: '#444', marginTop: 8, fontStyle: 'italic' }}>Lower is better (4 = excellent, 28 = very poor)</Text>
+                  </>
+                );
+              })() : (
+                <Text style={{ fontSize: 13, color: '#555', fontStyle: 'italic' }}>
+                  Log your wellness check-in daily to see trends here
+                </Text>
+              )}
+            </View>
+          </>
+        ) : null}
 
         <View style={styles.bottomPadding} />
       </ScrollView>

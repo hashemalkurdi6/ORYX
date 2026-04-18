@@ -18,6 +18,7 @@ export interface User {
   followers_count: number;
   following_count: number;
   created_at: string;
+  avatar_url?: string | null;
   // Onboarding fields
   display_name?: string | null;
   sport_tags?: string[] | null;
@@ -37,6 +38,7 @@ interface AuthState {
   token: string | null;
   user: User | null;
   setAuth: (token: string, user: User) => void;
+  updateUser: (partial: Partial<User>) => void;
   clearAuth: () => void;
 }
 
@@ -46,6 +48,8 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       user: null,
       setAuth: (token: string, user: User) => set({ token, user }),
+      updateUser: (partial: Partial<User>) =>
+        set((state) => ({ user: state.user ? { ...state.user, ...partial } : state.user })),
       clearAuth: () => set({ token: null, user: null }),
     }),
     {

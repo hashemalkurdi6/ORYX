@@ -20,6 +20,7 @@ export interface User {
   followers_count: number;
   following_count: number;
   created_at: string;
+  avatar_url?: string | null;
   // Onboarding fields
   display_name?: string | null;
   sport_tags?: string[] | null;
@@ -432,6 +433,37 @@ export interface UserProfileUpdate {
   location?: string;
   sports?: string[];
   weight_kg?: number;
+}
+
+// ── Athlete Profile & Insight ──────────────────────────────────────────────
+
+export interface AthleteProfile {
+  id: string;
+  display_name: string;
+  username: string;
+  avatar_url: string | null;
+  sport_tags: string[];
+  location: string | null;
+  bio: string | null;
+  followers_count: number;
+  following_count: number;
+  is_private: boolean;
+  is_following: boolean;
+  is_blocked: boolean;
+  total_workouts: number;
+  current_streak: number;
+  best_streak: number;
+  member_since: string; // "YYYY-MM"
+  recent_achievements: any[];
+}
+
+export interface InsightData {
+  current_readiness: { score: number | null; label: string; color: string };
+  today_diagnosis: { diagnosis_text: string | null; contributing_factors: string[]; recommendation: string | null; readiness_score: number | null };
+  last_session: { id: string; activity_type: string; sport_category: string | null; duration_minutes: number; training_load: number | null; rpe: number | null; autopsy_text: string | null; logged_at: string; source: string } | null;
+  recent_sessions: Array<{ id: string; activity_type: string; sport_category: string | null; duration_minutes: number; training_load: number | null; rpe: number | null; logged_at: string; source: string }>;
+  weekly_recap: { sessions: number; total_load: number; avg_readiness: number | null; calories_hit_days: number };
+  today_nutrition: { calories_consumed: number | null; calories_target: number | null; protein_consumed_g: number | null; carbs_consumed_g: number | null; fat_consumed_g: number | null };
 }
 
 // ── Axios Instance ─────────────────────────────────────────────────────────
@@ -1332,6 +1364,501 @@ export async function getWeightSummary(): Promise<WeightSummary> {
 
 export async function updateWeightSettings(weight_unit: 'kg' | 'lbs'): Promise<{ weight_unit: string }> {
   const response = await apiClient.post<{ weight_unit: string }>('/weight/settings', { weight_unit });
+  return response.data;
+}
+
+// ── Community Types ────────────────────────────────────────────────────────────
+
+export interface UserPreview {
+  id: string;
+  display_name: string;
+  username: string;
+  sport_tags: string[];
+  avatar_url: string | null;
+  initials: string;
+  followers_count: number;
+  following_count: number;
+  is_following?: boolean;
+}
+
+export interface PostAuthor {
+  id: string;
+  display_name: string;
+  username: string;
+  avatar_url: string | null;
+  initials: string;
+  sport_tags: string[];
+}
+
+export interface PostReactions {
+  fire: number;
+  muscle: number;
+  heart: number;
+}
+
+export interface Post {
+  id: string;
+  user_id: string;
+  photo_url: string | null;
+  caption: string | null;
+  oryx_data_card_json: {
+    post_type: 'workout' | 'insight' | 'recap' | 'milestone' | 'generic';
+    [key: string]: any;
+  } | null;
+  also_shared_as_story: boolean;
+  story_id: string | null;
+  club_id: string | null;
+  is_deleted: boolean;
+  created_at: string;
+  time_ago: string;
+  author: {
+    id: string;
+    display_name: string;
+    username: string;
+    avatar_url: string | null;
+    initials: string;
+    sport_tags: string[];
+  };
+  reactions: { fire: number; muscle: number; heart: number; };
+  my_reactions: string[];
+  comment_count: number;
+  location_text: string | null;
+  is_saved: boolean;
+  is_pinned: boolean;
+  is_archived: boolean;
+  like_count: number;
+  is_liked_by_current_user: boolean;
+}
+
+// Backward compat alias
+export type SocialPost = Post & {
+  post_type?: string;
+  content_json?: any;
+  user_caption?: string | null;
+  is_public?: boolean;
+};
+
+export interface FeedResponse {
+  posts: Post[];
+  page: number;
+  has_more: boolean;
+  following_count: number;
+}
+
+export interface CommunityClub {
+  id: string;
+  name: string;
+  sport_type: string;
+  cover_image: string | null;
+  description: string | null;
+  member_count: number;
+  is_member: boolean;
+}
+
+export interface ClubMember {
+  id: string;
+  display_name: string;
+  username: string;
+  sport_tags: string[];
+  initials: string;
+  avatar_url: string | null;
+}
+
+export interface ClubDetail {
+  club: CommunityClub;
+  members: ClubMember[];
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  user_id: string;
+  display_name: string;
+  initials: string;
+  avatar_url: string | null;
+  sport_tags: string[];
+  value: number;
+  is_current_user: boolean;
+}
+
+export interface LeaderboardResponse {
+  leaderboard: LeaderboardEntry[];
+  my_rank: number | null;
+  my_entry: LeaderboardEntry | null;
+  week_start: string;
+  countdown: string;
+  metric: string;
+  last_week_top3: { rank: number; display_name: string; value: number }[];
+}
+
+export interface PostComment {
+  id: string;
+  user_id: string;
+  display_name: string;
+  avatar_url: string | null;
+  initials: string;
+  comment_text: string;
+  created_at: string;
+  time_ago: string;
+  is_own: boolean;
+  parent_comment_id: string | null;
+  like_count: number;
+  is_liked_by_me: boolean;
+  replies: PostComment[];
+  total_reply_count: number;
+}
+
+export interface CheckinStatus {
+  has_checkin: boolean;
+  window_active: boolean;
+  window_expires_at: string | null;
+  checkin: {
+    id: string;
+    photo_url: string | null;
+    caption: string | null;
+    stats_overlay_json: any;
+    influence_tags: string[] | null;
+    created_at: string;
+  } | null;
+}
+
+// ── Community API Functions ────────────────────────────────────────────────────
+
+export const followUser = async (userId: string) =>
+  (await apiClient.post(`/social/follow/${userId}`)).data;
+
+export const unfollowUser = async (userId: string) =>
+  (await apiClient.delete(`/social/follow/${userId}`)).data;
+
+export const getFollowers = async (): Promise<{ followers: UserPreview[] }> =>
+  (await apiClient.get('/social/followers')).data;
+
+export const getFollowing = async (): Promise<{ following: UserPreview[] }> =>
+  (await apiClient.get('/social/following')).data;
+
+export const getAthleteFollowers = async (userId: string): Promise<{ followers: UserPreview[] }> =>
+  (await apiClient.get(`/social/followers/${userId}`)).data;
+
+export const getAthleteFollowing = async (userId: string): Promise<{ following: UserPreview[] }> =>
+  (await apiClient.get(`/social/following/${userId}`)).data;
+
+export const getSuggestions = async (): Promise<{ suggestions: UserPreview[] }> =>
+  (await apiClient.get('/social/suggestions')).data;
+
+export const searchUsers = async (q: string): Promise<{ users: UserPreview[] }> =>
+  (await apiClient.get('/social/search', { params: { q } })).data;
+
+export const getFeed = async (page = 0, limit = 20): Promise<FeedResponse> =>
+  (await apiClient.get('/feed', { params: { page, limit } })).data;
+
+export const createPost = async (data: {
+  photo_url?: string;
+  caption?: string;
+  oryx_data_card_json?: object;
+  also_shared_as_story?: boolean;
+  club_id?: string;
+  insight_type?: string;
+  session_id?: string;
+  custom_title?: string;
+  location_text?: string;
+  privacy_settings?: Record<string, boolean>;
+  background_style?: string;
+}): Promise<{ post: Post }> =>
+  (await apiClient.post('/posts', data)).data;
+
+export const deletePost = async (id: string) =>
+  (await apiClient.delete(`/posts/${id}`)).data;
+
+export const getUserPosts = async (userId: string, page = 0, limit = 30): Promise<{ posts: Post[]; page: number; has_more: boolean }> =>
+  (await apiClient.get(`/posts/user/${userId}`, { params: { page, limit } })).data;
+
+export const getPostDetail = async (postId: string): Promise<{ post: Post }> =>
+  (await apiClient.get(`/posts/${postId}`)).data;
+
+export const editPostCaption = async (id: string, caption: string) =>
+  (await apiClient.patch(`/posts/${id}`, { caption })).data;
+
+export const toggleReaction = async (postId: string, reactionType: string) =>
+  (await apiClient.post(`/posts/${postId}/react`, null, { params: { reaction_type: reactionType } })).data;
+
+export const getPostComments = async (postId: string): Promise<{ comments: PostComment[] }> =>
+  (await apiClient.get(`/posts/${postId}/comments`)).data;
+
+export const addComment = async (postId: string, commentText: string, parentCommentId?: string): Promise<{ comment: PostComment }> =>
+  (await apiClient.post(`/posts/${postId}/comments`, { comment_text: commentText, parent_comment_id: parentCommentId ?? null })).data;
+
+export const deleteComment = async (postId: string, commentId: string) =>
+  (await apiClient.delete(`/posts/${postId}/comments/${commentId}`)).data;
+
+export const editComment = async (postId: string, commentId: string, commentText: string): Promise<{ comment: PostComment }> =>
+  (await apiClient.patch(`/posts/${postId}/comments/${commentId}`, { comment_text: commentText })).data;
+
+export const likeComment = async (postId: string, commentId: string): Promise<{ liked: boolean; like_count: number }> =>
+  (await apiClient.post(`/posts/${postId}/comments/${commentId}/like`)).data;
+
+export const likePost = async (postId: string): Promise<{ liked: boolean; like_count: number }> =>
+  (await apiClient.post(`/posts/${postId}/like`)).data;
+
+export const unlikePost = async (postId: string): Promise<{ liked: boolean; like_count: number }> =>
+  (await apiClient.delete(`/posts/${postId}/like`)).data;
+
+export const savePost = async (postId: string): Promise<void> =>
+  (await apiClient.post(`/posts/${postId}/save`)).data;
+
+export const unsavePost = async (postId: string): Promise<void> =>
+  (await apiClient.delete(`/posts/${postId}/save`)).data;
+
+export const hidePost = async (postId: string): Promise<void> =>
+  (await apiClient.post(`/posts/${postId}/hide`)).data;
+
+export const getPostInsights = async (postId: string): Promise<{
+  total_views: number;
+  fire_count: number;
+  muscle_count: number;
+  heart_count: number;
+  total_reactions: number;
+  total_comments: number;
+  total_saves: number;
+}> => (await apiClient.get(`/posts/${postId}/insights`)).data;
+
+export const patchPost = async (postId: string, data: { caption?: string; is_pinned?: boolean; is_archived?: boolean }): Promise<{ post: Post }> =>
+  (await apiClient.patch(`/posts/${postId}`, data)).data;
+
+export const getClubs = async (): Promise<{ clubs: CommunityClub[] }> =>
+  (await apiClient.get('/clubs')).data;
+
+export const getMyClubs = async (): Promise<{ clubs: CommunityClub[] }> =>
+  (await apiClient.get('/clubs/mine')).data;
+
+export const getClubDetail = async (id: string): Promise<ClubDetail> =>
+  (await apiClient.get(`/clubs/${id}`)).data;
+
+export const joinClub = async (id: string) =>
+  (await apiClient.post(`/clubs/${id}/join`)).data;
+
+export const leaveClub = async (id: string) =>
+  (await apiClient.delete(`/clubs/${id}/leave`)).data;
+
+export const getClubLeaderboard = async (id: string, metric = 'training_load'): Promise<LeaderboardResponse> =>
+  (await apiClient.get(`/clubs/${id}/leaderboard`, { params: { metric } })).data;
+
+export const autoJoinClubs = async (): Promise<{ joined: string[] }> =>
+  (await apiClient.post('/clubs/auto-join')).data;
+
+export const getTodayCheckin = async (): Promise<CheckinStatus> =>
+  (await apiClient.get('/checkin/today')).data;
+
+export const saveCheckin = async (data: {
+  photo_url?: string;
+  caption?: string;
+  stats_overlay_json?: any;
+  influence_tags?: string[];
+  is_public?: boolean;
+}): Promise<{ checkin: any; post_id: string }> =>
+  (await apiClient.post('/checkin', data)).data;
+
+export const deleteCheckin = async (): Promise<void> =>
+  (await apiClient.delete('/checkin/today')).data;
+
+export const generateCheckinCaption = async (data: {
+  name: string;
+  readiness?: number;
+  steps?: number;
+  calories_consumed?: number;
+  calories_target?: number;
+  session_name?: string;
+  sport_tags?: string[];
+  time_of_day?: string;
+}): Promise<{ caption: string }> =>
+  (await apiClient.post('/checkin/caption', data)).data;
+
+// ── Athlete Profile & Social ───────────────────────────────────────────────────
+
+export const getAthleteProfile = async (userId: string): Promise<AthleteProfile> =>
+  (await apiClient.get(`/users/${userId}/profile`)).data;
+
+export const getAthletePublicPosts = async (userId: string, page = 0): Promise<{ posts: Post[]; is_private?: boolean; page: number; has_more: boolean }> =>
+  (await apiClient.get(`/users/${userId}/posts`, { params: { page } })).data;
+
+export const reportUser = async (userId: string, reason?: string) =>
+  (await apiClient.post(`/users/${userId}/report`, { reason })).data;
+
+export const blockUser = async (userId: string) =>
+  (await apiClient.post(`/users/${userId}/block`)).data;
+
+export const unblockUser = async (userId: string) =>
+  (await apiClient.delete(`/users/${userId}/block`)).data;
+
+export const getInsightData = async (): Promise<InsightData> =>
+  (await apiClient.get('/posts/insight-data')).data;
+
+// ── Stories Types ──────────────────────────────────────────────────────────────
+
+export interface StoryItem {
+  id: string;
+  user_id: string;
+  photo_url: string;  // always present, never null
+  caption: string | null;
+  oryx_data_overlay_json: {
+    readiness?: number;
+    steps?: number;
+    calories?: number;
+    calories_target?: number;
+    training_load?: number;
+    readiness_color?: string;
+    readiness_label?: string;
+    x_ratio?: number;
+    y_ratio?: number;
+  } | null;
+  text_overlay: string | null;
+  source_post_id: string | null;
+  checkin_id: string | null;
+  created_at: string;
+  expires_at: string;
+  is_expired: boolean;
+  is_seen?: boolean;
+  author?: {
+    id: string | null;
+    display_name: string;
+    initials: string;
+    avatar_url: string | null;
+  };
+}
+
+export interface StoryGroup {
+  user_id: string;
+  display_name: string;
+  initials: string;
+  avatar_url: string | null;
+  has_unseen_story: boolean;
+  stories: StoryItem[];
+  is_own: boolean;
+}
+
+// ── Stories API Functions ──────────────────────────────────────────────────────
+
+export const getStoriesFeed = async (): Promise<{ story_groups: StoryGroup[] }> =>
+  (await apiClient.get('/stories/feed')).data;
+
+export const getMyStories = async (): Promise<{ stories: StoryItem[] }> =>
+  (await apiClient.get('/stories/my')).data;
+
+export const getStory = async (storyId: string): Promise<{ story: StoryItem }> =>
+  (await apiClient.get(`/stories/${storyId}`)).data;
+
+export const createStory = async (data: {
+  photo_url: string;
+  caption?: string;
+  oryx_data_overlay_json?: object;
+  text_overlay?: string;
+  checkin_id?: string;
+  source_post_id?: string;
+}): Promise<{ story: StoryItem }> =>
+  (await apiClient.post('/stories', data)).data;
+
+// Upload media — compresses image if expo-image-manipulator is available, sends as multipart
+export const uploadMedia = async (uri: string, maxWidth = 1080): Promise<{ url: string }> => {
+  let uploadUri = uri;
+
+  // Try expo-image-manipulator for compression
+  try {
+    const ImageManipulator = await import('expo-image-manipulator');
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: maxWidth } }],
+      { compress: maxWidth <= 720 ? 0.8 : 0.85, format: ImageManipulator.SaveFormat.JPEG }
+    );
+    uploadUri = result.uri;
+  } catch {
+    // manipulator unavailable — use original uri
+  }
+
+  // Send as multipart/form-data — React Native FormData accepts { uri, type, name }
+  const formData = new FormData();
+  formData.append('file', { uri: uploadUri, type: 'image/jpeg', name: 'upload.jpg' } as any);
+
+  const response = await apiClient.post<{ url: string }>('/media/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+export const deleteStory = async (storyId: string): Promise<{ message: string }> =>
+  (await apiClient.delete(`/stories/${storyId}`)).data;
+
+export const updateMyProfile = async (data: {
+  display_name?: string;
+  bio?: string;
+  location?: string;
+  sport_tags?: string[];
+  avatar_url?: string;
+}): Promise<any> => {
+  const response = await apiClient.patch('/users/me/profile', data);
+  return response.data;
+};
+
+// ── Wellness Trends ───────────────────────────────────────────────────────────
+
+export interface HrvDataPoint {
+  date: string;
+  hrv_ms: number;
+}
+
+export interface SleepDataPoint {
+  date: string;
+  duration_hours: number;
+  bedtime: string | null;
+}
+
+export interface ReadinessDataPoint {
+  date: string;
+  score: number;
+}
+
+export interface HooperiDataPoint {
+  date: string;
+  sleep_quality: number;
+  fatigue: number;
+  stress: number;
+  soreness: number;
+  total: number;
+}
+
+export interface WellnessTrends {
+  hrv_data: HrvDataPoint[];
+  sleep_data: SleepDataPoint[];
+  readiness_history: ReadinessDataPoint[];
+  hooper_history: HooperiDataPoint[];
+  hrv_stats: {
+    current_hrv: number | null;
+    seven_day_avg: number | null;
+    thirty_day_avg: number | null;
+    trend_direction: 'up' | 'down' | 'stable';
+  };
+  sleep_stats: {
+    last_night_hours: number | null;
+    seven_day_avg: number | null;
+    best_this_month: number | null;
+    avg_bedtime_variance_minutes: number | null;
+  };
+  readiness_stats: {
+    best_day_this_month: { date: string; score: number } | null;
+    worst_day_this_month: { date: string; score: number } | null;
+    monthly_average: number | null;
+  };
+  hooper_stats: {
+    current_total: number | null;
+    seven_day_avg: number | null;
+  };
+  data_availability: {
+    has_hrv_data: boolean;
+    has_sleep_data: boolean;
+    has_readiness_history: boolean;
+    has_hooper_history: boolean;
+  };
+}
+
+export async function getWellnessTrends(days = 30): Promise<WellnessTrends> {
+  const response = await apiClient.get<WellnessTrends>('/wellness/trends', { params: { days } });
   return response.data;
 }
 

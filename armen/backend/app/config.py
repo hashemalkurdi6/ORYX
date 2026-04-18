@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
     USDA_API_KEY: str = ""   # optional — get free key at https://fdc.nal.usda.gov/
+    # S3 / Cloudflare R2 media storage (optional — leave blank for base64 dev fallback)
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_SECRET_ACCESS_KEY: str = ""
+    AWS_S3_BUCKET: str = ""
+    AWS_S3_REGION: str = "us-east-1"
+    AWS_S3_ENDPOINT_URL: str = ""  # empty = use AWS; set to R2 endpoint for Cloudflare R2
 
     @property
     def usda_api_key(self) -> str:

@@ -16,7 +16,9 @@ function AppStack() {
           contentStyle: { backgroundColor: theme.bg.primary },
           headerShown: false,
         }}
-      />
+      >
+        <Stack.Screen name="checkin" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
+      </Stack>
     </>
   );
 }
