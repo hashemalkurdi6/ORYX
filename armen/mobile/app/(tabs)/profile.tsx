@@ -35,10 +35,19 @@ import {
 import { useAuthStore } from '@/services/authStore';
 import apiClient from '@/services/api';
 import PostDetailModal from '@/components/PostDetailModal';
+import AmbientBackdrop from '@/components/AmbientBackdrop';
 import { useTheme } from '@/contexts/ThemeContext';
-import { ThemeColors } from '@/services/theme';
+import { ThemeColors, theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
+import { useCountUp } from '@/services/animations';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Count-up wrapper for integer stats.
+function StatCountUp({ value, style }: { value: number; style: any }) {
+  const v = useCountUp(value, 900, 100);
+  return <Text style={style}>{v.toLocaleString()}</Text>;
+}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -649,30 +658,46 @@ export default function ProfileScreen() {
 
   return (
     <>
+    <AmbientBackdrop />
     <ScrollView
       style={s.container}
       contentContainerStyle={s.contentContainer}
     >
-      {/* 1. PROFILE HEADER */}
+      {/* 1. PROFILE HEADER — @username left, + and settings icons right */}
       <SafeAreaView edges={['top']}>
         <View style={s.topBar}>
-          <View style={{ flex: 1 }} />
-          <TouchableOpacity
-            onPress={() => router.push('/settings')}
-            style={s.settingsIconBtn}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="settings-outline" size={22} color={theme.text.secondary} />
+          <TouchableOpacity style={s.usernamePill} activeOpacity={0.75}>
+            <Text style={s.usernameHandle}>
+              @{user?.username ?? (email.split('@')[0] || 'me')}
+            </Text>
+            <Ionicons name="chevron-down" size={14} color={theme.text.secondary} />
           </TouchableOpacity>
+          <View style={{ flex: 1 }} />
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity
+              style={s.topBarBtn}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="add" size={20} color={theme.text.body} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push('/settings')}
+              style={s.topBarBtn}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="options-outline" size={18} color={theme.text.body} />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <View style={s.profileHeaderSection}>
+        {/* Avatar + stats triplet — matches design layout */}
+        <View style={s.headerRow2}>
           <TouchableOpacity onPress={handleAvatarPress} activeOpacity={0.8} style={{ position: 'relative' }}>
             <View style={s.avatarCircle}>
               {user?.avatar_url ? (
                 <Image
                   source={{ uri: user.avatar_url }}
-                  style={{ width: 80, height: 80, borderRadius: 40 }}
+                  style={{ width: 76, height: 76, borderRadius: 38 }}
                   resizeMode="cover"
                 />
               ) : initials ? (
@@ -683,126 +708,120 @@ export default function ProfileScreen() {
             </View>
             <View style={{
               position: 'absolute', bottom: 0, right: 0,
-              backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 10,
+              backgroundColor: 'rgba(0,0,0,0.72)', borderRadius: 10,
               width: 20, height: 20, alignItems: 'center', justifyContent: 'center',
             }}>
-              <Ionicons name="camera" size={12} color="#fff" />
+              <Ionicons name="camera" size={11} color={T.text.primary} />
             </View>
           </TouchableOpacity>
 
+          <View style={s.statsTripletRow}>
+            <View style={s.statsTripletItem}>
+              <StatCountUp value={userPosts.length} style={s.statsTripletVal} />
+              <Text style={s.statsTripletLabel}>posts</Text>
+            </View>
+            <TouchableOpacity style={s.statsTripletItem} onPress={() => openSocialSheet('followers')} activeOpacity={0.7}>
+              <StatCountUp value={user?.followers_count ?? 0} style={s.statsTripletVal} />
+              <Text style={s.statsTripletLabel}>followers</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.statsTripletItem} onPress={() => openSocialSheet('following')} activeOpacity={0.7}>
+              <StatCountUp value={user?.following_count ?? 0} style={s.statsTripletVal} />
+              <Text style={s.statsTripletLabel}>following</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Display name + bio + location — left-aligned */}
+        <View style={s.identityBlock}>
           <Text style={s.displayName}>{displayName}</Text>
 
-          {user?.username ? (
-            <Text style={s.usernameText}>@{user.username}</Text>
-          ) : null}
-
           {user?.bio ? (
-            <Text style={s.bioText} numberOfLines={2}>{user.bio}</Text>
+            <Text style={s.bioText} numberOfLines={3}>{user.bio}</Text>
           ) : (
             <TouchableOpacity onPress={() => router.push('/settings')} activeOpacity={0.7}>
-              <Text style={{ color: '#666', fontSize: 13, fontStyle: 'italic', marginTop: 4 }}>Add a bio</Text>
-            </TouchableOpacity>
-          )}
-
-          {(user?.sport_tags && user.sport_tags.length > 0) || (user?.sports && user.sports.length > 0) ? (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}>
-              {(user.sport_tags ?? user.sports ?? []).map((sport) => (
-                <View key={sport} style={{ backgroundColor: '#1e2a3a', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, marginRight: 6, marginBottom: 4 }}>
-                  <Text style={{ color: '#5b9bd5', fontSize: 12 }}>{sport}</Text>
-                </View>
-              ))}
-              <TouchableOpacity onPress={() => router.push('/settings')} activeOpacity={0.7} style={{ marginBottom: 4 }}>
-                <Ionicons name="pencil" size={14} color="#666" />
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={[s.sportTag, s.sportTagAdd]}
-              onPress={() => router.push('/settings')}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="add" size={13} color={theme.text.secondary} />
-              <Text style={s.sportTagText}>Add sports</Text>
+              <Text style={s.bioPlaceholder}>Add a bio</Text>
             </TouchableOpacity>
           )}
 
           {user?.location ? (
             <View style={s.locationRow}>
-              <Ionicons name="location-outline" size={14} color={theme.text.secondary} />
+              <Ionicons name="location" size={13} color={T.readiness.low} />
               <Text style={s.locationText}>{user.location}</Text>
             </View>
           ) : null}
-
-          {/* Social stats row */}
-          <View style={s.socialStatsRow}>
-            <TouchableOpacity style={s.socialStatItem} onPress={() => openSocialSheet('following')} activeOpacity={0.7}>
-              <Text style={s.socialStatValue}>{user?.following_count ?? 0}</Text>
-              <Text style={s.socialStatLabel}>Following</Text>
-            </TouchableOpacity>
-            <View style={s.socialStatDivider} />
-            <TouchableOpacity style={s.socialStatItem} onPress={() => openSocialSheet('followers')} activeOpacity={0.7}>
-              <Text style={s.socialStatValue}>{user?.followers_count ?? 0}</Text>
-              <Text style={s.socialStatLabel}>Followers</Text>
-            </TouchableOpacity>
-            <View style={s.socialStatDivider} />
-            <View style={s.socialStatItem}>
-              <Text style={s.socialStatValue}>{userPosts.length}</Text>
-              <Text style={s.socialStatLabel}>Posts</Text>
-            </View>
-            <View style={s.socialStatDivider} />
-            <View style={s.socialStatItem}>
-              <Text style={s.socialStatValue}>{formatJoinDate(user?.created_at)}</Text>
-              <Text style={s.socialStatLabel}>Joined</Text>
-            </View>
-          </View>
-
-          {/* Highlights Row */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 16 }} contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}>
-            {/* New highlight button */}
-            <TouchableOpacity onPress={() => setShowHighlightSheet(true)} style={{ alignItems: 'center', gap: 4 }}>
-              <View style={{ width: 60, height: 60, borderRadius: 30, borderWidth: 1.5, borderColor: '#444', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', backgroundColor: '#111' }}>
-                <Ionicons name="add" size={24} color="#888" />
-              </View>
-              <Text style={{ color: '#888', fontSize: 11 }}>New</Text>
-            </TouchableOpacity>
-            {/* Placeholder highlights — hardcoded for now */}
-          </ScrollView>
-
-          {/* Edit Profile / Customize pill buttons */}
-          <View style={s.profileActionRow}>
-            <TouchableOpacity
-              style={s.profileActionBtn}
-              onPress={() => router.push('/settings')}
-              activeOpacity={0.75}
-            >
-              <Text style={s.profileActionBtnText}>Edit Profile</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={s.profileActionBtn}
-              onPress={() => router.push('/settings')}
-              activeOpacity={0.75}
-            >
-              <Text style={s.profileActionBtnText}>Customize</Text>
-            </TouchableOpacity>
-          </View>
         </View>
+
+        {/* Action row — Edit profile / Share / follow-users icon */}
+        <View style={s.profileActionRow}>
+          <TouchableOpacity
+            style={s.profileActionBtn}
+            onPress={() => router.push('/settings')}
+            activeOpacity={0.75}
+          >
+            <Text style={s.profileActionBtnText}>Edit profile</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.profileActionBtn} activeOpacity={0.75}>
+            <Text style={s.profileActionBtnText}>Share</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.profileActionIconBtn} activeOpacity={0.75}>
+            <Ionicons name="person-add-outline" size={18} color={T.text.body} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Highlights row — round count tiles */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 20, gap: 14, paddingVertical: 4 }}
+          style={{ marginTop: 16, marginHorizontal: -20 }}
+        >
+          {[
+            { n: activities.length, label: 'sessions' },
+            { n: currentStreak, label: 'streak' },
+            { n: longestStreak, label: 'best' },
+            { n: sessionsThisMonth, label: 'month' },
+            { n: userPosts.length, label: 'posts' },
+          ].map((h, i) => (
+            <View key={i} style={s.highlightTile}>
+              <View style={s.highlightCircle}>
+                <Text style={s.highlightNum}>{h.n}</Text>
+              </View>
+              <Text style={s.highlightLabel}>{h.label}</Text>
+            </View>
+          ))}
+          <TouchableOpacity style={s.highlightTile} onPress={() => setShowHighlightSheet(true)} activeOpacity={0.75}>
+            <View style={[s.highlightCircle, s.highlightCircleAdd]}>
+              <Ionicons name="add" size={22} color={T.text.secondary} />
+            </View>
+            <Text style={s.highlightLabel}>new</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </SafeAreaView>
 
-      {/* 2. TAB BAR */}
+      {/* 2. TAB BAR — icon tabs matching design (grid / tag / bookmark) */}
       <View style={s.tabBar}>
-        {(['posts', 'achievements', 'about'] as const).map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={s.tabItem}
-            onPress={() => setProfileTab(tab)}
-            activeOpacity={0.7}
-          >
-            <Text style={[s.tabLabel, profileTab === tab && s.tabLabelActive]}>
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </Text>
-            {profileTab === tab && <View style={s.tabUnderline} />}
-          </TouchableOpacity>
-        ))}
+        {([
+          { key: 'posts' as const, icon: 'grid-outline' as const, iconActive: 'grid' as const },
+          { key: 'achievements' as const, icon: 'pricetag-outline' as const, iconActive: 'pricetag' as const },
+          { key: 'about' as const, icon: 'bookmark-outline' as const, iconActive: 'bookmark' as const },
+        ]).map((tab) => {
+          const active = profileTab === tab.key;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={s.tabItem}
+              onPress={() => setProfileTab(tab.key)}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={active ? tab.iconActive : tab.icon}
+                size={20}
+                color={active ? T.text.primary : T.text.muted}
+              />
+              {active && <View style={s.tabUnderline} />}
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {/* 3. TAB CONTENT */}
@@ -818,11 +837,11 @@ export default function ProfileScreen() {
     {/* ── Highlight Sheet Modal ── */}
     <Modal visible={showHighlightSheet} transparent animationType="slide" onRequestClose={() => setShowHighlightSheet(false)}>
       <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} onPress={() => setShowHighlightSheet(false)} />
-      <View style={{ backgroundColor: '#1a1a1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 }}>
-        <Text style={{ color: '#fff', fontSize: 17, fontWeight: '600', marginBottom: 8 }}>New Highlight</Text>
-        <Text style={{ color: '#888', fontSize: 14 }}>Create highlights from your stories (coming soon)</Text>
+      <View style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 }}>
+        <Text style={{ color: '#F0F2F6', fontSize: 17, fontWeight: '600', marginBottom: 8 }}>New Highlight</Text>
+        <Text style={{ color: '#8B95A8', fontSize: 14 }}>Create highlights from your stories (coming soon)</Text>
         <TouchableOpacity onPress={() => setShowHighlightSheet(false)} style={{ marginTop: 20, alignItems: 'center' }}>
-          <Text style={{ color: '#5b9bd5', fontSize: 16 }}>Close</Text>
+          <Text style={{ color: '#5BA8FF', fontSize: 16 }}>Close</Text>
         </TouchableOpacity>
       </View>
     </Modal>
@@ -844,19 +863,19 @@ export default function ProfileScreen() {
       visible={false}
       onRequestClose={() => {}}
     >
-      <View style={{ flex: 1, backgroundColor: '#0a0a0a' }}>
+      <View style={{ flex: 1, backgroundColor: '#141820' }}>
         <SafeAreaView edges={['top']} style={{ flex: 1 }}>
           {/* Header */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#2a2a2a' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.10)' }}>
             <TouchableOpacity onPress={() => { setShowPostDetail(false); setSelectedPost(null); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="arrow-back" size={24} color="#f0f0f0" />
+              <Ionicons name="arrow-back" size={24} color="#F0F2F6" />
             </TouchableOpacity>
-            <Text style={{ flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '700', color: '#f0f0f0' }}>Post</Text>
+            <Text style={{ flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '700', color: '#F0F2F6' }}>Post</Text>
             <TouchableOpacity
               onPress={() => selectedPost && setShowMenuForPost(selectedPost.id)}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="ellipsis-horizontal" size={22} color="#888888" />
+              <Ionicons name="ellipsis-horizontal" size={22} color="#8B95A8" />
             </TouchableOpacity>
           </View>
 
@@ -870,12 +889,12 @@ export default function ProfileScreen() {
               />
             )}
             {selectedPost?.oryx_data_card_json && (
-              <View style={{ backgroundColor: '#1a1a1a', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#2a2a2a' }}>
+              <View style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' }}>
                 <Text style={{ fontSize: 12, color: '#888888' }}>{selectedPost.oryx_data_card_json.post_type?.toUpperCase() || 'ORYX CARD'}</Text>
               </View>
             )}
             {selectedPost?.caption && (
-              <Text style={{ fontSize: 14, color: '#f0f0f0', lineHeight: 20 }}>{selectedPost.caption}</Text>
+              <Text style={{ fontSize: 14, color: '#F0F2F6', lineHeight: 20 }}>{selectedPost.caption}</Text>
             )}
             {selectedPost?.time_ago && (
               <Text style={{ fontSize: 11, color: '#555555' }}>{selectedPost.time_ago}</Text>
@@ -896,17 +915,17 @@ export default function ProfileScreen() {
           activeOpacity={1}
           onPress={() => setShowMenuForPost(null)}
         >
-          <View style={{ backgroundColor: '#1a1a1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 10, paddingBottom: insets.bottom + 20 }}>
+          <View style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 10, paddingBottom: insets.bottom + 20 }}>
             <TouchableOpacity
               onPress={() => {
                 setShowMenuForPost(null);
                 setEditCaptionText(selectedPost?.caption || '');
                 setShowEditCaption(true);
               }}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: '#2a2a2a', borderRadius: 12 }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 12 }}
             >
-              <Ionicons name="pencil-outline" size={18} color="#f0f0f0" />
-              <Text style={{ fontSize: 15, color: '#f0f0f0' }}>Edit Caption</Text>
+              <Ionicons name="pencil-outline" size={18} color="#F0F2F6" />
+              <Text style={{ fontSize: 15, color: '#F0F2F6' }}>Edit Caption</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={async () => {
@@ -928,10 +947,10 @@ export default function ProfileScreen() {
                   }
                 ]);
               }}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: '#2a2a2a', borderRadius: 12 }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 12 }}
             >
-              <Ionicons name="trash-outline" size={18} color="#c0392b" />
-              <Text style={{ fontSize: 15, color: '#c0392b' }}>Delete Post</Text>
+              <Ionicons name="trash-outline" size={18} color="#FF6B4A" />
+              <Text style={{ fontSize: 15, color: '#FF6B4A' }}>Delete Post</Text>
             </TouchableOpacity>
             {selectedPost?.photo_url && (
               <TouchableOpacity
@@ -945,15 +964,15 @@ export default function ProfileScreen() {
                     Alert.alert('Error', 'Could not share as story.');
                   }
                 }}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: '#2a2a2a', borderRadius: 12 }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 12 }}
               >
-                <Ionicons name="share-outline" size={18} color="#f0f0f0" />
-                <Text style={{ fontSize: 15, color: '#f0f0f0' }}>Share as Story</Text>
+                <Ionicons name="share-outline" size={18} color="#F0F2F6" />
+                <Text style={{ fontSize: 15, color: '#F0F2F6' }}>Share as Story</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
               onPress={() => setShowMenuForPost(null)}
-              style={{ padding: 14, alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#2a2a2a' }}
+              style={{ padding: 14, alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' }}
             >
               <Text style={{ fontSize: 15, color: '#888888' }}>Cancel</Text>
             </TouchableOpacity>
@@ -969,21 +988,21 @@ export default function ProfileScreen() {
         onRequestClose={() => setShowEditCaption(false)}
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: '#1a1a1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 12, paddingBottom: insets.bottom + 20 }}>
-            <Text style={{ fontSize: 16, fontWeight: '700', color: '#f0f0f0' }}>Edit Caption</Text>
+          <View style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 12, paddingBottom: insets.bottom + 20 }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: '#F0F2F6' }}>Edit Caption</Text>
             <TextInput
-              style={{ backgroundColor: '#2a2a2a', borderRadius: 12, padding: 12, color: '#f0f0f0', fontSize: 14, minHeight: 80 }}
+              style={{ backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 12, padding: 12, color: '#F0F2F6', fontSize: 14, minHeight: 80 }}
               value={editCaptionText}
               onChangeText={setEditCaptionText}
               multiline
               autoFocus
-              placeholderTextColor="#555555"
+              placeholderTextColor="#525E72"
               placeholder="Caption..."
             />
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <TouchableOpacity
                 onPress={() => setShowEditCaption(false)}
-                style={{ flex: 1, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#2a2a2a', alignItems: 'center' }}
+                style={{ flex: 1, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', alignItems: 'center' }}
               >
                 <Text style={{ color: '#888888', fontWeight: '600' }}>Cancel</Text>
               </TouchableOpacity>
@@ -1001,9 +1020,9 @@ export default function ProfileScreen() {
                     Alert.alert('Error', 'Could not update caption.');
                   }
                 }}
-                style={{ flex: 1, padding: 14, borderRadius: 12, backgroundColor: '#f0f0f0', alignItems: 'center' }}
+                style={{ flex: 1, padding: 14, borderRadius: 12, backgroundColor: '#F0F2F6', alignItems: 'center' }}
               >
-                <Text style={{ color: '#000000', fontWeight: '700' }}>Save</Text>
+                <Text style={{ color: '#0E1400', fontWeight: '700' }}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1091,60 +1110,115 @@ function createStyles(t: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: t.bg.primary,
+      backgroundColor: 'transparent',
     },
     contentContainer: {
       paddingHorizontal: 20,
-      paddingBottom: 40,
+      paddingBottom: 120,
     },
 
+    // Top bar — @username pill left, icon buttons right
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingTop: 8,
-      paddingBottom: 4,
+      paddingBottom: 16,
+      gap: 8,
+    },
+    usernamePill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    usernameHandle: {
+      fontSize: 18,
+      color: t.text.primary,
+      fontFamily: TY.sans.medium,
+      letterSpacing: -0.3,
+    },
+    topBarBtn: {
+      width: 36, height: 36, borderRadius: R.md,
+      backgroundColor: t.glass.pill,
+      borderWidth: 1, borderColor: t.glass.border,
+      alignItems: 'center', justifyContent: 'center',
     },
     settingsIconBtn: {
       padding: 6,
     },
 
-    profileHeaderSection: {
-      alignItems: 'center',
-      paddingTop: 8,
+    // Avatar + 3-stat row
+    headerRow2: {
+      flexDirection: 'row', alignItems: 'center', gap: 20,
       paddingBottom: 16,
-      gap: 10,
     },
     avatarCircle: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
-      backgroundColor: t.bg.elevated,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 4,
+      width: 76, height: 76, borderRadius: 38,
+      backgroundColor: t.glass.cardHi,
+      borderWidth: 1, borderColor: t.glass.border,
+      alignItems: 'center', justifyContent: 'center',
+      overflow: 'hidden',
     },
     avatarText: {
-      fontSize: 28,
-      fontWeight: '700',
-      color: t.text.primary,
-      letterSpacing: 1,
+      fontSize: 26, color: t.text.primary,
+      fontFamily: TY.sans.semibold, letterSpacing: 0.5,
+    },
+    statsTripletRow: {
+      flex: 1, flexDirection: 'row', justifyContent: 'space-around',
+    },
+    statsTripletItem: {
+      alignItems: 'center', gap: 2,
+    },
+    statsTripletVal: {
+      fontSize: 20, color: t.text.primary,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.3, ...TY.tabular,
+    },
+    statsTripletLabel: {
+      fontSize: 12, color: t.text.secondary,
+      fontFamily: TY.sans.regular,
+    },
+
+    // Identity block
+    identityBlock: {
+      gap: 4, marginBottom: 14,
     },
     displayName: {
-      fontSize: 22,
-      fontWeight: '700',
-      color: t.text.primary,
-      textAlign: 'center',
-    },
-    usernameText: {
-      fontSize: 15,
-      color: t.text.muted,
+      fontSize: 19, color: t.text.primary,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.3,
     },
     bioText: {
-      fontSize: 14,
-      color: t.text.secondary,
-      textAlign: 'center',
-      lineHeight: 20,
-      paddingHorizontal: 20,
+      fontSize: 13, color: t.text.body,
+      fontFamily: TY.sans.regular, lineHeight: 18,
+    },
+    bioPlaceholder: {
+      fontSize: 13, color: t.text.muted,
+      fontFamily: TY.sans.regular, fontStyle: 'italic',
+    },
+    usernameText: {
+      fontSize: 13, color: t.text.muted,
+      fontFamily: TY.sans.regular,
+    },
+
+    // Highlight tiles (horizontal row of round count tiles)
+    highlightTile: {
+      alignItems: 'center', gap: 6, width: 72,
+    },
+    highlightCircle: {
+      width: 60, height: 60, borderRadius: 30,
+      backgroundColor: t.glass.cardHi,
+      borderWidth: 1, borderColor: t.glass.border,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    highlightCircleAdd: {
+      backgroundColor: 'transparent',
+      borderStyle: 'dashed',
+    },
+    highlightNum: {
+      fontSize: 18, color: t.text.primary,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.3, ...TY.tabular,
+    },
+    highlightLabel: {
+      fontSize: 10, color: t.text.secondary,
+      fontFamily: TY.mono.medium, letterSpacing: 0.8, textTransform: 'uppercase',
     },
     sportTagsScroll: {
       maxHeight: 36,
@@ -1157,10 +1231,10 @@ function createStyles(t: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 5,
-      backgroundColor: t.bg.elevated,
+      backgroundColor: t.glass.pill,
       borderWidth: 1,
-      borderColor: t.border,
-      borderRadius: 20,
+      borderColor: t.glass.border,
+      borderRadius: R.pill,
       paddingHorizontal: 12,
       paddingVertical: 6,
     },
@@ -1170,15 +1244,18 @@ function createStyles(t: ThemeColors) {
     sportTagText: {
       fontSize: 13,
       color: t.text.secondary,
+      fontFamily: TY.sans.regular,
     },
     locationRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
+      marginTop: 2,
     },
     locationText: {
       fontSize: 13,
-      color: t.text.secondary,
+      color: t.text.body,
+      fontFamily: TY.sans.regular,
     },
 
     socialStatsRow: {
@@ -1208,49 +1285,57 @@ function createStyles(t: ThemeColors) {
 
     profileActionRow: {
       flexDirection: 'row',
-      gap: 10,
+      gap: 8,
       marginTop: 4,
     },
     profileActionBtn: {
-      paddingHorizontal: 18,
-      paddingVertical: 7,
-      borderRadius: 20,
+      flex: 1,
+      paddingHorizontal: 14,
+      paddingVertical: 9,
+      borderRadius: R.sm,
       borderWidth: 1,
-      borderColor: t.border,
-      backgroundColor: t.bg.elevated,
+      borderColor: t.glass.border,
+      backgroundColor: t.glass.pill,
+      alignItems: 'center',
     },
     profileActionBtnText: {
       fontSize: 13,
-      fontWeight: '600',
       color: t.text.primary,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.2,
+    },
+    profileActionIconBtn: {
+      width: 38, height: 38, borderRadius: R.sm,
+      backgroundColor: t.glass.pill,
+      borderWidth: 1, borderColor: t.glass.border,
+      alignItems: 'center', justifyContent: 'center',
     },
 
-    // Tab bar
+    // Tab bar — icon tabs
     tabBar: {
       flexDirection: 'row',
       borderBottomWidth: 1,
-      borderBottomColor: t.border,
+      borderBottomColor: t.glass.border,
       marginBottom: 16,
+      marginTop: 20,
     },
     tabItem: {
       flex: 1,
       alignItems: 'center',
-      paddingVertical: 12,
+      paddingVertical: 14,
       position: 'relative',
     },
     tabLabel: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: t.text.muted,
+      fontSize: 14, color: t.text.muted,
+      fontFamily: TY.sans.semibold,
     },
     tabLabelActive: {
       color: t.text.primary,
     },
     tabUnderline: {
       position: 'absolute',
-      bottom: 0,
-      left: '15%',
-      right: '15%',
+      bottom: -1,
+      left: '20%',
+      right: '20%',
       height: 2,
       borderRadius: 1,
       backgroundColor: t.text.primary,
@@ -1289,23 +1374,20 @@ function createStyles(t: ThemeColors) {
     },
     pbCard: {
       width: (SCREEN_WIDTH - 40 - 10) / 2,
-      backgroundColor: t.bg.elevated,
-      borderRadius: 14,
+      backgroundColor: t.glass.card,
+      borderRadius: R.lg,
       borderWidth: 1,
-      borderColor: t.border,
-      padding: 14,
+      borderColor: t.glass.border,
+      padding: SP[4],
       gap: 6,
     },
     pbCardLabel: {
-      fontSize: 11,
-      color: t.text.muted,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
+      fontSize: 10, color: t.text.secondary,
+      fontFamily: TY.mono.medium, letterSpacing: 1.4, textTransform: 'uppercase',
     },
     pbCardValue: {
-      fontSize: 20,
-      fontWeight: '700',
-      color: t.text.primary,
+      fontSize: 22, color: t.text.primary,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.3, ...TY.tabular,
     },
 
     badgesScroll: {
@@ -1318,10 +1400,10 @@ function createStyles(t: ThemeColors) {
     badgeCard: {
       width: 100,
       height: 110,
-      backgroundColor: t.bg.elevated,
+      backgroundColor: t.glass.card,
       borderWidth: 1,
-      borderColor: t.border,
-      borderRadius: 14,
+      borderColor: t.glass.border,
+      borderRadius: R.md,
       alignItems: 'center',
       justifyContent: 'center',
       padding: 8,
@@ -1337,36 +1419,36 @@ function createStyles(t: ThemeColors) {
     },
     badgeName: {
       fontSize: 12,
-      fontWeight: '700',
       color: t.text.primary,
       textAlign: 'center',
+      fontFamily: TY.sans.semibold, letterSpacing: -0.1,
     },
     badgeNameLocked: {
       color: t.text.muted,
     },
     badgeSubtitle: {
       fontSize: 10,
-      color: t.text.muted,
+      color: t.text.secondary,
       textAlign: 'center',
+      fontFamily: TY.mono.medium, letterSpacing: 0.6,
     },
 
     card: {
-      backgroundColor: t.bg.elevated,
-      borderRadius: 16,
-      padding: 16,
+      backgroundColor: t.glass.card,
+      borderRadius: R.lg,
+      padding: SP[4],
       borderWidth: 1,
-      borderColor: t.border,
+      borderColor: t.glass.border,
       marginBottom: 12,
     },
 
     sectionLabel: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: t.text.muted,
+      fontSize: 11, color: t.text.secondary,
       textTransform: 'uppercase',
-      letterSpacing: 2,
-      marginBottom: 10,
+      letterSpacing: 1.8,
+      marginBottom: 12,
       marginTop: 4,
+      fontFamily: TY.mono.medium,
     },
 
     // About tab
@@ -1388,6 +1470,7 @@ function createStyles(t: ThemeColors) {
       fontSize: 15,
       color: t.text.primary,
       lineHeight: 22,
+      fontFamily: TY.sans.regular,
     },
     aboutTagsWrap: {
       flexDirection: 'row',
@@ -1406,11 +1489,12 @@ function createStyles(t: ThemeColors) {
       fontSize: 14,
       color: t.text.secondary,
       flex: 1,
+      fontFamily: TY.sans.regular,
     },
     aboutDetailValue: {
       fontSize: 14,
       color: t.text.primary,
-      fontWeight: '500',
+      fontFamily: TY.sans.medium, letterSpacing: -0.1,
     },
 
     bottomPadding: {

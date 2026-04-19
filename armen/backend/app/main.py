@@ -44,6 +44,7 @@ from app.models import saved_post as saved_post_model  # noqa: F401
 from app.models import hidden_post as hidden_post_model  # noqa: F401
 from app.models import post_view as post_view_model  # noqa: F401
 from app.models import post_like as post_like_model  # noqa: F401
+from app.models import conversation as conversation_model  # noqa: F401
 
 from app.routers import auth, strava, health, diagnosis
 from app.routers import whoop, oura, wellness, nutrition
@@ -64,6 +65,7 @@ from app.routers import checkin as checkin_router
 from app.routers import stories as stories_router
 from app.routers import media as media_router
 from app.routers import users as users_router
+from app.routers import messages as messages_router
 
 
 _USER_COLUMN_MIGRATIONS = [
@@ -468,6 +470,44 @@ CREATE TABLE IF NOT EXISTS posts_likes (
     "CREATE INDEX IF NOT EXISTS idx_posts_likes_user ON posts_likes (user_id)",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT",
     "ALTER TABLE users ALTER COLUMN avatar_url TYPE TEXT USING avatar_url::TEXT",
+    # ── Direct Messages (Phase 1) ───────────────────────────────────────────
+    # users.dm_privacy: 'mutuals' (default) | 'everyone' | 'following'
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS dm_privacy VARCHAR(20) NOT NULL DEFAULT 'mutuals'",
+    """
+    CREATE TABLE IF NOT EXISTS conversations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        type VARCHAR(16) NOT NULL DEFAULT 'direct',
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations (updated_at DESC)",
+    """
+    CREATE TABLE IF NOT EXISTS conversation_participants (
+        conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        joined_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        last_read_at TIMESTAMP,
+        muted BOOLEAN NOT NULL DEFAULT FALSE,
+        is_archived BOOLEAN NOT NULL DEFAULT FALSE,
+        is_request BOOLEAN NOT NULL DEFAULT FALSE,
+        CONSTRAINT pk_conversation_participant PRIMARY KEY (conversation_id, user_id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_conversation_participants_user ON conversation_participants (user_id)",
+    """
+    CREATE TABLE IF NOT EXISTS messages (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+        sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        content TEXT NOT NULL,
+        message_type VARCHAR(32) NOT NULL DEFAULT 'text',
+        extra_metadata JSONB,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        deleted_at TIMESTAMP
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_messages_conversation_created ON messages (conversation_id, created_at DESC)",
 ]
 
 
@@ -543,6 +583,7 @@ app.include_router(checkin_router.router)
 app.include_router(stories_router.router)
 app.include_router(media_router.router)
 app.include_router(users_router.router)
+app.include_router(messages_router.router)
 
 
 @app.get("/", tags=["health-check"])

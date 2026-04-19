@@ -23,6 +23,10 @@ import StoryCreator from '@/components/StoryCreator';
 import PostCreator from '@/components/PostCreator';
 import AthleteProfileModal from '@/components/AthleteProfileModal';
 import PostDetailModal from '@/components/PostDetailModal';
+import AmbientBackdrop from '@/components/AmbientBackdrop';
+import { theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
+import { useMessagesStore } from '@/services/messagesStore';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   getStoriesFeed, deleteStory,
   StoryItem, StoryGroup,
@@ -41,13 +45,55 @@ const COVER_IMAGES: Record<string, any> = {
   recap: require('@/assets/images/cards/recap.jpg'),
 };
 
+// ── DM entry icon for the Community header ──────────────────────────────────
+// Paper-plane icon with a lime dot overlay when there are unread DMs.
+// Taps push the /messages stack.
+function CommunityDmIcon() {
+  const unread = useMessagesStore((s) => s.unreadCount);
+  const refresh = useMessagesStore((s) => s.refresh);
+  const { theme } = useTheme();
+
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh]),
+  );
+
+  return (
+    <TouchableOpacity
+      onPress={() => router.push('/messages')}
+      activeOpacity={0.8}
+      style={{
+        width: 40, height: 40, borderRadius: 20,
+        backgroundColor: theme.glass.pill,
+        borderWidth: 1, borderColor: theme.glass.border,
+        alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <Ionicons name="paper-plane-outline" size={18} color={theme.text.body} />
+      {unread > 0 ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 6, right: 6,
+            width: 9, height: 9, borderRadius: 5,
+            backgroundColor: theme.accent,
+            borderWidth: 1, borderColor: theme.bg.primary,
+          }}
+        />
+      ) : null}
+    </TouchableOpacity>
+  );
+}
+
 // ── MenuOption ────────────────────────────────────────────────────────────────
 
 function MenuOption({ label, icon, color, onPress }: { label: string; icon: string; color?: string; onPress: () => void }) {
   return (
-    <TouchableOpacity onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', padding: 16, gap: 14, borderBottomWidth: 1, borderBottomColor: '#222' }}>
-      <Ionicons name={icon as any} size={20} color={color || '#ccc'} />
-      <Text style={{ color: color || '#fff', fontSize: 16 }}>{label}</Text>
+    <TouchableOpacity onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', padding: 16, gap: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' }}>
+      <Ionicons name={icon as any} size={20} color={color || '#CED4E0'} />
+      <Text style={{ color: color || '#F0F2F6', fontSize: 16 }}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -80,7 +126,7 @@ function SearchScreen({ onClose, currentUserId }: { onClose: () => void; current
   useEffect(() => { search(query); }, [query, tab]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0a0a0a' }}>
+    <View style={{ flex: 1, backgroundColor: '#141820' }}>
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, paddingTop: 56, gap: 12 }}>
         <TextInput
@@ -88,8 +134,8 @@ function SearchScreen({ onClose, currentUserId }: { onClose: () => void; current
           value={query}
           onChangeText={setQuery}
           placeholder="Search..."
-          placeholderTextColor="#555"
-          style={{ flex: 1, backgroundColor: '#1a1a1a', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: '#fff', fontSize: 15 }}
+          placeholderTextColor="#525E72"
+          style={{ flex: 1, backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: '#F0F2F6', fontSize: 15 }}
         />
         <TouchableOpacity onPress={onClose}>
           <Text style={{ color: '#5b9bd5', fontSize: 15 }}>Cancel</Text>
@@ -103,10 +149,10 @@ function SearchScreen({ onClose, currentUserId }: { onClose: () => void; current
             onPress={() => setTab(t)}
             style={{
               paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
-              backgroundColor: tab === t ? '#5b9bd5' : '#1a1a1a',
+              backgroundColor: tab === t ? '#5b9bd5' : 'rgba(28,34,46,0.72)',
             }}
           >
-            <Text style={{ color: tab === t ? '#fff' : '#888', fontSize: 13, fontWeight: '600', textTransform: 'capitalize' }}>{t}</Text>
+            <Text style={{ color: tab === t ? '#F0F2F6' : '#8B95A8', fontSize: 13, fontWeight: '600', textTransform: 'capitalize' }}>{t}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -127,31 +173,31 @@ function SearchScreen({ onClose, currentUserId }: { onClose: () => void; current
                   }
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: '#fff', fontWeight: '600' }}>{item.display_name || item.username}</Text>
-                  <Text style={{ color: '#666', fontSize: 12 }}>@{item.username}</Text>
+                  <Text style={{ color: '#F0F2F6', fontWeight: '600' }}>{item.display_name || item.username}</Text>
+                  <Text style={{ color: '#525E72', fontSize: 12 }}>@{item.username}</Text>
                 </View>
               </View>
             );
             if (tab === 'posts') return (
               <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#111' }}>
                 {item.photo_url && <Image source={{ uri: item.photo_url }} style={{ width: '100%', height: 160, borderRadius: 8, marginBottom: 8 }} />}
-                <Text style={{ color: '#ccc', fontSize: 13 }} numberOfLines={2}>{item.caption || 'No caption'}</Text>
+                <Text style={{ color: '#CED4E0', fontSize: 13 }} numberOfLines={2}>{item.caption || 'No caption'}</Text>
               </View>
             );
             if (tab === 'clubs') return (
               <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#111', gap: 12 }}>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: '#fff', fontWeight: '600' }}>{item.name}</Text>
-                  <Text style={{ color: '#666', fontSize: 12 }}>{item.member_count || 0} members</Text>
+                  <Text style={{ color: '#F0F2F6', fontWeight: '600' }}>{item.name}</Text>
+                  <Text style={{ color: '#525E72', fontSize: 12 }}>{item.member_count || 0} members</Text>
                 </View>
                 <TouchableOpacity style={{ paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#5b9bd5', borderRadius: 8 }}>
-                  <Text style={{ color: '#fff', fontWeight: '600', fontSize: 13 }}>Join</Text>
+                  <Text style={{ color: '#F0F2F6', fontWeight: '600', fontSize: 13 }}>Join</Text>
                 </TouchableOpacity>
               </View>
             );
             return null;
           }}
-          ListEmptyComponent={query.length > 0 ? <Text style={{ color: '#555', textAlign: 'center', marginTop: 40 }}>No results</Text> : null}
+          ListEmptyComponent={query.length > 0 ? <Text style={{ color: '#525E72', textAlign: 'center', marginTop: 40 }}>No results</Text> : null}
         />
       )}
     </View>
@@ -166,8 +212,8 @@ function Avatar({ initials, avatarUrl, size = 36, style }: { initials: string; a
     return <Image source={{ uri: avatarUrl }} style={[{ width: size, height: size, borderRadius: size / 2 }, style]} />;
   }
   return (
-    <View style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: '#2a2a2a', alignItems: 'center', justifyContent: 'center' }, style]}>
-      <Text style={{ fontSize: size * 0.35, fontWeight: '700', color: '#e0e0e0' }}>{initials || '?'}</Text>
+    <View style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: 'rgba(255,255,255,0.10)', alignItems: 'center', justifyContent: 'center' }, style]}>
+      <Text style={{ fontSize: size * 0.35, fontWeight: '700', color: '#F0F2F6' }}>{initials || '?'}</Text>
     </View>
   );
 }
@@ -176,7 +222,7 @@ function Avatar({ initials, avatarUrl, size = 36, style }: { initials: string; a
 
 function SportPill({ tag }: { tag: string }) {
   return (
-    <View style={{ backgroundColor: '#2a2a2a', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 }}>
+    <View style={{ backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 }}>
       <Text style={{ fontSize: 10, color: '#888888' }}>{tag}</Text>
     </View>
   );
@@ -190,28 +236,28 @@ function OryxDataCard({ data }: { data: Post['oryx_data_card_json'] }) {
 
   if (ptype === 'workout') {
     return (
-      <View style={{ backgroundColor: '#1a1a1a', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#2a2a2a', gap: 8 }}>
+      <View style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', gap: 8 }}>
         <Text style={{ fontSize: 9, color: '#555555', letterSpacing: 2, textTransform: 'uppercase' }}>WORKOUT</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Ionicons name="fitness" size={18} color="#e0e0e0" />
-          <Text style={{ fontSize: 15, fontWeight: '700', color: '#f0f0f0', flex: 1 }} numberOfLines={1}>
+          <Ionicons name="fitness" size={18} color="#F0F2F6" />
+          <Text style={{ fontSize: 15, fontWeight: '700', color: '#F0F2F6', flex: 1 }} numberOfLines={1}>
             {data.session_name || 'Workout'}
           </Text>
         </View>
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
           {data.duration_minutes != null && (
-            <View style={{ backgroundColor: '#2a2a2a', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
-              <Text style={{ fontSize: 12, color: '#f0f0f0' }}>{data.duration_minutes} min</Text>
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
+              <Text style={{ fontSize: 12, color: '#F0F2F6' }}>{data.duration_minutes} min</Text>
             </View>
           )}
           {data.training_load != null && (
-            <View style={{ backgroundColor: '#2a2a2a', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
-              <Text style={{ fontSize: 12, color: '#f0f0f0' }}>Load {data.training_load}</Text>
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
+              <Text style={{ fontSize: 12, color: '#F0F2F6' }}>Load {data.training_load}</Text>
             </View>
           )}
           {data.rpe != null && (
-            <View style={{ backgroundColor: '#2a2a2a', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
-              <Text style={{ fontSize: 12, color: '#f0f0f0' }}>RPE {data.rpe}/10</Text>
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
+              <Text style={{ fontSize: 12, color: '#F0F2F6' }}>RPE {data.rpe}/10</Text>
             </View>
           )}
         </View>
@@ -227,9 +273,9 @@ function OryxDataCard({ data }: { data: Post['oryx_data_card_json'] }) {
     const text: string = data.diagnosis_text || '';
     const isLong = text.length > 160;
     return (
-      <View style={{ backgroundColor: '#1a1a1a', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#2a2a2a', borderLeftWidth: 3, borderLeftColor: '#27ae60', gap: 8 }}>
+      <View style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', borderLeftWidth: 3, borderLeftColor: '#27ae60', gap: 8 }}>
         <Text style={{ fontSize: 9, color: '#555555', letterSpacing: 2, textTransform: 'uppercase' }}>ORYX INSIGHT</Text>
-        <Text style={{ fontSize: 13, color: '#f0f0f0', lineHeight: 20 }} numberOfLines={expanded ? undefined : 3}>{text}</Text>
+        <Text style={{ fontSize: 13, color: '#F0F2F6', lineHeight: 20 }} numberOfLines={expanded ? undefined : 3}>{text}</Text>
         {isLong && (
           <TouchableOpacity onPress={() => setExpanded(!expanded)}>
             <Text style={{ fontSize: 12, color: '#888888' }}>{expanded ? 'Show less' : 'Read more'}</Text>
@@ -238,7 +284,7 @@ function OryxDataCard({ data }: { data: Post['oryx_data_card_json'] }) {
         {data.factors && Array.isArray(data.factors) && data.factors.length > 0 && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
             {data.factors.map((f: string, i: number) => (
-              <View key={i} style={{ backgroundColor: '#2a2a2a', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+              <View key={i} style={{ backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
                 <Text style={{ fontSize: 10, color: '#888888' }}>{f}</Text>
               </View>
             ))}
@@ -263,18 +309,18 @@ function OryxDataCard({ data }: { data: Post['oryx_data_card_json'] }) {
       { label: 'Total Load', value: data.total_load ?? '-' },
     ];
     return (
-      <View style={{ backgroundColor: '#1a1a1a', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#2a2a2a', gap: 8 }}>
+      <View style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', gap: 8 }}>
         <Text style={{ fontSize: 9, color: '#555555', letterSpacing: 2, textTransform: 'uppercase' }}>WEEK RECAP</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {stats.map((s, i) => (
             <View key={i} style={{ flex: 1, backgroundColor: '#222222', borderRadius: 10, padding: 10 }}>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: '#f0f0f0' }}>{String(s.value)}</Text>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#F0F2F6' }}>{String(s.value)}</Text>
               <Text style={{ fontSize: 10, color: '#555555', marginTop: 2 }}>{s.label}</Text>
             </View>
           ))}
         </View>
         {data.summary ? (
-          <Text style={{ fontSize: 13, fontStyle: 'italic', color: '#f0f0f0', lineHeight: 18 }}>{data.summary}</Text>
+          <Text style={{ fontSize: 13, fontStyle: 'italic', color: '#F0F2F6', lineHeight: 18 }}>{data.summary}</Text>
         ) : null}
       </View>
     );
@@ -282,9 +328,9 @@ function OryxDataCard({ data }: { data: Post['oryx_data_card_json'] }) {
 
   if (ptype === 'milestone') {
     return (
-      <View style={{ backgroundColor: '#1a1a1a', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#2a2a2a', alignItems: 'center', gap: 8 }}>
-        <Ionicons name="trophy" size={48} color="#e0e0e0" />
-        <Text style={{ fontSize: 18, fontWeight: '700', color: '#f0f0f0', textAlign: 'center' }}>
+      <View style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', alignItems: 'center', gap: 8 }}>
+        <Ionicons name="trophy" size={48} color="#F0F2F6" />
+        <Text style={{ fontSize: 18, fontWeight: '700', color: '#F0F2F6', textAlign: 'center' }}>
           {data.badge_name || 'Milestone Reached'}
         </Text>
         {data.description && (
@@ -296,8 +342,8 @@ function OryxDataCard({ data }: { data: Post['oryx_data_card_json'] }) {
 
   // generic
   return (
-    <View style={{ backgroundColor: '#1a1a1a', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#2a2a2a', gap: 4 }}>
-      {data.title ? <Text style={{ fontSize: 15, fontWeight: '700', color: '#f0f0f0' }}>{data.title}</Text> : null}
+    <View style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', gap: 4 }}>
+      {data.title ? <Text style={{ fontSize: 15, fontWeight: '700', color: '#F0F2F6' }}>{data.title}</Text> : null}
       {data.body ? <Text style={{ fontSize: 13, color: '#888888', lineHeight: 18 }}>{data.body}</Text> : null}
     </View>
   );
@@ -338,7 +384,7 @@ function PostCard({ post, currentUserId, onLike, onComment, onDeletePost, onProf
 
   return (
     <View style={{
-      backgroundColor: '#1a1a1a', borderRadius: 16, borderWidth: 1, borderColor: '#242424', overflow: 'hidden',
+      backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 16, borderWidth: 1, borderColor: '#242424', overflow: 'hidden',
     }}>
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12, gap: 12 }}>
@@ -349,16 +395,16 @@ function PostCard({ post, currentUserId, onLike, onComment, onDeletePost, onProf
         >
           <Avatar initials={post.author.initials} avatarUrl={post.author.avatar_url} size={40} />
           <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ fontSize: 15, fontWeight: '700', color: '#f0f0f0', letterSpacing: 0.1 }} numberOfLines={1}>{post.author.display_name}</Text>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#F0F2F6', letterSpacing: 0.1 }} numberOfLines={1}>{post.author.display_name}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text style={{ fontSize: 12, color: '#666' }}>@{post.author.username}</Text>
-              <Text style={{ fontSize: 12, color: '#444' }}>·</Text>
-              <Text style={{ fontSize: 12, color: '#666' }}>{post.time_ago}</Text>
+              <Text style={{ fontSize: 12, color: '#525E72' }}>@{post.author.username}</Text>
+              <Text style={{ fontSize: 12, color: '#525E72' }}>·</Text>
+              <Text style={{ fontSize: 12, color: '#525E72' }}>{post.time_ago}</Text>
               {post.location_text ? (
                 <>
-                  <Text style={{ fontSize: 12, color: '#444' }}>·</Text>
-                  <Ionicons name="location-outline" size={11} color="#666" />
-                  <Text style={{ color: '#666', fontSize: 12 }} numberOfLines={1}>{post.location_text}</Text>
+                  <Text style={{ fontSize: 12, color: '#525E72' }}>·</Text>
+                  <Ionicons name="location-outline" size={11} color="#525E72" />
+                  <Text style={{ color: '#525E72', fontSize: 12 }} numberOfLines={1}>{post.location_text}</Text>
                 </>
               ) : null}
             </View>
@@ -399,12 +445,12 @@ function PostCard({ post, currentUserId, onLike, onComment, onDeletePost, onProf
       {post.caption ? (
         <View style={{ paddingHorizontal: 16, paddingTop: post.photo_url ? 10 : 4, paddingBottom: 4 }}>
           <Text style={{ color: '#d8d8d8', fontSize: 14, lineHeight: 22 }} numberOfLines={3}>
-            <Text style={{ fontWeight: '700', color: '#f0f0f0' }}>{post.author?.display_name || 'Athlete'} </Text>
+            <Text style={{ fontWeight: '700', color: '#F0F2F6' }}>{post.author?.display_name || 'Athlete'} </Text>
             {post.caption}
           </Text>
           {post.caption.length > 100 && (
             <TouchableOpacity style={{ marginTop: 4 }}>
-              <Text style={{ color: '#666', fontSize: 13 }}>more</Text>
+              <Text style={{ color: '#525E72', fontSize: 13 }}>more</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -418,18 +464,18 @@ function PostCard({ post, currentUserId, onLike, onComment, onDeletePost, onProf
       )}
 
       {/* Footer */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, marginTop: 4, borderTopWidth: 1, borderTopColor: '#222', gap: 20 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, marginTop: 4, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)', gap: 20 }}>
         <TouchableOpacity onPress={() => onLike(post.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }} activeOpacity={0.7}>
           <Ionicons
             name={post.is_liked_by_current_user ? 'heart' : 'heart-outline'}
             size={22}
-            color={post.is_liked_by_current_user ? '#e74c3c' : '#666'}
+            color={post.is_liked_by_current_user ? '#e74c3c' : '#525E72'}
           />
-          <Text style={{ fontSize: 14, fontWeight: '500', color: '#666' }}>{post.like_count ?? 0}</Text>
+          <Text style={{ fontSize: 14, fontWeight: '500', color: '#525E72' }}>{post.like_count ?? 0}</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => onComment(post)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }} activeOpacity={0.7}>
-          <Ionicons name="chatbubble-outline" size={20} color="#666" />
-          <Text style={{ fontSize: 14, fontWeight: '500', color: '#666' }}>{post.comment_count ?? 0}</Text>
+          <Ionicons name="chatbubble-outline" size={20} color="#525E72" />
+          <Text style={{ fontSize: 14, fontWeight: '500', color: '#525E72' }}>{post.comment_count ?? 0}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -443,7 +489,7 @@ function LeaderboardList({ leaderboard, metric, onProfilePress }: { leaderboard:
     if (rank === 1) return '#FFD700';
     if (rank === 2) return '#C0C0C0';
     if (rank === 3) return '#CD7F32';
-    return '#f0f0f0';
+    return '#F0F2F6';
   };
 
   const formatValue = (v: number) => {
@@ -474,10 +520,10 @@ function LeaderboardList({ leaderboard, metric, onProfilePress }: { leaderboard:
             flexDirection: 'row',
             alignItems: 'center',
             padding: 12,
-            backgroundColor: entry.is_current_user ? '#1a1a1a' : 'transparent',
+            backgroundColor: entry.is_current_user ? 'rgba(28,34,46,0.72)' : 'transparent',
             borderRadius: 12,
             borderWidth: entry.is_current_user ? 1 : 0,
-            borderColor: '#2a2a2a',
+            borderColor: 'rgba(255,255,255,0.10)',
             gap: 10,
           }}
         >
@@ -486,29 +532,29 @@ function LeaderboardList({ leaderboard, metric, onProfilePress }: { leaderboard:
           </Text>
           <Avatar initials={entry.initials} avatarUrl={entry.avatar_url} size={32} />
           <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ fontSize: 14, color: '#f0f0f0', fontWeight: entry.is_current_user ? '700' : '400' }}>{entry.display_name}</Text>
+            <Text style={{ fontSize: 14, color: '#F0F2F6', fontWeight: entry.is_current_user ? '700' : '400' }}>{entry.display_name}</Text>
             {entry.sport_tags?.length > 0 && (
               <View style={{ flexDirection: 'row', gap: 4 }}>
                 {entry.sport_tags.slice(0, 2).map((t, i) => <SportPill key={i} tag={t} />)}
               </View>
             )}
           </View>
-          <Text style={{ fontSize: 14, fontWeight: '700', color: '#f0f0f0' }}>{formatValue(entry.value)}</Text>
+          <Text style={{ fontSize: 14, fontWeight: '700', color: '#F0F2F6' }}>{formatValue(entry.value)}</Text>
         </TouchableOpacity>
       ))}
 
       {/* Current user pinned if not in top 10 */}
       {leaderboard.my_entry && leaderboard.my_rank != null && leaderboard.my_rank > 10 && (
         <>
-          <View style={{ height: 1, backgroundColor: '#2a2a2a', marginVertical: 4 }} />
+          <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.10)', marginVertical: 4 }} />
           <Text style={{ fontSize: 11, color: '#555555', textAlign: 'center' }}>You are ranked {leaderboard.my_rank}th this week</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: '#1a1a1a', borderRadius: 12, borderWidth: 1, borderColor: '#2a2a2a', gap: 10 }}>
-            <Text style={{ fontSize: 16, fontWeight: '700', color: '#f0f0f0', width: 28, textAlign: 'center' }}>{leaderboard.my_rank}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', gap: 10 }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: '#F0F2F6', width: 28, textAlign: 'center' }}>{leaderboard.my_rank}</Text>
             <Avatar initials={leaderboard.my_entry.initials} avatarUrl={leaderboard.my_entry.avatar_url} size={32} />
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, color: '#f0f0f0', fontWeight: '700' }}>{leaderboard.my_entry.display_name}</Text>
+              <Text style={{ fontSize: 14, color: '#F0F2F6', fontWeight: '700' }}>{leaderboard.my_entry.display_name}</Text>
             </View>
-            <Text style={{ fontSize: 14, fontWeight: '700', color: '#f0f0f0' }}>{formatValue(leaderboard.my_entry.value)}</Text>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: '#F0F2F6' }}>{formatValue(leaderboard.my_entry.value)}</Text>
           </View>
         </>
       )}
@@ -520,7 +566,7 @@ function LeaderboardList({ leaderboard, metric, onProfilePress }: { leaderboard:
           {leaderboard.last_week_top3.map((entry) => (
             <View key={entry.rank} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 }}>
               <Text style={{ fontSize: 16 }}>{medalEmoji(entry.rank)}</Text>
-              <Text style={{ fontSize: 14, color: '#f0f0f0', flex: 1 }}>{entry.display_name}</Text>
+              <Text style={{ fontSize: 14, color: '#F0F2F6', flex: 1 }}>{entry.display_name}</Text>
               <Text style={{ fontSize: 13, color: '#888888' }}>{formatValue(entry.value)}</Text>
             </View>
           ))}
@@ -1008,13 +1054,13 @@ export default function CommunityScreen() {
                         key={sug.id}
                         onPress={() => { setProfileUserId(sug.id); setShowAthleteProfile(true); }}
                         style={{
-                          backgroundColor: '#1a1a1a', borderRadius: 14, padding: 14,
+                          backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 14, padding: 14,
                           borderWidth: 1, borderColor: '#242424', width: 148, gap: 8,
                         }}
                         activeOpacity={0.8}
                       >
                         <Avatar initials={sug.initials} avatarUrl={sug.avatar_url} size={48} />
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#f0f0f0', lineHeight: 19 }} numberOfLines={1}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#F0F2F6', lineHeight: 19 }} numberOfLines={1}>
                           {sug.display_name}
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
@@ -1023,13 +1069,13 @@ export default function CommunityScreen() {
                         <TouchableOpacity
                           onPress={(e) => { e.stopPropagation(); handleFollow(sug.id, isFollowing); }}
                           style={{
-                            backgroundColor: isFollowing ? '#2a2a2a' : '#e0e0e0',
+                            backgroundColor: isFollowing ? 'rgba(255,255,255,0.10)' : '#F0F2F6',
                             borderRadius: 8, paddingVertical: 7, alignItems: 'center',
-                            borderWidth: isFollowing ? 1 : 0, borderColor: '#333',
+                            borderWidth: isFollowing ? 1 : 0, borderColor: 'rgba(255,255,255,0.10)',
                           }}
                           activeOpacity={0.75}
                         >
-                          <Text style={{ fontSize: 12, fontWeight: '600', color: isFollowing ? '#888' : '#0a0a0a' }}>
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: isFollowing ? '#8B95A8' : '#141820' }}>
                             {isFollowing ? 'Following' : 'Follow'}
                           </Text>
                         </TouchableOpacity>
@@ -1052,8 +1098,8 @@ export default function CommunityScreen() {
             const ownGroup = storyGroups.find(g => g.is_own);
             const hasStory = ownGroup && ownGroup.stories.length > 0;
             const rawRingColor = ownGroup?.stories[0]?.oryx_data_overlay_json?.readiness_color ?? '#555555';
-            const ringColor = rawRingColor === '#555555' ? '#fff' : rawRingColor;
-            const borderColor = hasStory ? ringColor : '#444';
+            const ringColor = rawRingColor === '#555555' ? '#F0F2F6' : rawRingColor;
+            const borderColor = hasStory ? ringColor : '#525E72';
             return (
               <TouchableOpacity
                 key="own"
@@ -1069,7 +1115,7 @@ export default function CommunityScreen() {
               >
                 <View style={{
                   width: 72, height: 72, borderRadius: 36,
-                  borderWidth: 2, borderColor: hasStory ? borderColor : '#444',
+                  borderWidth: 2, borderColor: hasStory ? borderColor : '#525E72',
                   borderStyle: hasStory ? 'solid' : 'dashed',
                   padding: 3, alignItems: 'center', justifyContent: 'center',
                 }}>
@@ -1082,13 +1128,13 @@ export default function CommunityScreen() {
                       position: 'absolute', bottom: 0, right: 0,
                       width: 20, height: 20, borderRadius: 10,
                       backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center',
-                      borderWidth: 2, borderColor: '#0a0a0a',
+                      borderWidth: 2, borderColor: '#141820',
                     }}>
                       <Ionicons name="add" size={13} color="#000000" />
                     </View>
                   )}
                 </View>
-                <Text style={{ fontSize: 11, color: '#666', maxWidth: 72, textAlign: 'center' }} numberOfLines={1}>
+                <Text style={{ fontSize: 11, color: '#525E72', maxWidth: 72, textAlign: 'center' }} numberOfLines={1}>
                   Your Story
                 </Text>
               </TouchableOpacity>
@@ -1098,7 +1144,7 @@ export default function CommunityScreen() {
           {/* Others' bubbles */}
           {storyGroups.filter(g => !g.is_own).map((group, i) => {
             const rawRingColor = group.stories[0]?.oryx_data_overlay_json?.readiness_color || '#555555';
-            const ringColor = rawRingColor === '#555555' ? '#fff' : rawRingColor;
+            const ringColor = rawRingColor === '#555555' ? '#F0F2F6' : rawRingColor;
             const allSeen = !group.has_unseen_story;
             const borderColor = allSeen ? ringColor + '66' : ringColor;
             const groupIdx = storyGroups.indexOf(group);
@@ -1116,7 +1162,7 @@ export default function CommunityScreen() {
                 }}>
                   <Avatar initials={group.initials} avatarUrl={group.avatar_url} size={60} />
                 </View>
-                <Text style={{ fontSize: 11, color: '#666', maxWidth: 72, textAlign: 'center' }} numberOfLines={1}>
+                <Text style={{ fontSize: 11, color: '#525E72', maxWidth: 72, textAlign: 'center' }} numberOfLines={1}>
                   {group.display_name.split(' ')[0].slice(0, 8)}
                 </Text>
               </TouchableOpacity>
@@ -1141,12 +1187,12 @@ export default function CommunityScreen() {
               onPress={() => setFeedFilter(f.toLowerCase() as any)}
               style={{
                 paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
-                backgroundColor: feedFilter === f.toLowerCase() ? '#5b9bd5' : '#161616',
-                borderWidth: 1, borderColor: feedFilter === f.toLowerCase() ? '#5b9bd5' : '#2a2a2a',
+                backgroundColor: feedFilter === f.toLowerCase() ? '#5b9bd5' : 'rgba(28,34,46,0.72)',
+                borderWidth: 1, borderColor: feedFilter === f.toLowerCase() ? '#5b9bd5' : 'rgba(255,255,255,0.10)',
               }}
               activeOpacity={0.75}
             >
-              <Text style={{ color: feedFilter === f.toLowerCase() ? '#fff' : '#888', fontSize: 13, fontWeight: '600' }}>{f}</Text>
+              <Text style={{ color: feedFilter === f.toLowerCase() ? '#F0F2F6' : '#8B95A8', fontSize: 13, fontWeight: '600' }}>{f}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -1159,15 +1205,15 @@ export default function CommunityScreen() {
           </View>
         ) : (
           <View style={{ alignItems: 'center', paddingTop: 60, gap: 12 }}>
-            <Ionicons name="people-outline" size={48} color="#2a2a2a" />
+            <Ionicons name="people-outline" size={48} color="rgba(255,255,255,0.10)" />
             <Text style={{ fontSize: 15, color: '#555555', textAlign: 'center', paddingHorizontal: 32 }}>
               Follow other athletes to see their posts here
             </Text>
             <TouchableOpacity
               onPress={() => setShowSearch(true)}
-              style={{ backgroundColor: '#1a1a1a', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10, borderWidth: 1, borderColor: '#2a2a2a', marginTop: 4 }}
+              style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', marginTop: 4 }}
             >
-              <Text style={{ fontSize: 14, color: '#f0f0f0', fontWeight: '600' }}>Find Athletes</Text>
+              <Text style={{ fontSize: 14, color: '#F0F2F6', fontWeight: '600' }}>Find Athletes</Text>
             </TouchableOpacity>
           </View>
         )
@@ -1217,11 +1263,11 @@ export default function CommunityScreen() {
                       style={{ width: 72, height: 72, borderRadius: 36 }}
                     />
                   ) : (
-                    <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#1a1a1a', borderWidth: 1, borderColor: '#2a2a2a', alignItems: 'center', justifyContent: 'center' }}>
+                    <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(28,34,46,0.72)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', alignItems: 'center', justifyContent: 'center' }}>
                       <Ionicons name="people" size={28} color="#555555" />
                     </View>
                   )}
-                  <Text style={{ fontSize: 10, color: '#f0f0f0', textAlign: 'center', width: 72 }} numberOfLines={2}>
+                  <Text style={{ fontSize: 10, color: '#F0F2F6', textAlign: 'center', width: 72 }} numberOfLines={2}>
                     {club.name}
                   </Text>
                 </TouchableOpacity>
@@ -1242,22 +1288,22 @@ export default function CommunityScreen() {
               <TouchableOpacity
                 key={club.id}
                 onPress={() => handleOpenClubDetail(club.id)}
-                style={{ backgroundColor: '#1a1a1a', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#242424', flexDirection: 'row', alignItems: 'center', gap: 14 }}
+                style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#242424', flexDirection: 'row', alignItems: 'center', gap: 14 }}
                 activeOpacity={0.75}
               >
                 {club.cover_image && COVER_IMAGES[club.cover_image] ? (
                   <Image source={COVER_IMAGES[club.cover_image]} style={{ width: 52, height: 52, borderRadius: 12 }} />
                 ) : (
-                  <View style={{ width: 52, height: 52, borderRadius: 12, backgroundColor: '#222', alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name="people" size={22} color="#555" />
+                  <View style={{ width: 52, height: 52, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="people" size={22} color="#525E72" />
                   </View>
                 )}
                 <View style={{ flex: 1, gap: 4 }}>
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#f0f0f0' }}>{club.name}</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#F0F2F6' }}>{club.name}</Text>
                   {club.description && (
-                    <Text style={{ fontSize: 13, color: '#888', lineHeight: 18 }} numberOfLines={1}>{club.description}</Text>
+                    <Text style={{ fontSize: 13, color: '#8B95A8', lineHeight: 18 }} numberOfLines={1}>{club.description}</Text>
                   )}
-                  <Text style={{ fontSize: 12, color: '#555' }}>{club.member_count} members</Text>
+                  <Text style={{ fontSize: 12, color: '#525E72' }}>{club.member_count} members</Text>
                 </View>
                 <TouchableOpacity
                   onPress={() => handleJoinLeaveClub(club)}
@@ -1265,12 +1311,12 @@ export default function CommunityScreen() {
                     borderRadius: 20,
                     paddingHorizontal: 14,
                     paddingVertical: 6,
-                    backgroundColor: club.is_member ? 'transparent' : '#e0e0e0',
+                    backgroundColor: club.is_member ? 'transparent' : '#F0F2F6',
                     borderWidth: club.is_member ? 1 : 0,
                     borderColor: '#555555',
                   }}
                 >
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: club.is_member ? '#888888' : '#0a0a0a' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: club.is_member ? '#888888' : '#141820' }}>
                     {club.is_member ? 'Leave' : 'Join'}
                   </Text>
                 </TouchableOpacity>
@@ -1288,15 +1334,15 @@ export default function CommunityScreen() {
     if (myClubs.length === 0 && !clubsLoading) {
       return (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 32 }}>
-          <Ionicons name="trophy-outline" size={48} color="#2a2a2a" />
+          <Ionicons name="trophy-outline" size={48} color="rgba(255,255,255,0.10)" />
           <Text style={{ fontSize: 15, color: '#555555', textAlign: 'center' }}>
             Join clubs to see leaderboards
           </Text>
           <TouchableOpacity
             onPress={() => setActiveTab('clubs')}
-            style={{ backgroundColor: '#1a1a1a', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10, borderWidth: 1, borderColor: '#2a2a2a', marginTop: 4 }}
+            style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', marginTop: 4 }}
           >
-            <Text style={{ fontSize: 14, color: '#f0f0f0', fontWeight: '600' }}>Discover Clubs</Text>
+            <Text style={{ fontSize: 14, color: '#F0F2F6', fontWeight: '600' }}>Discover Clubs</Text>
           </TouchableOpacity>
         </View>
       );
@@ -1319,12 +1365,12 @@ export default function CommunityScreen() {
                 onPress={() => handleLeaderboardClubSelect(club.id)}
                 style={{
                   borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7,
-                  backgroundColor: selectedClubId === club.id ? '#1a1a1a' : 'transparent',
+                  backgroundColor: selectedClubId === club.id ? 'rgba(28,34,46,0.72)' : 'transparent',
                   borderWidth: 1,
-                  borderColor: selectedClubId === club.id ? '#f0f0f0' : '#2a2a2a',
+                  borderColor: selectedClubId === club.id ? '#F0F2F6' : 'rgba(255,255,255,0.10)',
                 }}
               >
-                <Text style={{ fontSize: 13, color: selectedClubId === club.id ? '#f0f0f0' : '#555555', fontWeight: selectedClubId === club.id ? '600' : '400' }}>
+                <Text style={{ fontSize: 13, color: selectedClubId === club.id ? '#F0F2F6' : '#555555', fontWeight: selectedClubId === club.id ? '600' : '400' }}>
                   {club.name}
                 </Text>
               </TouchableOpacity>
@@ -1340,12 +1386,12 @@ export default function CommunityScreen() {
               onPress={() => handleLeaderboardMetricChange(key)}
               style={{
                 borderRadius: 16, paddingHorizontal: 12, paddingVertical: 5,
-                backgroundColor: leaderboardMetric === key ? '#1a1a1a' : 'transparent',
+                backgroundColor: leaderboardMetric === key ? 'rgba(28,34,46,0.72)' : 'transparent',
                 borderWidth: 1,
-                borderColor: leaderboardMetric === key ? '#e0e0e0' : '#2a2a2a',
+                borderColor: leaderboardMetric === key ? '#F0F2F6' : 'rgba(255,255,255,0.10)',
               }}
             >
-              <Text style={{ fontSize: 11, color: leaderboardMetric === key ? '#f0f0f0' : '#555555' }}>{label}</Text>
+              <Text style={{ fontSize: 11, color: leaderboardMetric === key ? '#F0F2F6' : '#555555' }}>{label}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -1370,19 +1416,19 @@ export default function CommunityScreen() {
       presentationStyle="fullScreen"
       onRequestClose={() => setShowClubDetail(false)}
     >
-      <View style={{ flex: 1, backgroundColor: '#0a0a0a' }}>
+      <View style={{ flex: 1, backgroundColor: '#141820' }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           {/* Header */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12, borderBottomWidth: 1, borderBottomColor: '#2a2a2a' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.10)' }}>
             {clubDetail?.club.cover_image && COVER_IMAGES[clubDetail.club.cover_image] ? (
               <Image source={COVER_IMAGES[clubDetail.club.cover_image]} style={{ width: 44, height: 44, borderRadius: 10 }} />
             ) : (
-              <View style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: '#1a1a1a', alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: 'rgba(28,34,46,0.72)', alignItems: 'center', justifyContent: 'center' }}>
                 <Ionicons name="people" size={18} color="#555555" />
               </View>
             )}
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: '#f0f0f0' }}>{clubDetail?.club.name || ''}</Text>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#F0F2F6' }}>{clubDetail?.club.name || ''}</Text>
               <Text style={{ fontSize: 12, color: '#555555' }}>{clubDetail?.club.member_count ?? 0} members</Text>
             </View>
             <TouchableOpacity onPress={() => setShowClubDetail(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -1391,7 +1437,7 @@ export default function CommunityScreen() {
           </View>
 
           {/* Mini tabs */}
-          <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#2a2a2a' }}>
+          <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.10)' }}>
             {(['feed', 'members', 'leaderboard'] as const).map((tab) => (
               <TouchableOpacity
                 key={tab}
@@ -1406,10 +1452,10 @@ export default function CommunityScreen() {
                 style={{
                   flex: 1, paddingVertical: 12, alignItems: 'center',
                   borderBottomWidth: 2,
-                  borderBottomColor: clubDetailTab === tab ? '#f0f0f0' : 'transparent',
+                  borderBottomColor: clubDetailTab === tab ? '#F0F2F6' : 'transparent',
                 }}
               >
-                <Text style={{ fontSize: 12, fontWeight: '600', color: clubDetailTab === tab ? '#f0f0f0' : '#555555', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: clubDetailTab === tab ? '#F0F2F6' : '#555555', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   {tab}
                 </Text>
               </TouchableOpacity>
@@ -1431,7 +1477,7 @@ export default function CommunityScreen() {
                     const isMemberFollowing = clubMemberFollowState[member.id] ?? false;
                     const isMe = member.id === currentUserId;
                     return (
-                      <View key={member.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: '#1a1a1a', borderRadius: 12, borderWidth: 1, borderColor: '#2a2a2a' }}>
+                      <View key={member.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' }}>
                         <TouchableOpacity
                           onPress={() => { if (member.id !== currentUserId) { setProfileUserId(member.id); setShowAthleteProfile(true); } }}
                           style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}
@@ -1439,7 +1485,7 @@ export default function CommunityScreen() {
                         >
                           <Avatar initials={member.initials} avatarUrl={member.avatar_url} size={40} />
                           <View style={{ flex: 1, gap: 4 }}>
-                            <Text style={{ fontSize: 14, fontWeight: '600', color: '#f0f0f0' }}>{member.display_name}</Text>
+                            <Text style={{ fontSize: 14, fontWeight: '600', color: '#F0F2F6' }}>{member.display_name}</Text>
                             <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
                               {member.sport_tags.slice(0, 3).map((t, i) => <SportPill key={i} tag={t} />)}
                             </View>
@@ -1450,12 +1496,12 @@ export default function CommunityScreen() {
                             onPress={() => handleMemberFollow(member.id)}
                             style={{
                               borderRadius: 16, paddingHorizontal: 12, paddingVertical: 5,
-                              backgroundColor: isMemberFollowing ? 'transparent' : '#e0e0e0',
+                              backgroundColor: isMemberFollowing ? 'transparent' : '#F0F2F6',
                               borderWidth: isMemberFollowing ? 1 : 0,
                               borderColor: '#555555',
                             }}
                           >
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: isMemberFollowing ? '#888888' : '#0a0a0a' }}>
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: isMemberFollowing ? '#888888' : '#141820' }}>
                               {isMemberFollowing ? 'Following' : 'Follow'}
                             </Text>
                           </TouchableOpacity>
@@ -1488,15 +1534,15 @@ export default function CommunityScreen() {
       presentationStyle="pageSheet"
       onRequestClose={() => { setShowComments(false); setActivePost(null); setComments([]); }}
     >
-      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#111111' }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: 'rgba(28,34,46,0.72)' }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           {/* Header */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#222' }}>
-            <Text style={{ fontSize: 17, fontWeight: '700', color: '#f0f0f0', flex: 1 }}>
-              Comments{comments.length > 0 ? <Text style={{ fontWeight: '400', color: '#666' }}> {comments.length}</Text> : null}
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' }}>
+            <Text style={{ fontSize: 17, fontWeight: '700', color: '#F0F2F6', flex: 1 }}>
+              Comments{comments.length > 0 ? <Text style={{ fontWeight: '400', color: '#525E72' }}> {comments.length}</Text> : null}
             </Text>
             <TouchableOpacity onPress={() => { setShowComments(false); setActivePost(null); setComments([]); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close" size={22} color="#888" />
+              <Ionicons name="close" size={22} color="#8B95A8" />
             </TouchableOpacity>
           </View>
 
@@ -1505,7 +1551,7 @@ export default function CommunityScreen() {
             {commentLoading ? (
               <ActivityIndicator color="#555555" style={{ marginTop: 40 }} />
             ) : comments.length === 0 ? (
-              <Text style={{ color: '#555', textAlign: 'center', marginTop: 40, fontSize: 14 }}>No comments yet. Be the first.</Text>
+              <Text style={{ color: '#525E72', textAlign: 'center', marginTop: 40, fontSize: 14 }}>No comments yet. Be the first.</Text>
             ) : (
               comments.map((comment) => (
                 <TouchableOpacity
@@ -1526,15 +1572,15 @@ export default function CommunityScreen() {
                       activeOpacity={0.7}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#f0f0f0' }}>{comment.display_name}</Text>
-                        <Text style={{ fontSize: 12, color: '#555' }}>{comment.time_ago}</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#F0F2F6' }}>{comment.display_name}</Text>
+                        <Text style={{ fontSize: 12, color: '#525E72' }}>{comment.time_ago}</Text>
                       </View>
                     </TouchableOpacity>
                     <Text style={{ fontSize: 14, color: '#d8d8d8', lineHeight: 21 }}>{comment.comment_text}</Text>
                   </View>
                   {comment.is_own && (
                     <TouchableOpacity onPress={() => handleDeleteComment(comment.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                      <Ionicons name="trash-outline" size={15} color="#444" />
+                      <Ionicons name="trash-outline" size={15} color="#525E72" />
                     </TouchableOpacity>
                   )}
                 </TouchableOpacity>
@@ -1543,12 +1589,12 @@ export default function CommunityScreen() {
           </ScrollView>
 
           {/* Input */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: insets.bottom + 12, borderTopWidth: 1, borderTopColor: '#222', gap: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: insets.bottom + 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)', gap: 10 }}>
             <Avatar initials={user?.display_name?.substring(0, 2).toUpperCase() || '?'} avatarUrl={null} size={32} />
             <TextInput
-              style={{ flex: 1, backgroundColor: '#1a1a1a', borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, color: '#f0f0f0', fontSize: 14, borderWidth: 1, borderColor: '#2a2a2a' }}
+              style={{ flex: 1, backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, color: '#F0F2F6', fontSize: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' }}
               placeholder="Add a comment..."
-              placeholderTextColor="#555"
+              placeholderTextColor="#525E72"
               value={commentInput}
               onChangeText={setCommentInput}
               multiline
@@ -1556,10 +1602,10 @@ export default function CommunityScreen() {
             <TouchableOpacity
               onPress={handleSendComment}
               disabled={!commentInput.trim()}
-              style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: commentInput.trim() ? '#e0e0e0' : '#222', alignItems: 'center', justifyContent: 'center' }}
+              style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: commentInput.trim() ? '#F0F2F6' : 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' }}
               activeOpacity={0.75}
             >
-              <Ionicons name="send" size={16} color={commentInput.trim() ? '#0a0a0a' : '#555'} />
+              <Ionicons name="send" size={16} color={commentInput.trim() ? '#141820' : '#525E72'} />
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -1576,14 +1622,14 @@ export default function CommunityScreen() {
       presentationStyle="pageSheet"
       onRequestClose={() => { setShowSearch(false); setSearchQuery(''); setSearchResults([]); }}
     >
-      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#111111' }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: 'rgba(28,34,46,0.72)' }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           {/* Header */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#2a2a2a', gap: 10 }}>
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a1a1a', borderRadius: 12, paddingHorizontal: 12, borderWidth: 1, borderColor: '#2a2a2a', gap: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.10)', gap: 10 }}>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 12, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', gap: 8 }}>
               <Ionicons name="search" size={16} color="#555555" />
               <TextInput
-                style={{ flex: 1, paddingVertical: 10, color: '#f0f0f0', fontSize: 15 }}
+                style={{ flex: 1, paddingVertical: 10, color: '#F0F2F6', fontSize: 15 }}
                 placeholder="Search athletes..."
                 placeholderTextColor="#555555"
                 value={searchQuery}
@@ -1607,11 +1653,11 @@ export default function CommunityScreen() {
                   key={u.id}
                   onPress={() => { setProfileUserId(u.id); setShowAthleteProfile(true); }}
                   activeOpacity={0.8}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: '#1a1a1a', borderRadius: 12, borderWidth: 1, borderColor: '#2a2a2a' }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' }}
                 >
                   <Avatar initials={u.initials} avatarUrl={u.avatar_url} size={40} />
                   <View style={{ flex: 1, gap: 4 }}>
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#f0f0f0' }}>{u.display_name}</Text>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#F0F2F6' }}>{u.display_name}</Text>
                     <Text style={{ fontSize: 12, color: '#555555' }}>@{u.username}</Text>
                     <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
                       {u.sport_tags.slice(0, 3).map((t, i) => <SportPill key={i} tag={t} />)}
@@ -1622,12 +1668,12 @@ export default function CommunityScreen() {
                       onPress={(e) => { e.stopPropagation(); handleSearchFollow(u.id, isFollowing); }}
                       style={{
                         borderRadius: 16, paddingHorizontal: 14, paddingVertical: 6,
-                        backgroundColor: isFollowing ? 'transparent' : '#e0e0e0',
+                        backgroundColor: isFollowing ? 'transparent' : '#F0F2F6',
                         borderWidth: isFollowing ? 1 : 0,
                         borderColor: '#555555',
                       }}
                     >
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: isFollowing ? '#888888' : '#0a0a0a' }}>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: isFollowing ? '#888888' : '#141820' }}>
                         {isFollowing ? 'Following' : 'Follow'}
                       </Text>
                     </TouchableOpacity>
@@ -1648,52 +1694,45 @@ export default function CommunityScreen() {
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
-      {/* Top header */}
+      <AmbientBackdrop />
+      {/* Top header — Geist title left, DM / search / + accent button right */}
       <View style={s.header}>
-        <Text style={s.headerTitle}>COMMUNITY</Text>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <TouchableOpacity onPress={() => router.push('/checkin' as any)} style={s.headerBtn}>
-            <Ionicons name="camera-outline" size={22} color="#f0f0f0" />
+        <Text style={s.headerTitle}>Community</Text>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <CommunityDmIcon />
+          <TouchableOpacity onPress={() => setShowSearch(true)} style={s.headerBtn} activeOpacity={0.8}>
+            <Ionicons name="search" size={18} color={T.text.body} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setCreateMenuVisible(true)} style={s.headerBtn}>
-            <Ionicons name="add" size={22} color="#f0f0f0" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowSearch(true)} style={s.headerBtn}>
-            <Ionicons name="people-outline" size={22} color="#f0f0f0" />
+          <TouchableOpacity onPress={() => setCreateMenuVisible(true)} style={s.headerPlus} activeOpacity={0.85}>
+            <Ionicons name="add" size={22} color={T.accentInk} />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Search bar */}
-      <TouchableOpacity
-        onPress={() => setSearchVisible(true)}
-        style={{
-          flexDirection: 'row', alignItems: 'center',
-          backgroundColor: '#161616', borderRadius: 12,
-          paddingHorizontal: 14, paddingVertical: 11,
-          marginHorizontal: 16, marginBottom: 4, marginTop: 10,
-          borderWidth: 1, borderColor: '#222',
-          gap: 10,
-        }}
-        activeOpacity={0.7}
-      >
-        <Ionicons name="search" size={16} color="#555" />
-        <Text style={{ color: '#555', fontSize: 14 }}>Search athletes, posts, clubs...</Text>
-      </TouchableOpacity>
-
-      {/* Tab pills */}
-      <View style={s.tabRow}>
-        {(['feed', 'clubs', 'leaderboard'] as const).map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            onPress={() => setActiveTab(tab)}
-            style={[s.tabPill, activeTab === tab && s.tabPillActive]}
-          >
-            <Text style={[s.tabPillText, activeTab === tab && s.tabPillTextActive]}>
-              {tab.toUpperCase()}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      {/* Filter chips */}
+      <View style={s.filterRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+        >
+          {(['feed', 'clubs', 'leaderboard'] as const).map((tab) => {
+            const label = tab === 'feed' ? 'following' : tab;
+            const isActive = activeTab === tab;
+            return (
+              <TouchableOpacity
+                key={tab}
+                onPress={() => setActiveTab(tab)}
+                style={[s.filterChip, isActive && s.filterChipActive]}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.filterChipText, isActive && s.filterChipTextActive]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* Content */}
@@ -1716,7 +1755,7 @@ export default function CommunityScreen() {
       {/* Post action menu */}
       <Modal visible={showMenu} transparent animationType="slide" onRequestClose={() => setShowMenu(false)}>
         <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} onPress={() => setShowMenu(false)} />
-        <View style={{ backgroundColor: '#1a1a1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 32 }}>
+        <View style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 32 }}>
           {menuPost?.user_id === currentUserId ? (
             <>
               <MenuOption label="Edit Caption" icon="pencil-outline" onPress={() => { setEditCaptionPost(menuPost); setEditCaptionText(menuPost?.caption || ''); setShowMenu(false); }} />
@@ -1731,7 +1770,7 @@ export default function CommunityScreen() {
             </>
           )}
           <TouchableOpacity onPress={() => setShowMenu(false)} style={{ padding: 16, alignItems: 'center' }}>
-            <Text style={{ color: '#888', fontSize: 16 }}>Cancel</Text>
+            <Text style={{ color: '#8B95A8', fontSize: 16 }}>Cancel</Text>
           </TouchableOpacity>
         </View>
       </Modal>
@@ -1739,19 +1778,19 @@ export default function CommunityScreen() {
       {/* Edit caption modal */}
       <Modal visible={!!editCaptionPost} transparent animationType="slide" onRequestClose={() => setEditCaptionPost(null)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: '#1a1a1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 32 }}>
-            <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16, marginBottom: 12 }}>Edit Caption</Text>
+          <View style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 32 }}>
+            <Text style={{ color: '#F0F2F6', fontWeight: '600', fontSize: 16, marginBottom: 12 }}>Edit Caption</Text>
             <TextInput
               value={editCaptionText}
               onChangeText={setEditCaptionText}
               multiline
-              style={{ backgroundColor: '#111', color: '#fff', borderRadius: 8, padding: 12, minHeight: 80, fontSize: 15 }}
-              placeholderTextColor="#555"
+              style={{ backgroundColor: '#111', color: '#F0F2F6', borderRadius: 8, padding: 12, minHeight: 80, fontSize: 15 }}
+              placeholderTextColor="#525E72"
               placeholder="Write a caption..."
             />
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
-              <TouchableOpacity onPress={() => setEditCaptionPost(null)} style={{ flex: 1, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#333', borderRadius: 8 }}>
-                <Text style={{ color: '#888' }}>Cancel</Text>
+              <TouchableOpacity onPress={() => setEditCaptionPost(null)} style={{ flex: 1, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', borderRadius: 8 }}>
+                <Text style={{ color: '#8B95A8' }}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={async () => {
@@ -1763,7 +1802,7 @@ export default function CommunityScreen() {
                 }}
                 style={{ flex: 1, padding: 12, alignItems: 'center', backgroundColor: '#5b9bd5', borderRadius: 8 }}
               >
-                <Text style={{ color: '#fff', fontWeight: '600' }}>Save</Text>
+                <Text style={{ color: '#F0F2F6', fontWeight: '600' }}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1796,32 +1835,32 @@ export default function CommunityScreen() {
             activeOpacity={1}
             onPress={() => setCreateMenuVisible(false)}
           >
-            <View style={{ backgroundColor: '#161616', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 16, gap: 8, paddingBottom: insets.bottom + 16 }}>
+            <View style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 16, gap: 8, paddingBottom: insets.bottom + 16 }}>
               <TouchableOpacity
                 onPress={() => { setCreateMenuVisible(false); setTimeout(() => setPostCreatorVisible(true), 300); }}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: '#2a2a2a', borderRadius: 14 }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 14 }}
               >
-                <Ionicons name="images-outline" size={22} color="#f0f0f0" />
+                <Ionicons name="images-outline" size={22} color="#F0F2F6" />
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#f0f0f0' }}>New Post</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#F0F2F6' }}>New Post</Text>
                   <Text style={{ fontSize: 12, color: '#888888', marginTop: 2 }}>Share a workout, insight, or photo</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color="#555555" />
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => { setCreateMenuVisible(false); setTimeout(() => setStoryCreatorVisible(true), 300); }}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: '#2a2a2a', borderRadius: 14 }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 14 }}
               >
-                <Ionicons name="camera-outline" size={22} color="#f0f0f0" />
+                <Ionicons name="camera-outline" size={22} color="#F0F2F6" />
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#f0f0f0' }}>Add Story</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#F0F2F6' }}>Add Story</Text>
                   <Text style={{ fontSize: 12, color: '#888888', marginTop: 2 }}>Share a moment — disappears in 24h</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color="#555555" />
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => setCreateMenuVisible(false)}
-                style={{ padding: 14, alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#2a2a2a', marginTop: 4 }}
+                style={{ padding: 14, alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', marginTop: 4 }}
               >
                 <Text style={{ fontSize: 15, color: '#888888' }}>Cancel</Text>
               </TouchableOpacity>
@@ -1868,65 +1907,81 @@ export default function CommunityScreen() {
 
 function createStyles(t: ThemeColors) {
   return StyleSheet.create({
+    // Transparent — AmbientBackdrop paints the bg.
     container: {
       flex: 1,
-      backgroundColor: t.bg.primary,
+      backgroundColor: 'transparent',
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-      borderBottomWidth: 1,
-      borderBottomColor: t.border,
+      paddingHorizontal: 20,
+      paddingTop: 12,
+      paddingBottom: 14,
     },
     headerTitle: {
-      fontSize: 17,
-      fontWeight: '800',
+      fontSize: 28,
       color: t.text.primary,
-      letterSpacing: 1.2,
+      fontFamily: TY.sans.semibold,
+      letterSpacing: -0.5,
     },
     headerBtn: {
-      width: 36,
-      height: 36,
-      borderRadius: 10,
-      backgroundColor: t.bg.elevated,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: t.glass.pill,
       borderWidth: 1,
-      borderColor: t.border,
+      borderColor: t.glass.border,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    tabRow: {
-      flexDirection: 'row',
-      borderBottomWidth: 1,
-      borderBottomColor: t.border,
-    },
-    tabPill: {
-      flex: 1,
-      paddingVertical: 13,
+    headerPlus: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: t.accent,
       alignItems: 'center',
-      borderBottomWidth: 2,
-      borderBottomColor: 'transparent',
+      justifyContent: 'center',
     },
-    tabPillActive: {
-      borderBottomColor: t.text.primary,
+    // Filter chips row
+    filterRow: {
+      paddingBottom: 14,
     },
-    tabPillText: {
-      fontSize: 12,
-      letterSpacing: 0.8,
-      color: t.text.muted,
-      fontWeight: '600',
+    filterChip: {
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: R.pill,
+      backgroundColor: t.glass.pill,
+      borderWidth: 1,
+      borderColor: t.glass.border,
     },
-    tabPillTextActive: {
-      color: t.text.primary,
+    filterChipActive: {
+      backgroundColor: t.accent,
+      borderColor: t.accent,
     },
+    filterChipText: {
+      fontSize: 13,
+      color: t.text.secondary,
+      fontFamily: TY.sans.medium,
+      letterSpacing: -0.1,
+    },
+    filterChipTextActive: {
+      color: t.accentInk,
+      fontFamily: TY.sans.semibold,
+    },
+    // Legacy keys kept so unchanged call sites don't error.
+    tabRow: { flexDirection: 'row', paddingBottom: 10 },
+    tabPill: { flex: 1, paddingVertical: 13, alignItems: 'center' },
+    tabPillActive: {},
+    tabPillText: { fontSize: 12, color: t.text.muted, fontFamily: TY.mono.medium, letterSpacing: 1.2 },
+    tabPillTextActive: { color: t.text.primary },
     sectionLabel: {
       fontSize: 11,
-      color: t.text.muted,
-      letterSpacing: 1.2,
+      color: t.text.secondary,
+      letterSpacing: 1.8,
       textTransform: 'uppercase',
-      fontWeight: '700',
+      fontFamily: TY.mono.medium,
     },
   });
 }

@@ -1,45 +1,207 @@
-// ORYX Design System — Strict monochromatic dark palette
-// NO colors except success and danger. No purple, blue, green, gradients, or warm tones.
+// ORYX Design System — dark-first, soft-glass cards, electric lime accent.
+// Canonical token source. constants/theme.ts re-exports these for legacy imports.
+//
+// Spec alignment notes (Home screen redesign, 2026-04):
+// - App bg is near-black with a subtle radial glow behind the readiness ring.
+// - "Glass" cards here are LIGHT translucent washes over the dark bg
+//   (rgba(255,255,255,0.03)), NOT dark tinted glass. Paired with a thin
+//   rgba(255,255,255,0.07) border and a subtle top-edge inner highlight.
+// - Accent is a single lime/chartreuse. Used sparingly.
 
 export interface ThemeColors {
   bg: {
-    primary: string;   // #0a0a0a — app background
-    secondary: string; // #111111 — section bg
-    elevated: string;  // #1a1a1a — cards, inputs, modals
-    subtle: string;    // #222222 — hover states, dividers
+    primary: string;    // app background
+    tint: string;       // subtle tint variant
+    secondary: string;  // legacy alias
+    elevated: string;   // opaque card fallback (when blur unavailable)
+    subtle: string;     // dividers / bars
+    ringHalo: string;   // lighter centre for the radial gradient behind the ring
   };
-  border: string;      // #2a2a2a
+
+  // Glass surfaces — translucent washes. Layer over bg.
+  glass: {
+    card: string;       // default card fill
+    cardHi: string;     // elevated variant (ORYX Intelligence, focused)
+    cardLo: string;     // recessed
+    chrome: string;     // nav / top bars
+    pill: string;       // chip / tag backgrounds
+    border: string;     // 1px card border
+    highlight: string;  // top-edge inner highlight line
+    rim: string;        // stronger rim
+    shade: string;      // bottom shade
+  };
+
+  border: string;       // alias of glass.border for legacy code
+  hairline: string;
+  divider: string;
+
   text: {
-    primary: string;   // #f0f0f0
-    secondary: string; // #888888
-    muted: string;     // #555555
+    primary: string;    // headlines, large numbers
+    body: string;       // body copy (~0.75 alpha on white)
+    secondary: string;  // labels, dim (~0.55 alpha)
+    muted: string;      // very dim (~0.35 alpha)
+    label: string;      // section labels (0.5 alpha)
   };
-  accent: string;      // #e0e0e0 — use sparingly for focus/interaction
+
+  accent: string;       // single brand accent — lime
+  accentDim: string;
+  accentInk: string;    // text colour on accent backgrounds
+
+  readiness: {
+    high: string;
+    mid: string;
+    low: string;
+  };
+
+  signal: {
+    load: string;       // electric blue for weekly load, complements lime
+    ai: string;         // lime echo for AI treatments
+  };
+
   status: {
-    success: string;   // #27ae60
-    danger: string;    // #c0392b
+    success: string;
+    warn: string;
+    danger: string;
   };
 }
 
 export const theme: ThemeColors = {
+  // Design v2 — deep slate / vivid glass. App bg is NOT pitch-black; it's a
+  // warm blue-charcoal so the radial ambient gradients read properly.
   bg: {
-    primary:   '#0a0a0a',
-    secondary: '#111111',
-    elevated:  '#1a1a1a',
-    subtle:    '#222222',
+    primary:  '#141820',
+    tint:     '#1A1F2A',
+    secondary:'#1A1F2A',
+    elevated: '#1C222E',
+    subtle:   'rgba(255,255,255,0.06)',
+    ringHalo: '#1A1F2A',
   },
-  border: '#2a2a2a',
+
+  // Tinted glass surfaces — 72%+ opacity so they feel like solid panels,
+  // not a barely-there wash. This is the biggest jump from v1.
+  glass: {
+    card:      'rgba(28,34,46,0.72)',
+    cardHi:    'rgba(36,44,60,0.80)',
+    cardLo:    'rgba(20,26,38,0.65)',
+    chrome:    'rgba(18,22,32,0.70)',
+    pill:      'rgba(44,54,72,0.85)',
+    border:    'rgba(255,255,255,0.10)',
+    highlight: 'rgba(255,255,255,0.12)',
+    rim:       'rgba(255,255,255,0.18)',
+    shade:     'rgba(0,0,0,0.40)',
+  },
+
+  border:   'rgba(255,255,255,0.10)',
+  hairline: 'rgba(255,255,255,0.09)',
+  divider:  'rgba(255,255,255,0.12)',
+
   text: {
-    primary:   '#f0f0f0',
-    secondary: '#888888',
-    muted:     '#555555',
+    primary:   '#F0F2F6',
+    body:      '#CED4E0',
+    secondary: '#8B95A8',
+    muted:     '#525E72',
+    label:     '#8B95A8',
   },
-  accent: '#e0e0e0',
+
+  accent:    '#DEFF47',
+  accentDim: 'rgba(222,255,71,0.20)',
+  accentInk: '#0E1400',
+
+  readiness: {
+    high: '#A8EF3A',
+    mid:  '#FFD04A',
+    low:  '#FF6B4A',
+  },
+
+  signal: {
+    load: '#5BA8FF',
+    ai:   '#DEFF47',
+  },
+
   status: {
-    success: '#27ae60',
-    danger:  '#c0392b',
+    success: '#A8EF3A',
+    warn:    '#FFD04A',
+    danger:  '#FF6B4A',
   },
 };
 
-// Keep ThemeColors exported as the interface name for backward compat with imports
+// ── Typography ──────────────────────────────────────────────────────────────
+// Geist = UI / headlines / body. JetBrains Mono = labels, tickers, timestamps,
+// and large metric numbers. Font family names below MUST match the keys
+// registered in app/_layout.tsx's useFonts() call.
+export const type = {
+  sans: {
+    regular:  'Geist_400Regular',
+    medium:   'Geist_500Medium',
+    semibold: 'Geist_600SemiBold',
+    bold:     'Geist_700Bold',
+  },
+  mono: {
+    regular:  'JetBrainsMono_400Regular',
+    medium:   'JetBrainsMono_500Medium',
+    semibold: 'JetBrainsMono_600SemiBold',
+    bold:     'JetBrainsMono_700Bold',
+  },
+  size: {
+    display:   96,   // hero readiness number
+    displaySm: 72,
+    h1:        28,   // greeting
+    h2:        22,
+    h3:        18,
+    body:      14,
+    small:     12,
+    micro:     10,
+    tick:      11,   // section labels
+  },
+  weight: {
+    regular:  '400' as const,
+    medium:   '500' as const,
+    semibold: '600' as const,
+    bold:     '700' as const,
+  },
+  tracking: {
+    display:  -0.04,
+    tight:    -0.02,
+    normal:    0,
+    label:     2,
+    micro:     1.8,
+  },
+  // Safety net for the hero number — tabular figures so digits don't wobble
+  // between states. Apply to any large numeric display.
+  tabular: { fontVariant: ['tabular-nums'] as ['tabular-nums'] },
+};
+
+// ── Radii ──────────────────────────────────────────────────────────────────
+export const radius = {
+  xs:   8,
+  sm:  12,
+  md:  16,
+  lg:  20,   // default card radius per spec
+  xl:  22,
+  xxl: 28,
+  pill: 999,
+};
+
+// ── Spacing scale ──────────────────────────────────────────────────────────
+export const space = {
+  0: 0,
+  1: 4,
+  2: 8,
+  3: 12,
+  4: 16,
+  5: 20,
+  6: 24,
+  7: 32,
+  8: 40,
+  9: 48,
+  10: 64,
+};
+
+// ── Readiness helper ───────────────────────────────────────────────────────
+export function readinessColor(score: number): string {
+  if (score >= 80) return theme.readiness.high;
+  if (score >= 55) return theme.readiness.mid;
+  return theme.readiness.low;
+}
+
 export type { ThemeColors as default };

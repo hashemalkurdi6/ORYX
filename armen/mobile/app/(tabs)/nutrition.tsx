@@ -52,12 +52,21 @@ import {
   WeeklyCalorieDay,
 } from '@/services/api';
 import { useTheme } from '@/contexts/ThemeContext';
-import { ThemeColors } from '@/services/theme';
+import { ThemeColors, theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
+import { useCountUp } from '@/services/animations';
 import FoodSearchModal from '@/components/FoodSearchModal';
+import GlassCard from '@/components/GlassCard';
+import AmbientBackdrop from '@/components/AmbientBackdrop';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - 40;
 const NUTRITION_PAGE_W = CARD_WIDTH - 2; // card borderWidth: 1 on each side
+
+// Mono ticker short-day for the Nutrition header (NUTRITION · TUE).
+function nutritionTicker(): string {
+  return new Date().toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+}
 
 // ── Micronutrient metadata ────────────────────────────────────────────────────
 
@@ -180,12 +189,25 @@ function MacroCircle({ label, value, target, unit, color, size = 76 }: MacroCirc
 }
 
 // ── Progress Bar ──────────────────────────────────────────────────────────────
-
-function ProgressBar({ value, color }: { value: number; color: string }) {
+// Multicolor gradient fill (blue → green → lime) — matches the Home strain
+// bar so every progress visualisation in the app reads the same.
+function ProgressBar({ value, color }: { value: number; color?: string }) {
   const { theme } = useTheme();
+  const pct = Math.round(Math.min(value, 1) * 100);
   return (
-    <View style={{ flex: 1, height: 5, backgroundColor: theme.border, borderRadius: 3, overflow: 'hidden' }}>
-      <View style={{ width: `${Math.round(Math.min(value, 1) * 100)}%` as any, height: '100%', backgroundColor: color, borderRadius: 3 }} />
+    <View style={{ flex: 1, height: 5, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
+      {color ? (
+        // Explicit override — keep a solid fill when caller provides one.
+        <View style={{ width: `${pct}%` as any, height: '100%', backgroundColor: color, borderRadius: 3 }} />
+      ) : (
+        <LinearGradient
+          colors={[theme.signal.load, theme.readiness.high, theme.accent]}
+          locations={[0, 0.55, 1]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={{ width: `${pct}%` as any, height: '100%', borderRadius: 3 }}
+        />
+      )}
     </View>
   );
 }
@@ -249,62 +271,83 @@ function CalorieMacroCard({
 
   const RING_SIZE = 140;
   const STROKE_W = 14;
-  const radius = (RING_SIZE - STROKE_W) / 2;
-  const circumference = 2 * Math.PI * radius;
+  const ringRadius = (RING_SIZE - STROKE_W) / 2;
+  const circumference = 2 * Math.PI * ringRadius;
   const cx = RING_SIZE / 2;
   const cy = RING_SIZE / 2;
 
   const pct = calorieTarget > 0 ? totalCalories / calorieTarget : 0;
   const fillPct = Math.min(pct, 1);
-  const strokeDashoffset = circumference * (1 - fillPct);
 
-  const ringColor = pct > 1 ? '#c0392b' : pct >= 0.9 ? '#e67e22' : '#e0e0e0';
+  const ringColor = pct > 1 ? theme.readiness.low
+    : pct >= 0.9 ? theme.readiness.mid
+    : theme.accent;
   const isOver = totalCalories > calorieTarget;
   const diff = Math.abs(Math.round(totalCalories - calorieTarget));
 
+  // Animated count-up for the big number + the arc fill.
+  const displayCalories = useCountUp(Math.round(totalCalories), 1000, 150);
+  const displayPct = useCountUp(Math.round(fillPct * 100), 1000, 150);
+  const animatedFill = (circumference * Math.min(displayPct, Math.round(fillPct * 100))) / 100;
+
   return (
-    <View style={{ backgroundColor: '#1a1a1a', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#2a2a2a', marginBottom: 16 }}>
+    <View style={{ backgroundColor: T.glass.card, borderRadius: R.lg, padding: SP[5], borderWidth: 1, borderColor: T.glass.border, marginBottom: SP[4] }}>
       {/* Calorie ring */}
       <View style={{ alignItems: 'center', paddingTop: 4 }}>
         <View style={{ width: RING_SIZE, height: RING_SIZE }}>
           <Svg width={RING_SIZE} height={RING_SIZE}>
             {/* Track */}
             <Circle
-              cx={cx} cy={cy} r={radius}
-              stroke="#2a2a2a" strokeWidth={STROKE_W} fill="none"
+              cx={cx} cy={cy} r={ringRadius}
+              stroke="rgba(255,255,255,0.06)" strokeWidth={STROKE_W} fill="none"
             />
-            {/* Fill */}
+            {/* Fill — dasharray grows as count-up progresses */}
             <Circle
-              cx={cx} cy={cy} r={radius}
+              cx={cx} cy={cy} r={ringRadius}
               stroke={ringColor} strokeWidth={STROKE_W} fill="none"
-              strokeDasharray={`${circumference} ${circumference}`}
-              strokeDashoffset={strokeDashoffset}
+              strokeDasharray={`${animatedFill} ${circumference}`}
               strokeLinecap="round"
               transform={`rotate(-90 ${cx} ${cy})`}
             />
           </Svg>
           {/* Center text */}
           <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 28, fontWeight: '700', color: '#fff', lineHeight: 32 }}>
-              {Math.round(totalCalories)}
+            <Text style={{
+              fontSize: 28, color: T.text.primary, lineHeight: 32,
+              fontFamily: TY.sans.semibold, letterSpacing: -0.8,
+              ...TY.tabular,
+            }}>
+              {displayCalories}
             </Text>
-            <Text style={{ fontSize: 12, color: theme.text.muted, marginTop: 1 }}>kcal</Text>
-            <Text style={{ fontSize: 11, color: isOver ? '#c0392b' : theme.text.muted, marginTop: 3 }}>
-              {isOver ? `${diff}kcal over` : `${diff}kcal left`}
+            <Text style={{
+              fontSize: 10, color: T.text.secondary, marginTop: 1,
+              fontFamily: TY.mono.medium, letterSpacing: 1.4, textTransform: 'uppercase',
+            }}>kcal</Text>
+            <Text style={{
+              fontSize: 11, color: isOver ? theme.readiness.low : theme.text.muted, marginTop: 3,
+              fontFamily: TY.mono.regular, letterSpacing: 0.3,
+            }}>
+              {isOver ? `${diff} over` : `${diff} left`}
             </Text>
           </View>
         </View>
         {/* Below ring */}
-        <Text style={{ fontSize: 12, color: theme.text.muted, marginTop: 10 }}>
-          Daily goal: {calorieTarget}kcal
+        <Text style={{
+          fontSize: 11, color: T.text.muted, marginTop: 12,
+          fontFamily: TY.mono.medium, letterSpacing: 1.2, textTransform: 'uppercase',
+        }}>
+          Daily goal · {calorieTarget} kcal
         </Text>
         <View style={{
-          marginTop: 6, paddingHorizontal: 10, paddingVertical: 3,
-          borderRadius: 10, backgroundColor: `${ringColor}22`,
+          marginTop: 6, paddingHorizontal: 10, paddingVertical: 4,
+          borderRadius: R.pill, backgroundColor: `${ringColor}22`,
           borderWidth: 1, borderColor: `${ringColor}55`,
         }}>
-          <Text style={{ fontSize: 11, fontWeight: '700', color: ringColor }}>
-            {Math.round(fillPct * 100)}%
+          <Text style={{
+            fontSize: 11, color: ringColor,
+            fontFamily: TY.mono.semibold, letterSpacing: 0.5,
+          }}>
+            {displayPct}%
           </Text>
         </View>
       </View>
@@ -332,7 +375,7 @@ function WeeklyCalorieTrend({ days }: WeeklyCalorieTrendProps) {
   const maxCal = target * 1.2;
 
   return (
-    <View style={{ backgroundColor: '#1a1a1a', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#2a2a2a', marginBottom: 16 }}>
+    <View style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', marginBottom: 16 }}>
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <Text style={{ fontSize: 10, fontWeight: '600', color: theme.text.muted, textTransform: 'uppercase', letterSpacing: 1 }}>
@@ -361,7 +404,7 @@ function WeeklyCalorieTrend({ days }: WeeklyCalorieTrendProps) {
               ? Math.max(3, Math.round((d.calories_logged / maxCal) * CHART_H))
               : 0;
             const ratio = target > 0 ? d.calories_logged / target : 0;
-            const barColor = d.calories_logged === 0 ? '#2a2a2a'
+            const barColor = d.calories_logged === 0 ? 'rgba(255,255,255,0.10)'
               : ratio > 1 ? '#e67e22'
               : ratio >= 0.9 ? '#e0e0e0'
               : '#555';
@@ -904,6 +947,7 @@ export default function NutritionScreen() {
 
   return (
     <>
+      <AmbientBackdrop />
       <ScrollView
         style={s.container}
         contentContainerStyle={s.contentContainer}
@@ -916,25 +960,30 @@ export default function NutritionScreen() {
           />
         }
       >
-        {/* Header */}
+        {/* Header — NUTRITION · DAY ticker + Intake title + Scan Food pill */}
         <SafeAreaView edges={['top']} style={s.safeHeader}>
           <View style={s.headerRow}>
             <View>
-              <Text style={s.pageTitle}>Nutrition</Text>
-              <Text style={s.pageSubtitle}>{todayDisplayDate()}</Text>
+              <Text style={s.pageTicker}>NUTRITION · {nutritionTicker()}</Text>
+              <Text style={s.pageTitle}>Intake</Text>
             </View>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
               {surveyComplete && (
                 <TouchableOpacity
                   style={s.headerIconBtn}
                   onPress={() => router.push('/nutrition-survey' as any)}
                   activeOpacity={0.85}
                 >
-                  <Ionicons name="settings-outline" size={18} color={theme.text.secondary} />
+                  <Ionicons name="settings-outline" size={16} color={theme.text.secondary} />
                 </TouchableOpacity>
               )}
-              <TouchableOpacity style={s.addBtn} onPress={() => setShowFoodSearchModal(true)} activeOpacity={0.85}>
-                <Ionicons name="add" size={22} color={theme.bg.primary} />
+              <TouchableOpacity
+                style={s.scanFoodPill}
+                onPress={handleScanPhoto}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="scan" size={16} color={theme.accentInk} />
+                <Text style={s.scanFoodPillText}>Scan food</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1011,7 +1060,7 @@ export default function NutritionScreen() {
                         </View>
                         <View style={s.microBarGroup}>
                           {hasData
-                            ? <ProgressBar value={barValue} color={theme.status.success} />
+                            ? <ProgressBar value={barValue} />
                             : <View style={{ flex: 1, height: 5, backgroundColor: theme.border, borderRadius: 3, opacity: 0.4 }} />
                           }
                           <Text style={[s.microValue, !hasData && { color: theme.text.muted }]} numberOfLines={1}>
@@ -1242,12 +1291,18 @@ export default function NutritionScreen() {
             </View>
           )}
 
-          {/* Progress bar */}
-          <View style={{ height: 5, backgroundColor: theme.border, borderRadius: 3, overflow: 'hidden', marginBottom: 6 }}>
-            <View style={{
-              width: `${Math.round(Math.min(waterPct, 1) * 100)}%` as any,
-              height: '100%', backgroundColor: waterColor, borderRadius: 3,
-            }} />
+          {/* Progress bar — multicolor gradient like the Home strain bar */}
+          <View style={{ height: 5, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden', marginBottom: 6 }}>
+            <LinearGradient
+              colors={[theme.signal.load, theme.readiness.high, theme.accent]}
+              locations={[0, 0.55, 1]}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={{
+                width: `${Math.round(Math.min(waterPct, 1) * 100)}%` as any,
+                height: '100%', borderRadius: 3,
+              }}
+            />
           </View>
 
           {/* Recommended note if target has been overridden */}
@@ -1274,7 +1329,7 @@ export default function NutritionScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
           >
-            <View style={{ backgroundColor: '#1a1a1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40, borderTopWidth: 1, borderTopColor: '#2a2a2a' }}>
+            <View style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.10)' }}>
               {/* Sheet header */}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
                 <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text.primary }}>Water Settings</Text>
@@ -1466,7 +1521,7 @@ export default function NutritionScreen() {
             </TouchableOpacity>
           </View>
         ) : mealPlan ? (
-          <>
+          <View style={s.mealPlanGlass}>
             {/* Compact Meal Plan Header — tappable to collapse */}
             <TouchableOpacity
               style={s.mpRow}
@@ -1674,7 +1729,7 @@ export default function NutritionScreen() {
 
             <View style={{ height: 4 }} />
             </>}
-          </>
+          </View>
         ) : null}
 
         {/* ── Weekly Nutrition Summary ── */}
@@ -1988,8 +2043,8 @@ function createStyles(t: ThemeColors) {
 
     // Survey prompt card
     surveyPromptCard: {
-      backgroundColor: '#1a1a1a', borderRadius: 20, padding: 20,
-      borderWidth: 1, borderColor: '#2a2a2a', marginBottom: 20, gap: 16,
+      backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 20, padding: 20,
+      borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', marginBottom: 20, gap: 16,
     },
     surveyPromptLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
     surveyIconWrap: {
@@ -2011,8 +2066,8 @@ function createStyles(t: ThemeColors) {
 
     // Meal plan header
     mealPlanHeader: {
-      backgroundColor: '#1a1a1a', borderRadius: 20, padding: 20,
-      borderWidth: 1, borderColor: '#2a2a2a', marginBottom: 16,
+      backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 20, padding: 20,
+      borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', marginBottom: 16,
     },
     mealPlanHeaderTop: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8,
@@ -2084,9 +2139,15 @@ function createStyles(t: ThemeColors) {
       paddingHorizontal: 16, paddingVertical: 14,
     },
     groceryHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    groceryHeaderTitle: { fontSize: 14, fontWeight: '600', color: t.text.primary },
+    groceryHeaderTitle: {
+      fontSize: 14, color: t.text.primary,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.2,
+    },
     groceryHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    groceryHeaderCount: { fontSize: 13, color: t.text.muted },
+    groceryHeaderCount: {
+      fontSize: 12, color: t.text.muted,
+      fontFamily: TY.mono.regular, letterSpacing: 0.4,
+    },
     groceryProgress: {
       height: 3, backgroundColor: t.border, marginHorizontal: 16, borderRadius: 2, marginBottom: 4,
     },
@@ -2101,8 +2162,14 @@ function createStyles(t: ThemeColors) {
     },
     groceryRowChecked: { opacity: 0.55 },
     groceryItemBody: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-    groceryItem: { fontSize: 14, color: t.text.primary, flex: 1 },
-    groceryItemQty: { fontSize: 13, color: t.text.muted, textAlign: 'right' },
+    groceryItem: {
+      fontSize: 14, color: t.text.primary, flex: 1,
+      fontFamily: TY.sans.regular,
+    },
+    groceryItemQty: {
+      fontSize: 13, color: t.text.muted, textAlign: 'right',
+      fontFamily: TY.mono.regular, letterSpacing: 0.3,
+    },
     groceryItemDone: { color: t.text.muted, textDecorationLine: 'line-through' },
 
     // Saved meals
@@ -2110,38 +2177,60 @@ function createStyles(t: ThemeColors) {
       backgroundColor: t.bg.elevated, borderRadius: 14, padding: 14,
       borderWidth: 1, borderColor: t.border, flexDirection: 'row', alignItems: 'center',
     },
-    savedMealName: { fontSize: 15, fontWeight: '600', color: t.text.primary },
-    savedMealMacro: { fontSize: 12, color: t.text.secondary },
+    savedMealName: {
+      fontSize: 15, color: t.text.primary,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.2,
+    },
+    savedMealMacro: {
+      fontSize: 12, color: t.text.secondary,
+      fontFamily: TY.mono.regular, letterSpacing: 0.2,
+    },
 
-    container: { flex: 1, backgroundColor: t.bg.primary },
-    contentContainer: { paddingHorizontal: 20, paddingBottom: 40 },
-    safeHeader: { paddingBottom: 20 },
-    headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    pageTitle: { fontSize: 28, fontWeight: '700', color: t.text.primary, marginBottom: 4 },
+    container: { flex: 1, backgroundColor: 'transparent' },
+    contentContainer: { paddingHorizontal: 20, paddingBottom: 120 },
+    safeHeader: { paddingBottom: 14 },
+    headerRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
+    pageTicker: {
+      fontSize: 10, color: t.text.muted, fontFamily: TY.mono.medium,
+      letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4,
+    },
+    pageTitle: {
+      fontSize: 26, fontWeight: '500', color: t.text.primary,
+      fontFamily: TY.sans.medium, letterSpacing: -0.5,
+    },
     pageSubtitle: { fontSize: 14, color: t.text.muted },
     addBtn: {
       width: 40, height: 40, borderRadius: 20,
-      backgroundColor: t.text.primary,
+      backgroundColor: t.accent,
       alignItems: 'center', justifyContent: 'center',
+    },
+    scanFoodPill: {
+      flexDirection: 'row', alignItems: 'center', gap: 6,
+      height: 40, paddingHorizontal: 16, borderRadius: R.pill,
+      backgroundColor: t.accent,
+    },
+    scanFoodPillText: {
+      fontSize: 13, fontWeight: '600', color: t.accentInk,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.2,
     },
 
     // Unified calorie + macro card
     unifiedCard: {
-      backgroundColor: '#1a1a1a', borderRadius: 16, padding: 20,
-      borderWidth: 1, borderColor: '#2a2a2a', marginBottom: 16,
+      backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 16, padding: 20,
+      borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', marginBottom: 16,
     },
 
     // Weekly calorie trend card
     weeklyTrendCard: {
-      backgroundColor: '#1a1a1a', borderRadius: 14, padding: 16,
-      borderWidth: 1, borderColor: '#2a2a2a', marginBottom: 16,
+      backgroundColor: t.glass.card, borderRadius: R.lg, padding: SP[4],
+      borderWidth: 1, borderColor: t.glass.border, marginBottom: SP[4],
     },
 
     // Scan card
     scanCard: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      backgroundColor: t.bg.elevated, borderRadius: 16, padding: 16,
-      borderWidth: 1, borderColor: t.border, marginBottom: 20,
+      backgroundColor: t.glass.card, borderRadius: R.lg, padding: SP[4],
+      borderWidth: 1, borderColor: t.glass.border, marginBottom: SP[5],
     },
     scanCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     scanIconWrap: {
@@ -2149,18 +2238,26 @@ function createStyles(t: ThemeColors) {
       backgroundColor: t.text.primary,
       alignItems: 'center', justifyContent: 'center',
     },
-    scanCardTitle: { fontSize: 15, fontWeight: '600', color: t.text.primary },
-    scanCardSubtitle: { fontSize: 12, color: t.text.muted, marginTop: 1 },
+    scanCardTitle: {
+      fontSize: 15, color: t.text.primary,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.2,
+    },
+    scanCardSubtitle: {
+      fontSize: 12, color: t.text.muted, marginTop: 1,
+      fontFamily: TY.sans.regular,
+    },
 
     sectionLabel: {
-      fontSize: 11, fontWeight: '600', color: t.text.muted,
-      textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12, marginTop: 4,
+      fontSize: 11, color: t.text.secondary,
+      fontFamily: TY.mono.medium, letterSpacing: 1.8,
+      textTransform: 'uppercase', marginBottom: 12, marginTop: 4,
+      paddingHorizontal: 4,
     },
 
     // TODAY'S NUTRITION swipeable card
     nutritionSwipeCard: {
-      backgroundColor: '#1a1a1a', borderRadius: 16,
-      borderWidth: 1, borderColor: '#2a2a2a', marginBottom: 20,
+      backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 16,
+      borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', marginBottom: 20,
       overflow: 'hidden',
     },
     nutritionSwipePage: {
@@ -2179,22 +2276,37 @@ function createStyles(t: ThemeColors) {
 
     // Fibre & Micros
     card: {
-      backgroundColor: t.bg.elevated, borderRadius: 16, padding: 16,
-      borderWidth: 1, borderColor: t.border, marginBottom: 20,
+      backgroundColor: t.glass.card, borderRadius: R.lg, padding: SP[4],
+      borderWidth: 1, borderColor: t.glass.border, marginBottom: SP[5],
     },
     microRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 12 },
     microLabelBlock: { width: 96 },
-    microLabel: { fontSize: 14, color: t.text.primary, fontWeight: '500' },
-    microTarget: { fontSize: 11, color: t.text.muted, marginTop: 1 },
+    microLabel: {
+      fontSize: 14, color: t.text.primary,
+      fontFamily: TY.sans.medium, letterSpacing: -0.2,
+    },
+    microTarget: {
+      fontSize: 11, color: t.text.muted, marginTop: 1,
+      fontFamily: TY.mono.regular, letterSpacing: 0.3,
+    },
     microBarGroup: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
-    microValue: { fontSize: 12, color: t.text.secondary, width: 52, textAlign: 'right' },
+    microValue: {
+      fontSize: 12, color: t.text.secondary, width: 52, textAlign: 'right',
+      fontFamily: TY.mono.regular, letterSpacing: 0.2,
+    },
     microDivider: { height: 1, backgroundColor: t.border },
-    microNote: { fontSize: 11, color: t.text.muted, marginBottom: 10, lineHeight: 16 },
+    microNote: {
+      fontSize: 11, color: t.text.muted, marginBottom: 10, lineHeight: 16,
+      fontFamily: TY.sans.regular,
+    },
     microExpandBtn: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
       paddingTop: 10, marginTop: 4, borderTopWidth: 1, borderTopColor: t.border,
     },
-    microExpandText: { fontSize: 12, color: t.text.muted },
+    microExpandText: {
+      fontSize: 11, color: t.text.secondary,
+      fontFamily: TY.mono.medium, letterSpacing: 1, textTransform: 'uppercase',
+    },
 
     // Meals section
     mealsSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
@@ -2206,23 +2318,35 @@ function createStyles(t: ThemeColors) {
     logMealInlineBtnText: { color: t.bg.primary, fontSize: 13, fontWeight: '700' },
     loadingRow: { paddingVertical: 40, alignItems: 'center' },
     emptyState: { alignItems: 'center', paddingVertical: 48, gap: 8 },
-    emptyTitle: { fontSize: 18, fontWeight: '700', color: t.text.primary, marginTop: 8 },
-    emptySubtitle: { fontSize: 14, color: t.text.muted, textAlign: 'center' },
+    emptyTitle: {
+      fontSize: 18, color: t.text.primary, marginTop: 8,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.3,
+    },
+    emptySubtitle: {
+      fontSize: 14, color: t.text.muted, textAlign: 'center',
+      fontFamily: TY.sans.regular,
+    },
     mealsSection: { gap: 8 },
     mealCard: {
-      backgroundColor: t.bg.elevated, borderRadius: 14, padding: 14,
-      borderWidth: 1, borderColor: t.border,
+      backgroundColor: t.glass.card, borderRadius: R.md, padding: 14,
+      borderWidth: 1, borderColor: t.glass.border,
       flexDirection: 'row', alignItems: 'center',
     },
     mealLeft: { flex: 1, gap: 6 },
     mealNameRow: { flexDirection: 'row', alignItems: 'center' },
-    mealName: { fontSize: 15, fontWeight: '600', color: t.text.primary },
+    mealName: {
+      fontSize: 15, color: t.text.primary,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.2,
+    },
     macroChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
     macroChip: {
       paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
-      backgroundColor: t.bg.secondary, borderWidth: 1, borderColor: t.border,
+      backgroundColor: t.glass.pill, borderWidth: 1, borderColor: t.glass.border,
     },
-    macroChipText: { fontSize: 11, color: t.text.secondary },
+    macroChipText: {
+      fontSize: 11, color: t.text.secondary,
+      fontFamily: TY.mono.regular, letterSpacing: 0.3,
+    },
     deleteBtn: { padding: 10, marginLeft: 4 },
 
     bottomPadding: { height: 24 },
@@ -2311,48 +2435,90 @@ function createStyles(t: ThemeColors) {
 
     // Weekly nutrition summary
     weeklyCard: {
-      backgroundColor: t.bg.elevated, borderRadius: 16,
-      borderWidth: 1, borderColor: t.border, marginBottom: 20, overflow: 'hidden',
+      backgroundColor: t.glass.card, borderRadius: R.lg,
+      borderWidth: 1, borderColor: t.glass.border, marginBottom: SP[5], overflow: 'hidden',
     },
     weeklyGrid: { flexDirection: 'row', flexWrap: 'wrap' },
     weeklyCell: { width: '50%', padding: 16, alignItems: 'center' },
     weeklyCellBorderLeft: { borderLeftWidth: 1, borderLeftColor: t.border },
     weeklyCellBorderTop: { borderTopWidth: 1, borderTopColor: t.border },
-    weeklyCellValue: { fontSize: 22, fontWeight: '700', color: t.text.primary, marginBottom: 4 },
-    weeklyCellLabel: { fontSize: 11, color: t.text.muted, textAlign: 'center' },
+    weeklyCellValue: {
+      fontSize: 22, color: t.text.primary, marginBottom: 4,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.4,
+    },
+    weeklyCellLabel: {
+      fontSize: 10, color: t.text.secondary, textAlign: 'center',
+      fontFamily: TY.mono.medium, letterSpacing: 1.2, textTransform: 'uppercase',
+    },
     weeklyCompare: {
       fontSize: 11, color: t.text.muted, textAlign: 'center',
       paddingVertical: 10, borderTopWidth: 1, borderTopColor: t.border,
+      fontFamily: TY.sans.regular,
     },
 
-    // Compact meal plan
+    // Compact meal plan — wrapped in a glass card to match the rest of the screen.
+    mealPlanGlass: {
+      backgroundColor: t.glass.card,
+      borderWidth: 1, borderColor: t.glass.border,
+      borderRadius: R.lg,
+      padding: SP[4],
+      marginTop: SP[5],
+      marginBottom: SP[3],
+    },
     mpRow: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      marginBottom: 4, marginTop: 24,
+      marginBottom: 4,
     },
-    mpTitle: { fontSize: 16, fontWeight: '700', color: t.text.primary },
-    mpCals: { fontSize: 14, color: t.text.muted },
-    cheatDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#d97706' },
-    cheatDayLine: { fontSize: 12, color: '#d97706', marginBottom: 10, fontStyle: 'italic' },
+    mpTitle: {
+      fontSize: 16, color: t.text.primary,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.3,
+    },
+    mpCals: { fontSize: 14, color: t.text.muted, fontFamily: TY.mono.regular },
+    cheatDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: t.readiness.mid },
+    cheatDayLine: {
+      fontSize: 12, color: t.readiness.mid, marginBottom: 10,
+      fontFamily: TY.sans.regular,
+    },
     mpMealList: { marginBottom: 4 },
     mpMealRow: {
       flexDirection: 'row', alignItems: 'center', gap: 10,
       paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: t.border,
     },
-    mpMealTime: { fontSize: 12, color: t.text.muted, width: 46, flexShrink: 0 },
-    mpMealName: { flex: 1, fontSize: 14, color: t.text.primary, fontWeight: '500' },
-    mpMealCals: { fontSize: 13, color: t.text.muted },
+    mpMealTime: {
+      fontSize: 11, color: t.text.muted, width: 46, flexShrink: 0,
+      fontFamily: TY.mono.medium, letterSpacing: 0.8,
+    },
+    mpMealName: {
+      flex: 1, fontSize: 14, color: t.text.primary,
+      fontFamily: TY.sans.medium, letterSpacing: -0.2,
+    },
+    mpMealCals: {
+      fontSize: 13, color: t.text.muted,
+      fontFamily: TY.mono.regular, letterSpacing: -0.1,
+    },
     mpMealExpanded: {
       paddingVertical: 12, paddingLeft: 56, borderBottomWidth: 1, borderBottomColor: t.border,
     },
-    mpIngredient: { fontSize: 13, color: t.text.secondary, lineHeight: 20 },
-    mpPrepNote: { fontSize: 13, color: t.text.muted, fontStyle: 'italic', lineHeight: 18 },
+    mpIngredient: {
+      fontSize: 13, color: t.text.secondary, lineHeight: 20,
+      fontFamily: TY.sans.regular,
+    },
+    mpPrepNote: {
+      fontSize: 13, color: t.text.muted, lineHeight: 18,
+      fontFamily: TY.sans.regular, fontStyle: 'italic',
+    },
     mpLogBtn: {
-      backgroundColor: t.text.primary, borderRadius: 8,
+      backgroundColor: t.accent, borderRadius: R.xs,
       paddingHorizontal: 14, paddingVertical: 6,
     },
-    mpLogBtnText: { fontSize: 12, fontWeight: '700', color: t.bg.primary },
-    mpNote: { fontSize: 12, color: t.text.muted, fontStyle: 'italic', marginTop: 10, marginBottom: 4, lineHeight: 17 },
+    mpLogBtnText: {
+      fontSize: 12, color: t.accentInk,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.1,
+    },
+    mpNote: {
+      fontSize: 12, color: t.text.muted, marginTop: 10, marginBottom: 4, lineHeight: 17,
+      fontFamily: TY.sans.regular, fontStyle: 'italic',
+    },
     mpTimingDot: { width: 7, height: 7, borderRadius: 3.5, marginRight: 2 },
     regenBtn: {
       flexDirection: 'row', alignItems: 'center', gap: 6,
@@ -2376,15 +2542,18 @@ function createStyles(t: ThemeColors) {
     // Ask ORYX chat
     chatCollapsed: {
       flexDirection: 'row', alignItems: 'center', gap: 10,
-      backgroundColor: t.bg.elevated, borderRadius: 14,
+      backgroundColor: t.glass.card, borderRadius: R.md,
       paddingHorizontal: 16, paddingVertical: 14,
-      borderWidth: 1, borderColor: t.border,
+      borderWidth: 1, borderColor: t.glass.border,
       marginBottom: 16,
     },
-    chatCollapsedText: { fontSize: 14, color: t.text.muted, flex: 1 },
+    chatCollapsedText: {
+      fontSize: 14, color: t.text.muted, flex: 1,
+      fontFamily: TY.sans.regular,
+    },
     chatContainer: {
-      backgroundColor: t.bg.elevated, borderRadius: 16,
-      borderWidth: 1, borderColor: t.border,
+      backgroundColor: t.glass.card, borderRadius: R.lg,
+      borderWidth: 1, borderColor: t.glass.border,
       marginBottom: 16, overflow: 'hidden',
     },
     chatHeader: {
@@ -2392,22 +2561,26 @@ function createStyles(t: ThemeColors) {
       paddingHorizontal: 16, paddingVertical: 12,
       borderBottomWidth: 1, borderBottomColor: t.border,
     },
-    chatHeaderTitle: { fontSize: 14, fontWeight: '600', color: t.text.primary },
+    chatHeaderTitle: {
+      fontSize: 14, color: t.text.primary,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.2,
+    },
     chatMessages: { maxHeight: 280, paddingHorizontal: 12 },
     chatEmptyHint: {
       color: t.text.muted, fontSize: 13, textAlign: 'center',
       paddingVertical: 20, lineHeight: 20,
+      fontFamily: TY.sans.regular,
     },
     chatBubble: {
       maxWidth: '80%', borderRadius: 14, paddingHorizontal: 13, paddingVertical: 9,
       marginVertical: 4,
     },
     chatBubbleUser: {
-      backgroundColor: '#2a2a2a', alignSelf: 'flex-end',
+      backgroundColor: 'rgba(255,255,255,0.10)', alignSelf: 'flex-end',
       borderBottomRightRadius: 4,
     },
     chatBubbleAssistant: {
-      backgroundColor: '#1a1a1a', alignSelf: 'flex-start',
+      backgroundColor: 'rgba(28,34,46,0.72)', alignSelf: 'flex-start',
       borderBottomLeftRadius: 4, borderWidth: 1, borderColor: t.border,
     },
     chatBubbleText: { fontSize: 14, color: '#fff', lineHeight: 20 },
@@ -2419,7 +2592,7 @@ function createStyles(t: ThemeColors) {
       flex: 1, backgroundColor: '#111', borderRadius: 20,
       paddingHorizontal: 14, paddingVertical: 9,
       fontSize: 14, color: t.text.primary,
-      borderWidth: 1, borderColor: '#2a2a2a',
+      borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
     },
     chatSendBtn: {
       width: 36, height: 36, borderRadius: 18,

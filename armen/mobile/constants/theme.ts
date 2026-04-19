@@ -1,31 +1,33 @@
-// ORYX — legacy constants, kept for any remaining direct usages.
+// ORYX — legacy constants. Kept so existing direct-imports keep building.
 // Prefer importing from @/services/theme for new code.
 
-export const BG            = '#0a0a0a';
-export const CARD          = '#1a1a1a';
-export const CARD_BORDER   = '#2a2a2a';
-export const CARD_ELEVATED = '#1a1a1a';
+import { theme, radius, space } from '@/services/theme';
 
-export const TEXT_PRIMARY   = '#f0f0f0';
-export const TEXT_SECONDARY = '#888888';
-export const TEXT_MUTED     = '#555555';
+export const BG            = theme.bg.primary;
+export const CARD          = theme.bg.elevated;
+export const CARD_BORDER   = 'rgba(255,255,255,0.08)';
+export const CARD_ELEVATED = theme.bg.elevated;
 
-export const ACCENT = '#e0e0e0';
+export const TEXT_PRIMARY   = theme.text.primary;
+export const TEXT_SECONDARY = theme.text.secondary;
+export const TEXT_MUTED     = theme.text.muted;
 
-export const SUCCESS    = '#27ae60';
-export const DANGER     = '#c0392b';
+export const ACCENT = theme.accent;
 
-// Provider brand colors — do not change
+export const SUCCESS = theme.status.success;
+export const DANGER  = theme.status.danger;
+
+// Provider brand colors — unchanged
 export const STRAVA = '#FC4C02';
 export const WHOOP  = '#FF6B35';
 export const OURA   = '#00B894';
 
-export const RADIUS_LG = 20;
-export const RADIUS_MD = 16;
-export const RADIUS_SM = 10;
-export const RADIUS_XS = 8;
+export const RADIUS_LG = radius.lg;
+export const RADIUS_MD = radius.md;
+export const RADIUS_SM = radius.sm;
+export const RADIUS_XS = radius.xs;
 
-export const SPACE = 8;
+export const SPACE = space[2];
 
 export const Theme = {
   BG, CARD, CARD_BORDER, CARD_ELEVATED,
@@ -37,7 +39,7 @@ export const Theme = {
 } as const;
 
 export function recoveryColor(score: number): string {
-  if (score >= 70) return SUCCESS;
-  if (score >= 40) return '#888888';
-  return DANGER;
+  if (score >= 70) return theme.readiness.high;
+  if (score >= 40) return theme.readiness.mid;
+  return theme.readiness.low;
 }

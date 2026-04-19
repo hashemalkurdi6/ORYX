@@ -36,27 +36,34 @@ import {
   WeightSummary,
 } from '@/services/api';
 import WeightLogSheet from '@/components/WeightLogSheet';
+import GlassCard from '@/components/GlassCard';
+import AmbientBackdrop from '@/components/AmbientBackdrop';
 import { Pedometer } from 'expo-sensors';
+import { LinearGradient } from 'expo-linear-gradient';
 import { fetchLast7DaysHealthData } from '@/services/healthKit';
 import { useTheme } from '@/contexts/ThemeContext';
-import { ThemeColors } from '@/services/theme';
+import { ThemeColors, theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
 
-// ── Palette ───────────────────────────────────────────────────────────────────
-const CLR_GREEN  = '#27ae60';
-const CLR_AMBER  = '#e67e22';
-const CLR_RED    = '#c0392b';
-const CLR_LOAD   = '#e0e0e0';
+// ── Palette (ORYX design tokens) ──────────────────────────────────────────────
+// All colour values route through services/theme so the design system is the
+// single source of truth. Names kept for backward compat with the rest of the
+// file.
+const CLR_GREEN  = T.readiness.high;  // chartreuse-leaning high readiness
+const CLR_AMBER  = T.readiness.mid;
+const CLR_RED    = T.readiness.low;
+const CLR_LOAD   = T.signal.load;     // electric blue for load arcs
+const CLR_ACCENT = T.accent;          // chartreuse brand accent
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
-// ── Ring geometry ─────────────────────────────────────────────────────────────
-const RSIZE   = 140;
-const RCX     = 70;
-const RCY     = 70;
-const OUTER_R = 54;
+// ── Ring geometry (Design v2: 260 outer, dual concentric, inner offset 6px) ──
+const RSIZE   = 260;
+const RCX     = 130;
+const RCY     = 130;
 const OUTER_SW = 12;
-const INNER_R = 36;
-const INNER_SW = 6;
+const OUTER_R = (RSIZE - OUTER_SW) / 2;          // 124
+const INNER_R = OUTER_R - OUTER_SW - 6;           // 106
+const INNER_SW = OUTER_SW * 0.55;                 // ~6.6
 const OUTER_C  = 2 * Math.PI * OUTER_R;
 const INNER_C  = 2 * Math.PI * INNER_R;
 
@@ -81,7 +88,7 @@ function hooperHex(v: number): string {
 
 function acwrHex(status: string): string {
   if (status === 'optimal')       return CLR_GREEN;
-  if (status === 'undertraining') return '#888888';
+  if (status === 'undertraining') return T.text.secondary;
   if (status === 'caution')       return CLR_AMBER;
   return CLR_RED;
 }
@@ -166,6 +173,72 @@ function formatFullDate(): string {
   });
 }
 
+// Mono ticker for the top-of-screen header — e.g. "TUE · APR 19 · WK 04".
+function formatTicker(): string {
+  const d = new Date();
+  const dow = d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+  const mon = d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+  const day = d.getDate();
+  // ISO week number
+  const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = (tmp.getUTCDay() + 6) % 7;
+  tmp.setUTCDate(tmp.getUTCDate() - dayNum + 3);
+  const firstThu = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 4));
+  const wk = 1 + Math.round(((tmp.getTime() - firstThu.getTime()) / 86400000 - 3 + ((firstThu.getUTCDay() + 6) % 7)) / 7);
+  return `${dow} · ${mon} ${day} · WK ${String(wk).padStart(2, '0')}`;
+}
+
+// ── Animation hooks ───────────────────────────────────────────────────────────
+
+/**
+ * Count-up hook — animates a number from 0 to `target` over `duration` ms
+ * with an optional `delay`. Matches the design's `useCountUp` with ease-out-cubic.
+ */
+function useCountUp(target: number, duration = 900, delay = 0): number {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    let raf: number;
+    const t0 = performance.now() + delay;
+    let start = 0;
+    const run = (ts: number) => {
+      if (ts < t0) { raf = requestAnimationFrame(run); return; }
+      if (!start) start = ts;
+      const p = Math.min((ts - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - p, 3);
+      setVal(Math.round(ease * target));
+      if (p < 1) raf = requestAnimationFrame(run);
+    };
+    raf = requestAnimationFrame(run);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration, delay]);
+  return val;
+}
+
+/**
+ * Stagger-entrance wrapper — fades + slides up children by `delay` ms.
+ * Mirrors the design's `oryx-up` keyframe applied with incremental per-card
+ * delays (60ms / 120ms / 180ms / ...).
+ */
+function AnimatedCard({ delay = 0, children, style }: {
+  delay?: number;
+  children: React.ReactNode;
+  style?: any;
+}) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(20)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 380, delay, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 380, delay, useNativeDriver: true }),
+    ]).start();
+  }, []);
+  return (
+    <Animated.View style={[{ opacity, transform: [{ translateY }] }, style]}>
+      {children}
+    </Animated.View>
+  );
+}
+
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 function SkeletonBlock({ width, height, style }: { width: string | number; height: number; style?: object }) {
   const opacity = useRef(new Animated.Value(0.3)).current;
@@ -179,7 +252,7 @@ function SkeletonBlock({ width, height, style }: { width: string | number; heigh
     anim.start();
     return () => anim.stop();
   }, [opacity]);
-  return <Animated.View style={[{ width, height, borderRadius: 6, backgroundColor: '#2a2a2a', opacity }, style]} />;
+  return <Animated.View style={[{ width, height, borderRadius: 6, backgroundColor: T.bg.subtle, opacity }, style]} />;
 }
 
 // ── Trend Arrow ───────────────────────────────────────────────────────────────
@@ -195,7 +268,7 @@ function MiniArc({ pct, color }: { pct: number; color: string }) {
   const off = c * (1 - Math.min(1, Math.max(0, pct)));
   return (
     <Svg width={size} height={size}>
-      <Circle cx={size/2} cy={size/2} r={r} stroke="#2a2a2a" strokeWidth={sw} fill="none" />
+      <Circle cx={size/2} cy={size/2} r={r} stroke={T.bg.subtle} strokeWidth={sw} fill="none" />
       {pct > 0 && (
         <Circle cx={size/2} cy={size/2} r={r} stroke={color} strokeWidth={sw} fill="none"
           strokeDasharray={c} strokeDashoffset={off} strokeLinecap="round"
@@ -206,31 +279,162 @@ function MiniArc({ pct, color }: { pct: number; color: string }) {
 }
 
 // ── Concentric Hero ───────────────────────────────────────────────────────────
+// Dual concentric — outer = readiness (0-100, readiness-spectrum colour),
+// inner = weekly load (0-100, load-blue). Count-up number, animated arc draw,
+// and an in-ring delta chip ("+6% vs 7D") sitting at the bottom of the ring
+// body. Matches Claude Design v2's hero motif 1:1.
 function ConcentricHero({
-  score, color, outerPct, innerPct,
-}: { score: number; color: 'green' | 'amber' | 'red'; outerPct: number; innerPct: number }) {
+  score, color, outerPct, innerPct, delta,
+}: {
+  score: number;
+  color: 'green' | 'amber' | 'red';
+  outerPct: number;
+  innerPct: number;
+  delta?: number | null;
+}) {
   const oHex  = readinessHex(color);
-  const oOff  = OUTER_C * (1 - Math.min(1, Math.max(0, outerPct)));
-  const iOff  = INNER_C * (1 - Math.min(1, Math.max(0, innerPct)));
+  const displayScore = useCountUp(score, 1000, 200);
+  const displayLoad  = useCountUp(Math.round(innerPct * 100), 1000, 400);
+
+  // Draw-in: dasharray grows from 0 to final fill length as numbers count up.
+  const outerFill = (OUTER_C * Math.min(displayScore, score)) / 100;
+  const innerFill = (INNER_C * Math.min(displayLoad, Math.round(innerPct * 100))) / 100;
+  const fontNum  = Math.round(RSIZE * 0.32);          // 83 at 260
+  const fontLbl  = Math.max(10, Math.round(RSIZE * 0.055));
+
   return (
     <View style={{ width: RSIZE, height: RSIZE, alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={RSIZE} height={RSIZE} style={{ position: 'absolute' }}>
-        <Circle cx={RCX} cy={RCY} r={OUTER_R} stroke="#2a2a2a" strokeWidth={OUTER_SW} fill="none" />
-        <Circle cx={RCX} cy={RCY} r={INNER_R} stroke="#2a2a2a" strokeWidth={INNER_SW} fill="none" />
+        {/* Outer track */}
+        <Circle cx={RCX} cy={RCY} r={OUTER_R} stroke="rgba(255,255,255,0.06)" strokeWidth={OUTER_SW} fill="none" />
+        {/* Outer progress — readiness, rounded cap */}
         <Circle cx={RCX} cy={RCY} r={OUTER_R} stroke={oHex} strokeWidth={OUTER_SW} fill="none"
-          strokeDasharray={OUTER_C} strokeDashoffset={oOff} strokeLinecap="round"
+          strokeDasharray={`${outerFill} ${OUTER_C}`} strokeLinecap="round"
           rotation={-90} origin={`${RCX}, ${RCY}`} />
+        {/* Inner track */}
+        <Circle cx={RCX} cy={RCY} r={INNER_R} stroke="rgba(255,255,255,0.05)" strokeWidth={INNER_SW} fill="none" />
+        {/* Inner progress — weekly load */}
         {innerPct > 0 && (
           <Circle cx={RCX} cy={RCY} r={INNER_R} stroke={CLR_LOAD} strokeWidth={INNER_SW} fill="none"
-            strokeDasharray={INNER_C} strokeDashoffset={iOff} strokeLinecap="round"
+            strokeDasharray={`${innerFill} ${INNER_C}`} strokeLinecap="round"
             rotation={-90} origin={`${RCX}, ${RCY}`} />
         )}
       </Svg>
-      {/* Safe inner diameter: inner ring inner edge = (36 - 3) × 2 = 66px. Use 52px for clear margin. */}
-      <View style={{ width: 52, height: 52, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-        <Text style={{ fontSize: 26, fontWeight: '700', color: '#fff', lineHeight: 30 }}>{score}</Text>
-        <Text style={{ fontSize: 7, color: '#888888', textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 1 }}>Readiness</Text>
+
+      {/* Centre: count-up number + READINESS label */}
+      <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{
+          fontSize: fontNum, color: T.text.primary,
+          fontFamily: TY.mono.medium, letterSpacing: -fontNum * 0.04, lineHeight: fontNum * 1.04,
+          ...TY.tabular,
+        }}>{displayScore}</Text>
+        <Text style={{
+          fontSize: fontLbl, color: T.text.secondary, fontFamily: TY.mono.medium,
+          textTransform: 'uppercase', letterSpacing: fontLbl * 0.12, marginTop: 4,
+        }}>Readiness</Text>
       </View>
+
+      {/* Bottom-of-ring delta chip — "+6% vs 7D" */}
+      {typeof delta === 'number' && delta !== 0 ? (
+        <View style={{
+          position: 'absolute', bottom: 18,
+          flexDirection: 'row', alignItems: 'center', gap: 6,
+        }}>
+          <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: oHex }} />
+          <Text style={{
+            fontFamily: TY.mono.medium, fontSize: 11, color: oHex,
+            letterSpacing: 0.9,
+          }}>
+            {delta > 0 ? '+' : ''}{delta}% vs 7D
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// ── Vital Tile (HRV / RHR / SLEEP) ────────────────────────────────────────────
+// Three-up row of small GlassCards under the ring. When a value exists we
+// render label + big number + unit. When it doesn't, we render a soft
+// onboarding nudge ("Connect Apple Health →") instead of a broken "-- ms".
+function VitalTile({
+  label, value, unit, icon,
+}: {
+  label: string;
+  value: number | string | null;
+  unit: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+}) {
+  const hasValue = value != null && value !== '';
+  return (
+    <GlassCard style={{ flex: 1 }} padding={14}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <Text style={{
+          fontFamily: TY.mono.medium, fontSize: 10,
+          color: T.text.label, letterSpacing: 1.8,
+        }}>{label}</Text>
+        <Ionicons name={icon} size={13} color={T.text.muted} />
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+        <Text style={{
+          fontSize: 22, color: hasValue ? T.text.primary : T.text.muted,
+          fontFamily: TY.sans.semibold, letterSpacing: -0.4,
+          ...TY.tabular,
+        }}>{hasValue ? String(value) : '—'}</Text>
+        {hasValue ? (
+          <Text style={{
+            fontFamily: TY.mono.regular, fontSize: 11, color: T.text.muted,
+            letterSpacing: 0.5,
+          }}>{unit}</Text>
+        ) : null}
+      </View>
+    </GlassCard>
+  );
+}
+
+// RingHalo intentionally removed — the coloured bloom was creating a visible
+// tinted shadow ring around the arc. The ring now sits directly on the app bg.
+
+// ── Scan sweep ────────────────────────────────────────────────────────────────
+// Thin 60-wide bright column that translates left→right across the parent
+// every ~4 seconds, mirroring the design's `oryx-scan` keyframe on the
+// ORYX Intelligence card.
+function ScanSweep() {
+  const x = useRef(new Animated.Value(-0.6)).current;
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(x, { toValue: 1.1, duration: 3000, delay: 1000, useNativeDriver: true }),
+        Animated.timing(x, { toValue: -0.6, duration: 0, useNativeDriver: true }),
+        Animated.timing(x, { toValue: -0.6, duration: 1000, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+
+  const translateX = w > 0
+    ? x.interpolate({ inputRange: [-0.6, 1.1], outputRange: [-w * 0.6, w * 1.1] })
+    : 0;
+
+  return (
+    <View
+      onLayout={(e) => setW(e.nativeEvent.layout.width)}
+      pointerEvents="none"
+      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}
+    >
+      <Animated.View style={{
+        position: 'absolute', top: 0, bottom: 0, width: 60,
+        transform: [{ translateX }],
+      }}>
+        <LinearGradient
+          colors={['transparent', 'rgba(222,255,71,0.15)', 'transparent']}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={{ flex: 1 }}
+        />
+      </Animated.View>
     </View>
   );
 }
@@ -460,12 +664,21 @@ export default function HomeScreen() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
+      <AmbientBackdrop />
       <ScrollView
-        style={[s.container, { paddingTop: insets.top }]}
-        contentContainerStyle={s.content}
+        style={s.container}
+        contentContainerStyle={[
+          s.content,
+          {
+            // Respect Dynamic Island / status bar
+            paddingTop: insets.top + SP[2],
+            // Clear the floating glass tab bar (height 64 + bottom inset 16 + safeArea)
+            paddingBottom: insets.bottom + 96,
+          },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#555" colors={[CLR_GREEN]} />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={T.text.muted} colors={[CLR_ACCENT]} />
         }
       >
         {/* Error banner */}
@@ -480,13 +693,17 @@ export default function HomeScreen() {
 
         {/* ─── SECTION 1: HEADER ──────────────────────────────────────────── */}
         <View style={s.header}>
-          <View>
-            <Text style={s.greeting}>{getGreeting()}</Text>
-            <Text style={s.userName}>{displayName}</Text>
-            <Text style={s.dateLabel}>{formatFullDate()}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.greeting}>{formatTicker()}</Text>
+            <Text style={s.userName}>{getGreeting()} {displayName}</Text>
           </View>
-          <View style={s.notifBtn}>
-            <Ionicons name="notifications-outline" size={19} color="#888" />
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={s.notifBtn}>
+              <Ionicons name="notifications-outline" size={16} color={T.text.body} />
+            </View>
+            <View style={[s.notifBtn, { backgroundColor: T.accent, borderColor: 'transparent' }]}>
+              <Ionicons name="sparkles" size={14} color={T.accentInk} />
+            </View>
           </View>
         </View>
 
@@ -548,94 +765,82 @@ export default function HomeScreen() {
             ) : null}
           </View>
         ) : (
-          <View style={s.heroCard}>
+          <AnimatedCard delay={0} style={s.heroContainer}>
             <TouchableOpacity style={s.infoBtn} onPress={() => setShowReadinessInfo(true)} activeOpacity={0.7}>
-              <Ionicons name="information-circle-outline" size={17} color="#555" />
+              <Ionicons name="information-circle-outline" size={17} color={T.text.muted} />
             </TouchableOpacity>
 
-            {/* Ring + callouts */}
-            <View style={s.heroRow}>
+            {/* Centred 260px dual-concentric ring with inline delta chip */}
+            <View style={{ alignItems: 'center', justifyContent: 'center' }}>
               <ConcentricHero
                 score={rScore}
                 color={rColor}
                 outerPct={rScore / 100}
                 innerPct={weeklyLoadPct}
+                delta={dashboard?.readiness_delta_7d ?? null}
               />
-              <View style={s.heroDivider} />
-              <View style={s.heroCallouts}>
-                <View>
-                  <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-                    <Text style={[s.calloutVal, { color: CLR_LOAD }]}>{dashboard?.weekly_load ?? 0}</Text>
-                    <TrendArrow up={weekLoadTrend} />
-                  </View>
-                  <Text style={s.calloutLabel}>WEEKLY LOAD</Text>
-                </View>
-                <View style={s.calloutInnerDivider} />
-                <View>
-                  <Text style={s.calloutVal}>{liveSteps > 0 ? liveSteps.toLocaleString() : '--'}</Text>
-                  <Text style={s.calloutLabel}>STEPS TODAY</Text>
-                </View>
-              </View>
             </View>
-
-            {/* Ring legend */}
-            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 8, marginBottom: 4 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: rHex }} />
-                <Text style={{ fontSize: 10, color: '#666', textTransform: 'uppercase', letterSpacing: 0.8 }}>Readiness</Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: CLR_LOAD }} />
-                <Text style={{ fontSize: 10, color: '#666', textTransform: 'uppercase', letterSpacing: 0.8 }}>Weekly Load</Text>
-              </View>
-            </View>
-
-            {/* Label row */}
-            <View style={s.heroLabelRow}>
-              <Text style={[s.heroLabel, { color: rHex }]}>
-                {(dashboard?.readiness_label ?? '').toUpperCase()}
-              </Text>
-              {dashboard?.data_confidence ? (
-                <View style={s.confidencePill}>
-                  <Text style={s.confidenceText}>{dashboard.data_confidence}</Text>
-                </View>
-              ) : null}
-            </View>
-
-            {dashboard?.readiness_primary_factor ? (
-              <Text style={s.heroFactor} numberOfLines={1} ellipsizeMode="tail">
-                {dashboard.readiness_primary_factor}
-              </Text>
-            ) : null}
-          </View>
+          </AnimatedCard>
         )}
 
-        {/* ─── SECTION 3: STRAIN GAUGE ─────────────────────────────────────── */}
-        {dashLoading ? (
-          <View style={s.strainCard}>
-            <SkeletonBlock width="100%" height={5} />
-          </View>
-        ) : (
-          <View style={s.strainCard}>
+        {/* ─── SECTION 2b: VITALS ROW (HRV / RHR / SLEEP) ─────────────────── */}
+        {!dashLoading ? (() => {
+          const hrv   = dashboard?.hrv_ms ?? null;
+          const rhr   = dashboard?.resting_heart_rate ?? null;
+          const sleep = dashboard?.sleep_hours != null ? Number(dashboard.sleep_hours).toFixed(1) : null;
+          const allMissing = hrv == null && rhr == null && sleep == null;
+          return (
+            <AnimatedCard delay={60}>
+              <View style={s.vitalsRow}>
+                <VitalTile label="HRV"   value={hrv}   unit="ms"  icon="heart-outline" />
+                <VitalTile label="RHR"   value={rhr}   unit="bpm" icon="flash-outline" />
+                <VitalTile label="SLEEP" value={sleep} unit="hr"  icon="moon-outline" />
+              </View>
+              {allMissing ? (
+                <TouchableOpacity style={s.connectHint} activeOpacity={0.7}>
+                  <Text style={s.connectHintText}>Connect Apple Health</Text>
+                  <Ionicons name="arrow-forward" size={12} color={CLR_ACCENT} />
+                </TouchableOpacity>
+              ) : null}
+            </AnimatedCard>
+          );
+        })() : null}
+
+        {/* ─── SECTION 3: STRAIN GAUGE (only when a session has been logged) ── */}
+        {!dashLoading && todaySessionLoad > 0 ? (
+          <GlassCard padding={SP[4]} style={{ marginBottom: SP[3] }}>
             <View style={s.strainHeaderRow}>
               <Text style={s.strainLeftLabel}>TODAY'S LOAD</Text>
-              <Text style={s.strainRightLabel}>
-                {todaySessionLoad > 0 ? `${todaySessionLoad} / ${dailyRecLoad}` : '—'}
-              </Text>
+              <Text style={s.strainRightLabel}>{todaySessionLoad} / {dailyRecLoad}</Text>
             </View>
             <View style={s.strainBarBg}>
-              {todaySessionLoad > 0 ? (
-                <View style={[s.strainBarFill, {
+              <LinearGradient
+                colors={[T.signal.load, T.readiness.high, T.accent]}
+                locations={[0, 0.55, 1]}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={{
+                  height: 6,
                   width: `${Math.min(100, strainPct * 100)}%` as any,
-                  backgroundColor: strainBarColor(strainPct),
-                }]} />
-              ) : null}
+                  borderRadius: R.pill,
+                }}
+              />
+              {/* Target marker */}
+              <View style={{
+                position: 'absolute', top: -2, bottom: -2,
+                left: '100%', width: 2,
+                backgroundColor: T.text.secondary, opacity: 0.4,
+              }}/>
             </View>
-            {todaySessionLoad === 0 ? (
-              <Text style={s.strainEmptyLabel}>No activity logged yet</Text>
-            ) : null}
-          </View>
-        )}
+            {/* Zone ticks (0 / 7 / 14 / 21) — design's strain scale */}
+            <View style={s.strainTicks}>
+              <Text style={s.strainTickText}>0</Text>
+              <Text style={s.strainTickText}>7</Text>
+              <Text style={s.strainTickText}>14</Text>
+              <Text style={s.strainTickText}>21</Text>
+            </View>
+          </GlassCard>
+        ) : null}
 
         {/* ─── SECTION 4: QUICK ACTION PILLS ───────────────────────────────── */}
         <ScrollView
@@ -645,24 +850,24 @@ export default function HomeScreen() {
           style={s.pillScroll}
         >
           <TouchableOpacity style={s.pill} onPress={() => router.push('/(tabs)/activity')} activeOpacity={0.75}>
-            <Ionicons name="barbell-outline" size={14} color="#ccc" />
-            <Text style={s.pillLabel}>Log Workout</Text>
+            <Ionicons name="barbell-outline" size={14} color={T.text.body} />
+            <Text style={s.pillLabel}>Workout</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.pill} onPress={() => router.push('/(tabs)/nutrition')} activeOpacity={0.75}>
-            <Ionicons name="restaurant-outline" size={14} color="#ccc" />
-            <Text style={s.pillLabel}>Log Food</Text>
+            <Ionicons name="restaurant-outline" size={14} color={T.text.body} />
+            <Text style={s.pillLabel}>Food</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.pill} onPress={handleLogRestDay} activeOpacity={0.75}>
-            <Ionicons name="bed-outline" size={14} color="#ccc" />
-            <Text style={s.pillLabel}>Rest Day</Text>
+            <Ionicons name="bed-outline" size={14} color={T.text.body} />
+            <Text style={s.pillLabel}>Rest</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[s.pill, !wellnessLogged && s.pillHighlight]}
             onPress={openWellnessModal}
             activeOpacity={0.75}
           >
-            <Ionicons name="happy-outline" size={14} color="#ccc" />
-            <Text style={s.pillLabel}>Check In</Text>
+            <Ionicons name="happy-outline" size={14} color={T.text.body} />
+            <Text style={s.pillLabel}>Check-in</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[s.pill, weightLoggedToday && s.pillDone]}
@@ -672,10 +877,10 @@ export default function HomeScreen() {
             <Ionicons
               name={weightLoggedToday ? 'checkmark' : 'scale-outline'}
               size={14}
-              color={weightLoggedToday ? CLR_GREEN : '#ccc'}
+              color={weightLoggedToday ? CLR_ACCENT : T.text.body}
             />
-            <Text style={[s.pillLabel, weightLoggedToday && { color: CLR_GREEN }]}>
-              {weightLoggedToday ? 'Weight ✓' : 'Log Weight'}
+            <Text style={[s.pillLabel, weightLoggedToday && { color: CLR_ACCENT }]}>
+              Weight
             </Text>
           </TouchableOpacity>
         </ScrollView>
@@ -689,58 +894,79 @@ export default function HomeScreen() {
             <SkeletonBlock width="65%" height={12} />
           </View>
         ) : (
-          <View style={[s.card, s.diagCard, { borderLeftColor: diagnosis ? toneHex(diagnosis.tone) : '#444' }]}>
-            <View style={s.diagHeaderRow}>
-              <View>
-                <Text style={s.sectionLabel}>ORYX INTELLIGENCE</Text>
-                {diagnosis?.generated_at ? (
-                  <Text style={s.diagMeta}>
-                    {diagnosis.cached ? 'Cached · ' : ''}
-                    {new Date(diagnosis.generated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </Text>
-                ) : null}
-              </View>
-              <TouchableOpacity
-                style={[s.refreshBtn, (diagRefreshing || diagnosis?.rate_limited) && s.refreshBtnOff]}
-                onPress={handleRefreshDiagnosis}
-                disabled={diagRefreshing || diagnosis?.rate_limited === true}
-                activeOpacity={0.7}
-              >
-                {diagRefreshing
-                  ? <ActivityIndicator size="small" color="#888" />
-                  : <Ionicons name="refresh-outline" size={15} color={diagnosis?.rate_limited ? '#444' : '#888'} />}
-              </TouchableOpacity>
-            </View>
-
-            <Text style={s.diagTitleLabel}>TODAY'S DIAGNOSIS</Text>
-            <Text style={s.diagText} numberOfLines={diagExpanded ? undefined : 3}>
-              {diagnosis?.diagnosis_text || 'No diagnosis yet. Log activities and wellness to get started.'}
-            </Text>
-            {(diagnosis?.diagnosis_text?.length ?? 0) > 160 ? (
-              <TouchableOpacity onPress={() => setDiagExpanded((p) => !p)}>
-                <Text style={s.readMoreText}>{diagExpanded ? 'Show less' : 'Read more'}</Text>
-              </TouchableOpacity>
-            ) : null}
-
-            {diagnosis?.contributing_factors && diagnosis.contributing_factors.length > 0 ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
-                <View style={{ flexDirection: 'row', gap: 6 }}>
-                  {diagnosis.contributing_factors.map((f, i) => (
-                    <View key={i} style={s.factorChip}>
-                      <Text style={s.factorText} numberOfLines={1}>{f}</Text>
-                    </View>
-                  ))}
+          (() => {
+            // Split "headline. body text..." — first sentence-ending becomes the
+            // bold mono headline; the rest flows as body. Mirrors Claude Design's
+            // ORYX Intelligence layout (headline + supporting body + chips).
+            const full = diagnosis?.diagnosis_text || 'No diagnosis yet. Log activities and wellness to get started.';
+            const m = full.match(/^([^.!?]+[.!?])\s+(.+)$/s);
+            const headline = m ? m[1].trim() : full;
+            const body     = m ? m[2].trim() : '';
+            const stamp    = diagnosis?.generated_at
+              ? new Date(diagnosis.generated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : '';
+            return (
+              <AnimatedCard delay={120}>
+              <GlassCard variant="hi" accentEdge="left" padding={SP[4]} style={{ marginBottom: SP[3] }}>
+                {/* Animated scan sweep — thin bright column travels across every 4s */}
+                <ScanSweep />
+                {/* Header: lime sigil + label, timestamp on right */}
+                <View style={s.diagHeaderRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="sparkles" size={12} color={CLR_ACCENT} />
+                    <Text style={s.diagTitleLabel}>ORYX INTELLIGENCE</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    {stamp ? <Text style={s.diagStamp}>{stamp}</Text> : null}
+                    <TouchableOpacity
+                      style={[s.refreshBtn, (diagRefreshing || diagnosis?.rate_limited) && s.refreshBtnOff]}
+                      onPress={handleRefreshDiagnosis}
+                      disabled={diagRefreshing || diagnosis?.rate_limited === true}
+                      activeOpacity={0.7}
+                    >
+                      {diagRefreshing
+                        ? <ActivityIndicator size="small" color={T.text.muted} />
+                        : <Ionicons name="refresh-outline" size={14} color={diagnosis?.rate_limited ? T.text.muted : T.text.secondary} />}
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </ScrollView>
-            ) : null}
 
-            {diagnosis?.recommendation ? (
-              <View style={s.recBox}>
-                <Ionicons name="bulb-outline" size={12} color={CLR_AMBER} style={{ marginRight: 6, marginTop: 1 }} />
-                <Text style={s.recText}>{diagnosis.recommendation}</Text>
-              </View>
-            ) : null}
-          </View>
+                {/* Headline: mono, bold, white */}
+                <Text style={s.diagHeadline}>{headline}</Text>
+
+                {/* Body: sans regular, dim */}
+                {body ? (
+                  <Text style={s.diagBody} numberOfLines={diagExpanded ? undefined : 5}>{body}</Text>
+                ) : null}
+                {body.length > 180 ? (
+                  <TouchableOpacity onPress={() => setDiagExpanded((p) => !p)}>
+                    <Text style={s.readMoreText}>{diagExpanded ? 'Show less' : 'Read more'}</Text>
+                  </TouchableOpacity>
+                ) : null}
+
+                {/* Factor chips — glass pills, mono */}
+                {diagnosis?.contributing_factors && diagnosis.contributing_factors.length > 0 ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: SP[3] }}>
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      {diagnosis.contributing_factors.map((f, i) => (
+                        <View key={i} style={s.factorChip}>
+                          <Text style={s.factorText} numberOfLines={1}>{f}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </ScrollView>
+                ) : null}
+
+                {diagnosis?.recommendation ? (
+                  <View style={s.recBox}>
+                    <Ionicons name="bulb-outline" size={12} color={CLR_AMBER} style={{ marginRight: 6, marginTop: 1 }} />
+                    <Text style={s.recText}>{diagnosis.recommendation}</Text>
+                  </View>
+                ) : null}
+              </GlassCard>
+              </AnimatedCard>
+            );
+          })()
         )}
 
         {/* ─── SECTION 6: TRAINING ─────────────────────────────────────────── */}
@@ -1263,31 +1489,89 @@ export default function HomeScreen() {
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
+// All style values route through the ORYX theme tokens. Liquid-glass surfaces
+// use translucent bg + rim highlight + subtle bottom shade.
 function createStyles(t: ThemeColors) {
+  const cardBase = {
+    backgroundColor: t.glass.card,
+    borderWidth: 1,
+    borderColor: t.border,
+    borderRadius: R.xl,
+  } as const;
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: '#0a0a0a',
+      // Transparent so the AmbientBackdrop shines through the scroll view.
+      // The app-level container is the one that holds the real near-black bg.
+      backgroundColor: 'transparent',
     },
     content: {
-      paddingHorizontal: 16,
-      paddingBottom: 24,
+      paddingHorizontal: SP[4],
+      // Extra bottom padding so content clears the floating glass tab bar (~90px)
+      paddingBottom: SP[10] + SP[6],
+    },
+
+    // ── Section 2: Hero (transparent, centred, halo behind ring) ──────────────
+    heroContainer: {
+      paddingTop: SP[1],
+      paddingBottom: SP[4],
+      alignItems: 'stretch',
+      position: 'relative',
+    },
+    heroTriplet: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: SP[3],
+    },
+    heroStat: {
+      flex: 1,
+      gap: 2,
+      paddingHorizontal: SP[2],
+    },
+    heroStatLabel: {
+      fontFamily: TY.mono.medium,
+      fontSize: 10,
+      color: t.text.label,
+      letterSpacing: 1.8,
+      textTransform: 'uppercase',
+    },
+    heroStatVal: {
+      fontFamily: TY.sans.semibold,
+      fontSize: 20,
+      color: t.text.primary,
+      letterSpacing: -0.4,
+      ...TY.tabular,
+    },
+    vitalsRow: {
+      flexDirection: 'row',
+      gap: SP[2],
+      marginBottom: SP[2],
+    },
+    connectHint: {
+      alignSelf: 'center',
+      flexDirection: 'row', alignItems: 'center', gap: 5,
+      paddingVertical: SP[1], marginBottom: SP[3],
+    },
+    connectHintText: {
+      fontFamily: TY.mono.medium, fontSize: 10,
+      color: CLR_ACCENT, letterSpacing: 1.4, textTransform: 'uppercase',
     },
 
     // Error
     errorBox: {
-      backgroundColor: 'rgba(192,57,43,0.12)',
+      backgroundColor: 'rgba(242,122,92,0.12)',
       borderLeftWidth: 3,
       borderLeftColor: CLR_RED,
-      borderRadius: 10,
-      padding: 12,
-      marginBottom: 12,
+      borderRadius: R.sm,
+      padding: SP[3],
+      marginBottom: SP[3],
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
     },
     errorText: { color: CLR_RED, fontSize: 13, flex: 1 },
-    retryBtn: { paddingHorizontal: 10, paddingVertical: 5, backgroundColor: 'rgba(192,57,43,0.15)', borderRadius: 8, marginLeft: 8 },
+    retryBtn: { paddingHorizontal: SP[3], paddingVertical: 5, backgroundColor: 'rgba(242,122,92,0.15)', borderRadius: R.xs, marginLeft: SP[2] },
     retryText: { color: CLR_RED, fontSize: 12, fontWeight: '600' },
 
     // ── Section 1: Header ──────────────────────────────────────────────────────
@@ -1295,29 +1579,32 @@ function createStyles(t: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'flex-start',
       justifyContent: 'space-between',
-      paddingTop: 8,
-      paddingBottom: 12,
+      paddingTop: SP[2],
+      paddingBottom: SP[3],
     },
-    greeting: { fontSize: 12, color: '#888', marginBottom: 2 },
-    userName: { fontSize: 22, fontWeight: '700', color: '#fff', marginBottom: 2 },
-    dateLabel: { fontSize: 12, color: '#555' },
+    greeting: {
+      fontSize: 10, color: t.text.muted, marginBottom: 4,
+      fontFamily: TY.mono.medium, letterSpacing: 2, textTransform: 'uppercase',
+    },
+    userName: {
+      fontSize: 22, fontWeight: '500', color: t.text.primary, marginBottom: 2,
+      letterSpacing: -0.4,
+    },
+    dateLabel: { fontSize: 12, color: t.text.muted },
     notifBtn: {
-      width: 36, height: 36, borderRadius: 18,
-      backgroundColor: '#1a1a1a', borderWidth: 1, borderColor: '#2a2a2a',
+      width: 34, height: 34, borderRadius: 17,
+      backgroundColor: t.glass.card, borderWidth: 1, borderColor: t.glass.border,
       alignItems: 'center', justifyContent: 'center', marginTop: 4,
     },
 
     // ── Section 2: Hero ────────────────────────────────────────────────────────
     heroCard: {
-      backgroundColor: '#1a1a1a',
-      borderRadius: 18,
-      padding: 14,
-      borderWidth: 1,
-      borderColor: '#2a2a2a',
-      marginBottom: 10,
+      ...cardBase,
+      padding: SP[4],
+      marginBottom: SP[3],
     },
     infoBtn: {
-      position: 'absolute', top: 10, right: 10,
+      position: 'absolute', top: SP[3], right: SP[3],
       width: 28, height: 28, borderRadius: 14,
       alignItems: 'center', justifyContent: 'center', zIndex: 1,
     },
@@ -1326,261 +1613,322 @@ function createStyles(t: ThemeColors) {
       alignItems: 'center',
     },
     heroDivider: {
-      width: 1, height: 80, backgroundColor: '#2a2a2a', marginHorizontal: 14,
+      width: 1, height: 80, backgroundColor: t.divider, marginHorizontal: SP[4],
     },
     heroCallouts: {
-      flex: 1, gap: 12,
+      flex: 1, gap: SP[3],
     },
     calloutVal: {
-      fontSize: 22, fontWeight: '800', color: '#fff',
+      fontSize: 22, fontWeight: '500', color: t.text.primary,
+      fontFamily: TY.mono.medium, letterSpacing: -0.4,
     },
     calloutLabel: {
-      fontSize: 9, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginTop: 1,
+      fontSize: 10, color: t.text.secondary, textTransform: 'uppercase',
+      letterSpacing: 1.6, marginTop: 2, fontFamily: TY.mono.medium,
     },
     calloutInnerDivider: {
-      height: 1, backgroundColor: '#2a2a2a',
-    },
-    heroLabelRow: {
-      flexDirection: 'row', alignItems: 'center', gap: 8,
-      marginTop: 10, flexWrap: 'wrap',
+      height: 1, backgroundColor: t.divider,
     },
     heroLabel: {
-      fontSize: 11, fontWeight: '700', letterSpacing: 2,
+      marginTop: SP[1],
+      fontSize: 11, letterSpacing: 2,
+      fontFamily: TY.mono.medium, textTransform: 'uppercase',
     },
     confidencePill: {
-      backgroundColor: '#2a2a2a', borderRadius: 20,
-      paddingHorizontal: 8, paddingVertical: 3,
+      backgroundColor: t.glass.pill, borderRadius: R.pill,
+      paddingHorizontal: SP[3], paddingVertical: 4,
+      borderWidth: 1, borderColor: t.glass.border,
     },
-    confidenceText: { fontSize: 10, color: '#fff', fontWeight: '600' },
+    confidenceText: {
+      fontSize: 10, color: t.text.body, fontFamily: TY.mono.medium,
+      letterSpacing: 0.8, textTransform: 'uppercase',
+    },
     heroFactor: {
-      fontSize: 12, color: '#888', fontStyle: 'italic', marginTop: 4,
+      fontSize: 13, color: t.text.body, marginTop: SP[2], lineHeight: 18,
+      fontFamily: TY.sans.regular,
     },
 
     // End of day
-    eodHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-    eodTitle: { fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: '600' },
-    eodText: { fontSize: 14, color: '#ccc', lineHeight: 20, marginBottom: 12 },
-    eodStats: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+    eodHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: SP[2] },
+    eodTitle: {
+      fontSize: 10, color: t.text.secondary, textTransform: 'uppercase',
+      letterSpacing: 2, fontWeight: '500', fontFamily: TY.mono.medium,
+    },
+    eodText: { fontSize: 14, color: t.text.primary, lineHeight: 21, marginBottom: SP[3] },
+    eodStats: { flexDirection: 'row', alignItems: 'center', marginBottom: SP[3] },
     eodStat: { flex: 1, alignItems: 'center' },
-    eodStatVal: { fontSize: 22, fontWeight: '700', color: '#fff', marginBottom: 2 },
-    eodStatLabel: { fontSize: 9, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 },
-    eodDivider: { width: 1, height: 32, backgroundColor: '#2a2a2a' },
-    eodTomorrow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#2a2a2a' },
-    eodTomorrowText: { fontSize: 12, color: '#888' },
+    eodStatVal: {
+      fontSize: 22, fontWeight: '500', color: t.text.primary, marginBottom: 2,
+      fontFamily: TY.mono.medium, letterSpacing: -0.4,
+    },
+    eodStatLabel: { fontSize: 9, color: t.text.secondary, textTransform: 'uppercase', letterSpacing: 1.4, fontFamily: TY.mono.medium },
+    eodDivider: { width: 1, height: 32, backgroundColor: t.divider },
+    eodTomorrow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: SP[3], borderTopWidth: 1, borderTopColor: t.divider },
+    eodTomorrowText: { fontSize: 12, color: t.text.secondary },
 
     // ── Section 3: Strain ─────────────────────────────────────────────────────
     strainCard: {
-      backgroundColor: '#1a1a1a',
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      borderWidth: 1,
-      borderColor: '#2a2a2a',
-      marginBottom: 10,
+      ...cardBase,
+      paddingHorizontal: SP[4],
+      paddingVertical: SP[3],
+      marginBottom: SP[3],
     },
     strainHeaderRow: {
-      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8,
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SP[2],
     },
-    strainLeftLabel: { fontSize: 9, color: '#888', textTransform: 'uppercase', letterSpacing: 1 },
-    strainRightLabel: { fontSize: 12, color: '#ccc', fontWeight: '600' },
+    strainLeftLabel: {
+      fontSize: 10, color: t.text.secondary, textTransform: 'uppercase',
+      letterSpacing: 2, fontFamily: TY.mono.medium,
+    },
+    strainRightLabel: { fontSize: 12, color: t.text.primary, fontWeight: '500', fontFamily: TY.mono.medium },
     strainBarBg: {
-      height: 6, backgroundColor: '#2a2a2a', borderRadius: 3, overflow: 'hidden',
+      height: 6, backgroundColor: t.glass.pill, borderRadius: R.pill,
+      position: 'relative', overflow: 'visible',
     },
-    strainBarFill: { height: 6, borderRadius: 3 },
-    strainEmptyLabel: { fontSize: 11, color: '#555', marginTop: 4, fontStyle: 'italic' },
+    strainBarFill: { height: 6, borderRadius: R.pill },
+    strainEmptyLabel: { fontSize: 11, color: t.text.muted, marginTop: 4, fontStyle: 'italic' },
+    strainTicks: {
+      flexDirection: 'row', justifyContent: 'space-between',
+      marginTop: 6,
+    },
+    strainTickText: {
+      fontFamily: TY.mono.regular, fontSize: 10, color: t.text.muted,
+      letterSpacing: 1,
+    },
 
     // ── Section 4: Quick actions ──────────────────────────────────────────────
-    pillScroll: { marginBottom: 12 },
-    pillRow: { flexDirection: 'row', gap: 8, paddingVertical: 2 },
+    pillScroll: { marginBottom: SP[3], marginHorizontal: -SP[4] },
+    pillRow: {
+      flexDirection: 'row',
+      gap: SP[2],
+      paddingVertical: 2,
+      paddingHorizontal: SP[4],
+      paddingRight: SP[6],
+    },
     pill: {
       flexDirection: 'row', alignItems: 'center', gap: 6,
-      height: 40, paddingHorizontal: 14,
-      backgroundColor: '#1a1a1a', borderRadius: 20,
-      borderWidth: 1, borderColor: '#2a2a2a',
+      height: 34, paddingHorizontal: SP[3],
+      backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: R.pill,
+      borderWidth: 1, borderColor: t.divider,
     },
-    pillHighlight: { borderColor: '#fff' },
-    pillDone: { borderColor: CLR_GREEN },
-    pillLabel: { fontSize: 13, color: '#ccc' },
+    pillHighlight: { borderColor: CLR_ACCENT, backgroundColor: T.accentDim },
+    pillDone: { borderColor: CLR_ACCENT },
+    pillLabel: { fontSize: 13, color: t.text.primary, fontWeight: '500' },
 
     // ── Section label shared ──────────────────────────────────────────────────
     sectionLabel: {
-      fontSize: 9, fontWeight: '600', color: '#555',
+      fontSize: 11, fontWeight: '500', color: t.text.secondary,
       textTransform: 'uppercase', letterSpacing: 2,
-      marginBottom: 8, marginTop: 2,
+      marginBottom: SP[2], marginTop: SP[1], fontFamily: TY.mono.medium,
+      paddingHorizontal: SP[1],
     },
 
     // ── Card shared ───────────────────────────────────────────────────────────
     card: {
-      backgroundColor: '#1a1a1a',
-      borderRadius: 14,
-      padding: 14,
-      borderWidth: 1,
-      borderColor: '#2a2a2a',
-      marginBottom: 10,
+      ...cardBase,
+      padding: SP[4],
+      marginBottom: SP[3],
     },
-    emptyHint: { fontSize: 13, color: '#555', fontStyle: 'italic' },
-    emptyHintCenter: { fontSize: 13, color: '#555', fontStyle: 'italic', textAlign: 'center' },
+    emptyHint: { fontSize: 13, color: t.text.muted, fontStyle: 'italic' },
+    emptyHintCenter: { fontSize: 13, color: t.text.muted, fontStyle: 'italic', textAlign: 'center' },
 
-    // ── Section 5: Diagnosis ──────────────────────────────────────────────────
-    diagCard: { borderLeftWidth: 3 },
-    diagHeaderRow: {
-      flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6,
+    // ── Section 5: Diagnosis (ORYX Intelligence) ─────────────────────────────
+    diagCard: {
+      backgroundColor: t.glass.cardHi,
+      borderWidth: 1, borderColor: t.glass.rim,
+      borderRadius: R.xl,
+      padding: SP[4],
+      marginBottom: SP[3],
+      // chartreuse accent line is drawn inline in JSX via borderTopColor override
     },
-    diagMeta: { fontSize: 10, color: '#555', marginTop: 2 },
+    diagHeaderRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      marginBottom: SP[3],
+    },
+    diagStamp: {
+      fontSize: 10, color: t.text.muted, fontFamily: TY.mono.medium,
+      letterSpacing: 1.2,
+    },
     refreshBtn: {
-      width: 30, height: 30, borderRadius: 15,
-      backgroundColor: '#222', alignItems: 'center', justifyContent: 'center',
+      width: 26, height: 26, borderRadius: 13,
+      backgroundColor: t.glass.pill,
+      borderWidth: 1, borderColor: t.glass.border,
+      alignItems: 'center', justifyContent: 'center',
     },
     refreshBtnOff: { opacity: 0.35 },
     diagTitleLabel: {
-      fontSize: 11, fontWeight: '600', color: '#fff',
-      textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6,
+      fontSize: 10, color: CLR_ACCENT,
+      textTransform: 'uppercase', letterSpacing: 2.6,
+      fontFamily: TY.mono.medium,
     },
-    diagText: { fontSize: 14, color: '#ccc', lineHeight: 20, marginBottom: 6 },
-    readMoreText: { fontSize: 12, color: '#888', marginBottom: 6 },
+    diagHeadline: {
+      fontSize: 17, lineHeight: 23, color: t.text.primary,
+      fontFamily: TY.mono.bold, letterSpacing: -0.2,
+      marginBottom: SP[3],
+    },
+    diagBody: {
+      fontSize: 13.5, lineHeight: 20, color: t.text.body,
+      fontFamily: TY.sans.regular, letterSpacing: -0.1,
+    },
+    readMoreText: {
+      fontSize: 12, color: CLR_ACCENT, marginTop: 4,
+      fontFamily: TY.mono.medium, letterSpacing: 0.5,
+    },
     factorChip: {
-      backgroundColor: '#222', borderRadius: 20,
-      paddingHorizontal: 9, paddingVertical: 3,
+      backgroundColor: t.glass.pill, borderRadius: R.pill,
+      paddingHorizontal: SP[3], paddingVertical: 5,
+      borderWidth: 1, borderColor: t.glass.border,
     },
-    factorText: { fontSize: 11, color: '#888' },
+    factorText: {
+      fontSize: 11, color: t.text.body, fontFamily: TY.mono.medium,
+      letterSpacing: 0.4,
+    },
     recBox: {
       flexDirection: 'row', alignItems: 'flex-start',
-      backgroundColor: '#222', borderRadius: 10, padding: 10, marginTop: 10,
+      backgroundColor: 'rgba(255,255,255,0.04)',
+      borderRadius: R.sm, padding: SP[3], marginTop: SP[3],
+      borderWidth: 1, borderColor: t.divider,
     },
-    recText: { flex: 1, fontSize: 13, color: CLR_AMBER, lineHeight: 18 },
+    recText: { flex: 1, fontSize: 13, color: CLR_AMBER, lineHeight: 19 },
 
     // ── Section 6: Training ───────────────────────────────────────────────────
     trainingCard: { gap: 0, padding: 0, overflow: 'hidden' },
-    trainZone: { paddingHorizontal: 14, paddingVertical: 12 },
-    trainDividerH: { height: 1, backgroundColor: '#2a2a2a' },
+    trainZone: { paddingHorizontal: SP[4], paddingVertical: SP[3] },
+    trainDividerH: { height: 1, backgroundColor: t.divider },
     trainStatsRow: { flexDirection: 'row', alignItems: 'center' },
     lastSessionIcon: {
-      width: 32, height: 32, borderRadius: 9,
-      backgroundColor: '#222', alignItems: 'center', justifyContent: 'center',
+      width: 40, height: 40, borderRadius: R.sm,
+      backgroundColor: CLR_ACCENT, alignItems: 'center', justifyContent: 'center',
     },
-    lastSessionName: { fontSize: 14, fontWeight: '700', color: '#fff', marginBottom: 2 },
-    lastSessionMeta: { fontSize: 12, color: '#888' },
+    lastSessionName: { fontSize: 16, fontWeight: '500', color: t.text.primary, marginBottom: 2, letterSpacing: -0.3 },
+    lastSessionMeta: { fontSize: 12, color: t.text.secondary, fontFamily: TY.mono.medium, letterSpacing: 0.4 },
     rpePill: {
-      backgroundColor: '#222', borderRadius: 8,
-      paddingHorizontal: 8, paddingVertical: 4,
-      borderWidth: 1, borderColor: '#333',
+      backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: R.xs,
+      paddingHorizontal: SP[2], paddingVertical: 4,
+      borderWidth: 1, borderColor: t.divider,
     },
-    rpePillText: { fontSize: 10, color: '#888', fontWeight: '700' },
+    rpePillText: { fontSize: 10, color: t.text.secondary, fontWeight: '500', fontFamily: TY.mono.medium, letterSpacing: 0.8 },
     trainStat: { flex: 1, alignItems: 'center' },
-    trainStatVal: { fontSize: 20, fontWeight: '700', color: '#fff', marginBottom: 2 },
-    trainStatLabel: { fontSize: 9, color: '#888', textTransform: 'uppercase', letterSpacing: 0.8 },
-    trainDivider: { width: 1, height: 30, backgroundColor: '#2a2a2a' },
-    dualBarBg: { height: 3, backgroundColor: '#1a1a1a', borderRadius: 2, overflow: 'hidden' },
+    trainStatVal: {
+      fontSize: 22, fontWeight: '500', color: t.text.primary, marginBottom: 2,
+      fontFamily: TY.mono.medium, letterSpacing: -0.4,
+    },
+    trainStatLabel: { fontSize: 9, color: t.text.secondary, textTransform: 'uppercase', letterSpacing: 1.4, fontFamily: TY.mono.medium },
+    trainDivider: { width: 1, height: 30, backgroundColor: t.divider },
+    dualBarBg: { height: 3, backgroundColor: t.bg.subtle, borderRadius: 2, overflow: 'hidden' },
     dualBarFill: { height: 3, borderRadius: 2 },
 
     // ── Section 7: Nutrition ──────────────────────────────────────────────────
     nutritionCard: { gap: 0 },
     nutRow1: {
       flexDirection: 'row', alignItems: 'baseline',
-      justifyContent: 'space-between', marginBottom: 8,
+      justifyContent: 'space-between', marginBottom: SP[2],
     },
-    nutTodayLabel: { fontSize: 9, color: '#888', textTransform: 'uppercase', letterSpacing: 1 },
-    nutCalories: { fontSize: 16, fontWeight: '700', color: '#fff' },
-    nutCalTarget: { fontSize: 11, color: '#888' },
-    nutMacrosRow: { flexDirection: 'row', gap: 12, marginBottom: 8 },
+    nutTodayLabel: {
+      fontSize: 10, color: t.text.secondary, textTransform: 'uppercase',
+      letterSpacing: 2, fontFamily: TY.mono.medium,
+    },
+    nutCalories: { fontSize: 18, fontWeight: '500', color: t.text.primary, fontFamily: TY.mono.medium, letterSpacing: -0.4 },
+    nutCalTarget: { fontSize: 11, color: t.text.secondary, fontFamily: TY.mono.medium },
+    nutMacrosRow: { flexDirection: 'row', gap: SP[3], marginBottom: SP[2] },
     nutMacro: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-    nutMacroLabel: { fontSize: 8, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 },
-    nutMacroVal: { fontSize: 10, color: '#ccc', fontWeight: '600' },
-    nutBarBg: { height: 4, backgroundColor: '#2a2a2a', borderRadius: 2, overflow: 'hidden' },
-    nutBarFill: { height: 4, borderRadius: 2 },
+    nutMacroLabel: { fontSize: 9, color: t.text.secondary, textTransform: 'uppercase', letterSpacing: 1, fontFamily: TY.mono.medium },
+    nutMacroVal: { fontSize: 11, color: t.text.primary, fontWeight: '500', fontFamily: TY.mono.medium },
+    nutBarBg: { height: 4, backgroundColor: t.bg.subtle, borderRadius: R.pill, overflow: 'hidden' },
+    nutBarFill: { height: 4, borderRadius: R.pill },
 
     // ── Section 8: Wellness ───────────────────────────────────────────────────
     wellnessCard: {
-      backgroundColor: '#1a1a1a',
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: '#2a2a2a',
-      marginBottom: 10,
+      ...cardBase,
+      marginBottom: SP[3],
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: 12,
-      paddingHorizontal: 14,
+      paddingVertical: SP[3],
+      paddingHorizontal: SP[4],
       minHeight: 64,
     },
     wellnessCol: { flex: 1, alignItems: 'center', position: 'relative' },
     wellnessColDivider: {
-      position: 'absolute', left: 0, top: 4, width: 1, height: 32, backgroundColor: '#2a2a2a',
+      position: 'absolute', left: 0, top: 4, width: 1, height: 32, backgroundColor: t.divider,
     },
-    wellnessVal: { fontSize: 18, fontWeight: '700', marginBottom: 2 },
-    wellnessColLabel: { fontSize: 9, color: '#888', textTransform: 'uppercase', letterSpacing: 0.3 },
+    wellnessVal: { fontSize: 18, fontWeight: '500', marginBottom: 2, fontFamily: TY.mono.medium, letterSpacing: -0.3 },
+    wellnessColLabel: { fontSize: 9, color: t.text.secondary, textTransform: 'uppercase', letterSpacing: 1, fontFamily: TY.mono.medium },
 
     // ── Section 9: Weekly ─────────────────────────────────────────────────────
     weekCard: {
-      backgroundColor: '#1a1a1a',
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: '#2a2a2a',
-      marginBottom: 10,
+      ...cardBase,
+      marginBottom: SP[3],
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: 10,
-      paddingHorizontal: 14,
+      paddingVertical: SP[3],
+      paddingHorizontal: SP[4],
     },
     weekStat: { flex: 1, alignItems: 'center' },
-    weekStatVal: { fontSize: 20, fontWeight: '700', color: '#fff', marginBottom: 2 },
-    weekStatLabel: { fontSize: 9, color: '#888', textTransform: 'uppercase', letterSpacing: 0.3 },
-    weekDivider: { width: 1, height: 30, backgroundColor: '#2a2a2a' },
+    weekStatVal: {
+      fontSize: 22, fontWeight: '500', color: t.text.primary, marginBottom: 2,
+      fontFamily: TY.mono.medium, letterSpacing: -0.4,
+    },
+    weekStatLabel: { fontSize: 9, color: t.text.secondary, textTransform: 'uppercase', letterSpacing: 1.2, fontFamily: TY.mono.medium },
+    weekDivider: { width: 1, height: 30, backgroundColor: t.divider },
 
     // ── Wellness Modal ────────────────────────────────────────────────────────
-    modalWrapper: { flex: 1, backgroundColor: '#0a0a0a' },
-    modalContent: { padding: 24, paddingBottom: 48 },
+    modalWrapper: { flex: 1, backgroundColor: t.bg.primary },
+    modalContent: { padding: SP[6], paddingBottom: SP[9] },
     modalHandle: {
-      width: 40, height: 4, backgroundColor: '#2a2a2a',
-      borderRadius: 2, alignSelf: 'center', marginBottom: 24,
+      width: 40, height: 4, backgroundColor: t.bg.subtle,
+      borderRadius: 2, alignSelf: 'center', marginBottom: SP[6],
     },
-    modalTitle: { fontSize: 22, fontWeight: '700', color: '#fff', marginBottom: 6 },
-    modalSubtitle: { fontSize: 13, color: '#888', marginBottom: 28 },
+    modalTitle: { fontSize: 22, fontWeight: '500', color: t.text.primary, marginBottom: 6, letterSpacing: -0.4 },
+    modalSubtitle: { fontSize: 13, color: t.text.secondary, marginBottom: SP[7] },
     wellnessRow: {
       flexDirection: 'row', alignItems: 'flex-start',
-      justifyContent: 'space-between', marginBottom: 22, gap: 12,
+      justifyContent: 'space-between', marginBottom: SP[6], gap: SP[3],
     },
     wellnessRowText: { flex: 1, paddingTop: 4 },
-    wellnessRowLabel: { fontSize: 15, color: '#fff', fontWeight: '500', lineHeight: 20, marginBottom: 3 },
-    hooperScale: { fontSize: 11, color: '#888', lineHeight: 16 },
-    wellnessControls: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    wellnessRowLabel: { fontSize: 15, color: t.text.primary, fontWeight: '500', lineHeight: 20, marginBottom: 3 },
+    hooperScale: { fontSize: 11, color: t.text.secondary, lineHeight: 16 },
+    wellnessControls: { flexDirection: 'row', alignItems: 'center', gap: SP[3] },
     stepBtn: {
       width: 36, height: 36, borderRadius: 18,
-      backgroundColor: '#1a1a1a', alignItems: 'center', justifyContent: 'center',
+      backgroundColor: t.bg.elevated, alignItems: 'center', justifyContent: 'center',
+      borderWidth: 1, borderColor: t.divider,
     },
-    stepBtnText: { fontSize: 20, color: '#fff', lineHeight: 24 },
+    stepBtnText: { fontSize: 20, color: t.text.primary, lineHeight: 24 },
     valueBadge: {
-      width: 52, height: 36, borderRadius: 10,
+      width: 52, height: 36, borderRadius: R.sm,
       borderWidth: 1, alignItems: 'center', justifyContent: 'center',
     },
-    valueText: { fontSize: 14, fontWeight: '700' },
-    modalFieldLabel: { fontSize: 13, color: '#888', marginBottom: 8, fontWeight: '500' },
+    valueText: { fontSize: 14, fontWeight: '500', fontFamily: TY.mono.medium },
+    modalFieldLabel: { fontSize: 13, color: t.text.secondary, marginBottom: SP[2], fontWeight: '500' },
     modalTextArea: {
-      backgroundColor: '#1a1a1a', borderRadius: 12,
-      paddingHorizontal: 16, paddingVertical: 14,
-      fontSize: 16, color: '#fff', borderWidth: 1, borderColor: '#2a2a2a',
-      minHeight: 80, textAlignVertical: 'top', marginBottom: 24,
+      backgroundColor: t.bg.elevated, borderRadius: R.md,
+      paddingHorizontal: SP[4], paddingVertical: SP[3],
+      fontSize: 16, color: t.text.primary, borderWidth: 1, borderColor: t.divider,
+      minHeight: 80, textAlignVertical: 'top', marginBottom: SP[6],
     },
     saveBtn: {
-      backgroundColor: '#fff', borderRadius: 12,
-      paddingVertical: 15, alignItems: 'center', marginBottom: 12,
+      backgroundColor: CLR_ACCENT, borderRadius: R.md,
+      paddingVertical: 15, alignItems: 'center', marginBottom: SP[3],
     },
-    saveBtnText: { color: '#0a0a0a', fontSize: 16, fontWeight: '700' },
+    saveBtnText: { color: T.accentInk, fontSize: 16, fontWeight: '600' },
     btnDisabled: { opacity: 0.5 },
-    cancelBtn: { alignItems: 'center', paddingVertical: 10 },
-    cancelText: { color: '#888', fontSize: 14 },
+    cancelBtn: { alignItems: 'center', paddingVertical: SP[3] },
+    cancelText: { color: t.text.secondary, fontSize: 14 },
 
     // ── Readiness Info Modal ──────────────────────────────────────────────────
     infoRow: {
-      flexDirection: 'row', alignItems: 'flex-start', gap: 12,
-      paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#2a2a2a',
+      flexDirection: 'row', alignItems: 'flex-start', gap: SP[3],
+      paddingVertical: SP[3], borderBottomWidth: 1, borderBottomColor: t.divider,
     },
     infoIcon: {
-      width: 34, height: 34, borderRadius: 9,
-      backgroundColor: '#222', alignItems: 'center', justifyContent: 'center',
+      width: 34, height: 34, borderRadius: R.sm,
+      backgroundColor: 'rgba(255,255,255,0.04)',
+      borderWidth: 1, borderColor: t.divider,
+      alignItems: 'center', justifyContent: 'center',
     },
-    infoLabel: { fontSize: 14, fontWeight: '600', color: '#fff', marginBottom: 4 },
-    infoScore: { fontSize: 17, fontWeight: '700', color: '#fff' },
-    infoDesc: { fontSize: 12, color: '#888', lineHeight: 17 },
+    infoLabel: { fontSize: 14, fontWeight: '500', color: t.text.primary, marginBottom: 4 },
+    infoScore: { fontSize: 17, fontWeight: '500', color: t.text.primary, fontFamily: TY.mono.medium },
+    infoDesc: { fontSize: 12, color: t.text.secondary, lineHeight: 17 },
 
     // ── Weight toast ──────────────────────────────────────────────────────────
     weightToast: {
@@ -1589,14 +1937,14 @@ function createStyles(t: ThemeColors) {
       alignSelf: 'center',
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      backgroundColor: 'rgba(15,15,15,0.92)',
+      gap: SP[2],
+      backgroundColor: t.glass.chrome,
       borderWidth: 1,
-      borderColor: CLR_GREEN,
-      borderRadius: 24,
-      paddingHorizontal: 18,
-      paddingVertical: 10,
+      borderColor: CLR_ACCENT,
+      borderRadius: R.pill,
+      paddingHorizontal: SP[5],
+      paddingVertical: SP[3],
     },
-    weightToastText: { fontSize: 14, fontWeight: '600', color: '#fff' },
+    weightToastText: { fontSize: 14, fontWeight: '500', color: t.text.primary },
   });
 }

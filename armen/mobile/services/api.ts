@@ -1862,4 +1862,132 @@ export async function getWellnessTrends(days = 30): Promise<WellnessTrends> {
   return response.data;
 }
 
+// ── Direct Messages (Phase 1) ───────────────────────────────────────────────
+
+export type DmMessageType =
+  | 'text'
+  | 'image'
+  | 'workout_card'
+  | 'daily_insight'
+  | 'weekly_recap'
+  | 'story_reply'
+  | 'post_share';
+
+export interface DmParticipant {
+  id: string;
+  display_name: string;
+  username: string | null;
+  avatar_url: string | null;
+  initials: string;
+}
+
+export interface DmMessage {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  content: string;
+  message_type: DmMessageType;
+  metadata: any | null;
+  created_at: string;
+  deleted_at: string | null;
+}
+
+export interface DmConversation {
+  id: string;
+  type: 'direct' | 'group';
+  other_participant: DmParticipant | null;
+  last_message: DmMessage | null;
+  last_message_at: string | null;
+  unread_count: number;
+  muted: boolean;
+  is_archived: boolean;
+  is_request: boolean;
+}
+
+export async function listConversations(opts?: { page?: number; limit?: number; include_archived?: boolean }): Promise<DmConversation[]> {
+  const params: Record<string, any> = { page: opts?.page ?? 1, limit: opts?.limit ?? 20 };
+  if (opts?.include_archived) params.include_archived = true;
+  const res = await apiClient.get<{ conversations: DmConversation[] }>('/messages/conversations', { params });
+  return res.data.conversations;
+}
+
+export async function listMessageRequests(): Promise<DmConversation[]> {
+  const res = await apiClient.get<{ conversations: DmConversation[] }>('/messages/conversations/requests');
+  return res.data.conversations;
+}
+
+export async function listMessages(conversationId: string, opts?: { before?: string; limit?: number }): Promise<{ messages: DmMessage[]; has_more: boolean }> {
+  const params: Record<string, any> = { limit: opts?.limit ?? 20 };
+  if (opts?.before) params.before = opts.before;
+  const res = await apiClient.get<{ messages: DmMessage[]; has_more: boolean }>(
+    `/messages/conversations/${conversationId}/messages`,
+    { params },
+  );
+  return res.data;
+}
+
+export async function sendMessage(
+  conversationId: string,
+  body: { content: string; message_type?: DmMessageType; metadata?: any },
+): Promise<DmMessage> {
+  const res = await apiClient.post<DmMessage>(
+    `/messages/conversations/${conversationId}/messages`,
+    {
+      content: body.content,
+      message_type: body.message_type ?? 'text',
+      metadata: body.metadata ?? null,
+    },
+  );
+  return res.data;
+}
+
+export async function startConversation(body: { recipient_id: string; initial_message?: string }): Promise<DmConversation> {
+  const res = await apiClient.post<DmConversation>('/messages/conversations/start', body);
+  return res.data;
+}
+
+export async function markConversationRead(conversationId: string): Promise<void> {
+  await apiClient.post(`/messages/conversations/${conversationId}/read`);
+}
+
+export async function deleteMessage(conversationId: string, messageId: string): Promise<void> {
+  await apiClient.delete(`/messages/conversations/${conversationId}/messages/${messageId}`);
+}
+
+export async function muteConversation(conversationId: string): Promise<void> {
+  await apiClient.post(`/messages/conversations/${conversationId}/mute`);
+}
+
+export async function unmuteConversation(conversationId: string): Promise<void> {
+  await apiClient.post(`/messages/conversations/${conversationId}/unmute`);
+}
+
+export async function archiveConversation(conversationId: string): Promise<void> {
+  await apiClient.post(`/messages/conversations/${conversationId}/archive`);
+}
+
+export async function unarchiveConversation(conversationId: string): Promise<void> {
+  await apiClient.post(`/messages/conversations/${conversationId}/unarchive`);
+}
+
+export async function getDmUnreadCount(): Promise<number> {
+  const res = await apiClient.get<{ unread_count: number }>('/messages/unread-count');
+  return res.data.unread_count;
+}
+
+export interface DmCandidate {
+  id: string;
+  display_name: string;
+  username: string | null;
+  avatar_url: string | null;
+  initials: string;
+}
+
+export async function getDmCandidates(query?: string): Promise<DmCandidate[]> {
+  const params: Record<string, any> = { limit: 50 };
+  if (query) params.q = query;
+  const res = await apiClient.get<{ users: DmCandidate[] }>('/messages/dm-candidates', { params });
+  return res.data.users;
+}
+
 export default apiClient;
