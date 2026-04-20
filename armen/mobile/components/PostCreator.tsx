@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { createPost, uploadMedia, getMyClubs, CommunityClub } from '@/services/api';
 import OryxInsightCreator from '@/components/OryxInsightCreator';
+import { ThemeColors, theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
 
+import { useTheme } from '@/contexts/ThemeContext';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Try CameraView
@@ -149,6 +151,8 @@ function OryxDataCardPreview({ data, currentStats, dashboard }: { data: any; cur
 
 export default function PostCreator({ visible, onClose, onPostCreated, currentStats, dashboard }: Props) {
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const cameraPermHook = useCameraPermissions ? useCameraPermissions() : [null, null];
   const [cameraPermission, requestCameraPermission] = cameraPermHook;
@@ -342,16 +346,18 @@ export default function PostCreator({ visible, onClose, onPostCreated, currentSt
                 <TouchableOpacity
                   onPress={() => { setWantsPhoto(true); setWantsOryx(false); }}
                   style={[styles.tile, wantsPhoto && styles.tileSelected]}
+                  activeOpacity={0.85}
                 >
-                  <Ionicons name="camera-outline" size={32} color={wantsPhoto ? '#f0f0f0' : '#888888'} />
+                  <Ionicons name="camera-outline" size={28} color={wantsPhoto ? T.accent : T.text.secondary} />
                   <Text style={[styles.tileName, wantsPhoto && styles.tileNameSelected]}>Photo Post</Text>
                   <Text style={styles.tileSubtitle}>Post a photo</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => { setWantsOryx(true); setWantsPhoto(false); }}
                   style={[styles.tile, wantsOryx && styles.tileSelected]}
+                  activeOpacity={0.85}
                 >
-                  <Ionicons name="stats-chart-outline" size={32} color={wantsOryx ? '#f0f0f0' : '#888888'} />
+                  <Ionicons name="stats-chart-outline" size={28} color={wantsOryx ? T.accent : T.text.secondary} />
                   <Text style={[styles.tileName, wantsOryx && styles.tileNameSelected]}>ORYX Insight</Text>
                   <Text style={styles.tileSubtitle}>Share your stats</Text>
                 </TouchableOpacity>
@@ -373,8 +379,9 @@ export default function PostCreator({ visible, onClose, onPostCreated, currentSt
                 }}
                 style={[styles.continueBtn, !canContinue && styles.continueBtnDisabled]}
                 disabled={!canContinue}
+                activeOpacity={0.85}
               >
-                <Text style={{ color: '#000000', fontWeight: '700', fontSize: 16 }}>Continue</Text>
+                <Text style={styles.continueBtnText}>Continue</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -657,54 +664,79 @@ export default function PostCreator({ visible, onClose, onPostCreated, currentSt
   return null;
 }
 
-const styles = StyleSheet.create({
+function createStyles(t: ThemeColors) {
+  return StyleSheet.create({
   sheetBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: t.glass.shade,
     justifyContent: 'flex-end',
   },
   sheetHandle: {
-    width: 36, height: 4, borderRadius: 2,
-    backgroundColor: '#2a2a2a',
-    alignSelf: 'center', marginBottom: 16,
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: t.border,
+    alignSelf: 'center', marginBottom: SP[3],
   },
+  // Bottom-sheet container styled to match the Create menu / Post action sheet
+  // the profile tab uses, so every bottom sheet in the app reads the same.
   typeSheet: {
-    backgroundColor: '#0a0a0a',
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: 20, gap: 16,
+    backgroundColor: t.glass.card,
+    borderTopLeftRadius: R.lg,
+    borderTopRightRadius: R.lg,
+    paddingHorizontal: SP[5],
+    paddingTop: SP[5],
+    gap: SP[4],
   },
   sheetTitle: {
-    fontSize: 16, fontWeight: '700', color: '#f0f0f0',
+    fontSize: TY.size.h3 - 1,
+    fontFamily: TY.sans.bold,
+    color: t.text.primary,
+    letterSpacing: TY.tracking.tight,
   },
   tileRow: {
-    flexDirection: 'row', gap: 12,
+    flexDirection: 'row', gap: SP[3],
   },
   tile: {
-    flex: 1, height: 120,
-    backgroundColor: '#1a1a1a',
-    borderRadius: 16, borderWidth: 1, borderColor: '#2a2a2a',
-    alignItems: 'center', justifyContent: 'center', gap: 6,
-    padding: 12,
+    flex: 1, height: 130,
+    backgroundColor: t.bg.elevated,
+    borderRadius: R.md,
+    borderWidth: 1, borderColor: t.border,
+    alignItems: 'center', justifyContent: 'center', gap: SP[2],
+    padding: SP[3],
   },
   tileSelected: {
-    borderColor: '#ffffff',
+    borderColor: t.accent,
+    backgroundColor: t.accentDim,
   },
   tileName: {
-    fontSize: 13, fontWeight: '700', color: '#888888', textAlign: 'center',
+    fontSize: TY.size.body,
+    fontFamily: TY.sans.semibold,
+    color: t.text.secondary,
+    textAlign: 'center',
   },
   tileNameSelected: {
-    color: '#f0f0f0',
+    color: t.text.primary,
   },
   tileSubtitle: {
-    fontSize: 11, color: '#555555', textAlign: 'center',
+    fontSize: TY.size.small,
+    fontFamily: TY.sans.regular,
+    color: t.text.muted,
+    textAlign: 'center',
   },
   continueBtn: {
-    backgroundColor: '#ffffff', borderRadius: 24,
-    height: 52, alignItems: 'center', justifyContent: 'center',
-    marginTop: 4,
+    backgroundColor: t.accent,
+    borderRadius: R.sm,
+    paddingVertical: SP[4],
+    alignItems: 'center', justifyContent: 'center',
+    marginTop: SP[1],
   },
   continueBtnDisabled: {
     opacity: 0.4,
+  },
+  continueBtnText: {
+    fontFamily: TY.sans.bold,
+    fontSize: TY.size.body + 2,
+    color: t.accentInk,
+    letterSpacing: TY.tracking.tight,
   },
 
   cameraBottomRow: {
@@ -849,4 +881,5 @@ const styles = StyleSheet.create({
   clubRowSelected: {
     backgroundColor: '#2a2a2a',
   },
-});
+  });
+}

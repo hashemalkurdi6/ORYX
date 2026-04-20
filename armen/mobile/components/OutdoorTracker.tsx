@@ -28,7 +28,8 @@ import {
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
+import { ThemeColors, theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
+import { useTheme } from '@/contexts/ThemeContext';
 import GlassCard from '@/components/GlassCard';
 import {
   createTracker,
@@ -277,6 +278,8 @@ function buildLeafletHtml(points: LatLng[], liveMode: boolean): string {
 
 export default function OutdoorTracker({ visible, onClose, onSave }: Props) {
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+  const s = useMemo(() => createStyles(theme), [theme]);
 
   const [screen, setScreen]             = useState<TrackingScreen>('permission_check');
   const [selectedType, setSelectedType] = useState<OutdoorActivityType>(OUTDOOR_TYPES[0]);
@@ -818,10 +821,11 @@ export default function OutdoorTracker({ visible, onClose, onSave }: Props) {
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
-const s = StyleSheet.create({
+function createStyles(t: ThemeColors) {
+  return StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: T.bg.primary,
+    backgroundColor: t.bg.primary,
   },
 
   // Shared layout
@@ -839,7 +843,7 @@ const s = StyleSheet.create({
   screenTitle: {
     fontFamily: TY.sans.bold,
     fontSize: TY.size.h2,
-    color: T.text.primary,
+    color: t.text.primary,
     letterSpacing: TY.tracking.tight,
   },
 
@@ -849,7 +853,7 @@ const s = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: R.pill,
-    backgroundColor: T.accentDim,
+    backgroundColor: t.accentDim,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: SP[8],
@@ -858,7 +862,7 @@ const s = StyleSheet.create({
   permTitle: {
     fontFamily: TY.sans.bold,
     fontSize: TY.size.h1,
-    color: T.text.primary,
+    color: t.text.primary,
     textAlign: 'center',
     letterSpacing: TY.tracking.tight,
     marginBottom: SP[4],
@@ -866,7 +870,7 @@ const s = StyleSheet.create({
   permBody: {
     fontFamily: TY.sans.regular,
     fontSize: TY.size.body,
-    color: T.text.body,
+    color: t.text.body,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: SP[8],
@@ -876,7 +880,7 @@ const s = StyleSheet.create({
   sectionLabel: {
     fontFamily: TY.mono.medium,
     fontSize: TY.size.micro,
-    color: T.text.label,
+    color: t.text.label,
     letterSpacing: TY.tracking.label,
     textTransform: 'uppercase',
     marginBottom: SP[4],
@@ -900,10 +904,10 @@ const s = StyleSheet.create({
   typeLabel: {
     fontFamily: TY.sans.medium,
     fontSize: TY.size.body,
-    color: T.text.secondary,
+    color: t.text.secondary,
   },
   typeLabelActive: {
-    color: T.accent,
+    color: t.accent,
     fontFamily: TY.sans.semibold,
   },
 
@@ -917,14 +921,14 @@ const s = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: R.pill,
-    backgroundColor: T.accentDim,
+    backgroundColor: t.accentDim,
     alignItems: 'center',
     justifyContent: 'center',
   },
   readyTitle: {
     fontFamily: TY.sans.bold,
     fontSize: TY.size.h1,
-    color: T.text.primary,
+    color: t.text.primary,
     textAlign: 'center',
     letterSpacing: TY.tracking.tight,
     marginBottom: SP[3],
@@ -932,7 +936,7 @@ const s = StyleSheet.create({
   readyBody: {
     fontFamily: TY.sans.regular,
     fontSize: TY.size.body,
-    color: T.text.body,
+    color: t.text.body,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: SP[6],
@@ -949,7 +953,7 @@ const s = StyleSheet.create({
   hintText: {
     fontFamily: TY.sans.regular,
     fontSize: TY.size.small,
-    color: T.text.secondary,
+    color: t.text.secondary,
     flex: 1,
   },
 
@@ -958,7 +962,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: T.accent,
+    backgroundColor: t.accent,
     borderRadius: R.md,
     paddingVertical: SP[4],
     gap: SP[2],
@@ -966,14 +970,14 @@ const s = StyleSheet.create({
   primaryBtnText: {
     fontFamily: TY.sans.semibold,
     fontSize: TY.size.body,
-    color: T.accentInk,
+    color: t.accentInk,
     letterSpacing: TY.tracking.tight,
   },
   startBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: T.accent,
+    backgroundColor: t.accent,
     borderRadius: R.lg,
     paddingVertical: SP[5],
     gap: SP[2],
@@ -981,7 +985,7 @@ const s = StyleSheet.create({
   startBtnText: {
     fontFamily: TY.sans.bold,
     fontSize: TY.size.h3,
-    color: T.accentInk,
+    color: t.accentInk,
     letterSpacing: TY.tracking.tight,
   },
   ghostBtn: {
@@ -992,17 +996,17 @@ const s = StyleSheet.create({
   ghostBtnText: {
     fontFamily: TY.sans.medium,
     fontSize: TY.size.body,
-    color: T.text.muted,
+    color: t.text.muted,
   },
 
   // Tracking screen
   trackingRoot: {
     flex: 1,
-    backgroundColor: T.bg.primary,
+    backgroundColor: t.bg.primary,
   },
   map: {
     flex: 1,
-    backgroundColor: T.bg.primary,
+    backgroundColor: t.bg.primary,
   },
   mapCloseBtn: {
     position: 'absolute',
@@ -1010,9 +1014,9 @@ const s = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: R.pill,
-    backgroundColor: T.glass.chrome,
+    backgroundColor: t.glass.chrome,
     borderWidth: 1,
-    borderColor: T.glass.border,
+    borderColor: t.glass.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1038,14 +1042,14 @@ const s = StyleSheet.create({
     letterSpacing: TY.tracking.label,
   },
   hud: {
-    backgroundColor: T.glass.chrome,
+    backgroundColor: t.glass.chrome,
     borderTopLeftRadius: R.xxl,
     borderTopRightRadius: R.xxl,
     paddingHorizontal: SP[6],
     paddingTop: SP[5],
     gap: SP[4],
     borderTopWidth: 1,
-    borderColor: T.glass.border,
+    borderColor: t.glass.border,
   },
   timerRow: {
     flexDirection: 'row',
@@ -1056,7 +1060,7 @@ const s = StyleSheet.create({
   timerText: {
     fontFamily: TY.mono.bold,
     fontSize: 52,
-    color: T.text.primary,
+    color: t.text.primary,
     fontVariant: ['tabular-nums'],
     letterSpacing: TY.tracking.tight,
   },
@@ -1080,13 +1084,13 @@ const s = StyleSheet.create({
   statVal: {
     fontFamily: TY.mono.semibold,
     fontSize: TY.size.h3,
-    color: T.text.primary,
+    color: t.text.primary,
     letterSpacing: TY.tracking.tight,
   },
   statLbl: {
     fontFamily: TY.mono.medium,
     fontSize: TY.size.micro,
-    color: T.text.label,
+    color: t.text.label,
     letterSpacing: TY.tracking.label,
   },
   controlRow: {
@@ -1099,7 +1103,7 @@ const s = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: R.pill,
-    backgroundColor: T.accent,
+    backgroundColor: t.accent,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -1109,9 +1113,9 @@ const s = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: R.pill,
-    backgroundColor: T.glass.pill,
+    backgroundColor: t.glass.pill,
     borderWidth: 1,
-    borderColor: T.status.danger,
+    borderColor: t.status.danger,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1119,7 +1123,7 @@ const s = StyleSheet.create({
   // Summary
   summaryScroll: {
     flex: 1,
-    backgroundColor: T.bg.primary,
+    backgroundColor: t.bg.primary,
   },
   summaryContent: {
     paddingHorizontal: SP[6],
@@ -1130,8 +1134,8 @@ const s = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: SP[5],
     borderWidth: 1,
-    borderColor: T.glass.border,
-    backgroundColor: T.bg.primary,
+    borderColor: t.glass.border,
+    backgroundColor: t.bg.primary,
   },
   summaryHeader: {
     flexDirection: 'row',
@@ -1142,7 +1146,7 @@ const s = StyleSheet.create({
   summaryTitle: {
     fontFamily: TY.sans.bold,
     fontSize: TY.size.h2,
-    color: T.text.primary,
+    color: t.text.primary,
     letterSpacing: TY.tracking.tight,
   },
   primaryMetrics: {
@@ -1157,20 +1161,20 @@ const s = StyleSheet.create({
     alignItems: 'center',
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderColor: T.glass.border,
+    borderColor: t.glass.border,
     paddingHorizontal: SP[4],
     marginHorizontal: SP[2],
   },
   primaryMetricVal: {
     fontFamily: TY.mono.bold,
     fontSize: TY.size.h2,
-    color: T.text.primary,
+    color: t.text.primary,
     letterSpacing: TY.tracking.tight,
   },
   primaryMetricLbl: {
     fontFamily: TY.mono.medium,
     fontSize: TY.size.micro,
-    color: T.text.label,
+    color: t.text.label,
     letterSpacing: TY.tracking.label,
   },
   secondaryGrid: {
@@ -1187,20 +1191,20 @@ const s = StyleSheet.create({
   secondaryVal: {
     fontFamily: TY.mono.semibold,
     fontSize: TY.size.h3,
-    color: T.text.primary,
+    color: t.text.primary,
     marginTop: SP[1],
     letterSpacing: TY.tracking.tight,
   },
   secondaryLbl: {
     fontFamily: TY.mono.medium,
     fontSize: TY.size.micro,
-    color: T.text.label,
+    color: t.text.label,
     letterSpacing: TY.tracking.label,
   },
   splitsTitle: {
     fontFamily: TY.mono.medium,
     fontSize: TY.size.micro,
-    color: T.text.label,
+    color: t.text.label,
     textTransform: 'uppercase',
     letterSpacing: TY.tracking.label,
     marginBottom: SP[3],
@@ -1208,7 +1212,7 @@ const s = StyleSheet.create({
   splitsHeaderRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderColor: T.glass.border,
+    borderColor: t.glass.border,
     paddingVertical: SP[3],
     paddingHorizontal: SP[4],
   },
@@ -1217,7 +1221,7 @@ const s = StyleSheet.create({
     paddingVertical: SP[3],
     paddingHorizontal: SP[4],
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: T.glass.border,
+    borderColor: t.glass.border,
   },
   splitsCell: {
     flex: 1,
@@ -1225,13 +1229,13 @@ const s = StyleSheet.create({
   splitsCellHeader: {
     fontFamily: TY.mono.medium,
     fontSize: TY.size.micro,
-    color: T.text.label,
+    color: t.text.label,
     letterSpacing: TY.tracking.label,
   },
   splitsCellValue: {
     fontFamily: TY.mono.regular,
     fontSize: TY.size.small,
-    color: T.text.body,
+    color: t.text.body,
   },
 
   // Save / discard
@@ -1239,7 +1243,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: T.accent,
+    backgroundColor: t.accent,
     borderRadius: R.md,
     paddingVertical: SP[4],
     gap: SP[2],
@@ -1248,7 +1252,7 @@ const s = StyleSheet.create({
   saveBtnText: {
     fontFamily: TY.sans.semibold,
     fontSize: TY.size.body,
-    color: T.accentInk,
+    color: t.accentInk,
     letterSpacing: TY.tracking.tight,
   },
   discardBtn: {
@@ -1258,6 +1262,7 @@ const s = StyleSheet.create({
   discardBtnText: {
     fontFamily: TY.sans.medium,
     fontSize: TY.size.body,
-    color: T.text.muted,
+    color: t.text.muted,
   },
-});
+  });
+}

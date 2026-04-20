@@ -3,7 +3,7 @@
  * Collects nutrition preferences and PATCHes /nutrition/profile on completion.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -18,8 +18,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import apiClient, { getNutritionProfile, NutritionProfile } from '@/services/api';
-import { theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
+import { ThemeColors, theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
 
+import { useTheme } from '@/contexts/ThemeContext';
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const TOTAL_STEPS = 6;
@@ -315,6 +316,8 @@ function FoodChip({ food, loved, disliked, onPress }: FoodChipProps) {
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function NutritionSurveyScreen() {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [step, setStep] = useState(1);
   const [surveyData, setSurveyData] = useState<SurveyData>(DEFAULT_SURVEY);
   const [saving, setSaving] = useState(false);
@@ -995,21 +998,22 @@ export default function NutritionSurveyScreen() {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+function createStyles(t: ThemeColors) {
+  return StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: T.bg.elevated,
+    backgroundColor: t.bg.elevated,
   },
 
   // Progress bar
   progressBarTrack: {
     height: 3,
-    backgroundColor: T.border,
+    backgroundColor: t.border,
     width: '100%',
   },
   progressBarFill: {
     height: 3,
-    backgroundColor: T.accent,
+    backgroundColor: t.accent,
     borderRadius: 2,
   },
 
@@ -1026,12 +1030,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   headerStepText: {
-    color: T.text.secondary,
+    color: t.text.secondary,
     fontSize: 13,
     fontFamily: TY.sans.medium,
   },
   skipText: {
-    color: T.text.secondary,
+    color: t.text.secondary,
     fontSize: 14,
     fontFamily: TY.sans.medium,
     textAlign: 'right',
@@ -1048,14 +1052,14 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   stepTitle: {
-    color: T.text.primary,
+    color: t.text.primary,
     fontSize: 26,
     fontFamily: TY.sans.bold,
     marginBottom: 24,
     lineHeight: 32,
   },
   sectionLabel: {
-    color: T.text.secondary,
+    color: t.text.secondary,
     fontSize: 12,
     fontFamily: TY.sans.semibold,
     textTransform: 'uppercase',
@@ -1073,21 +1077,21 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: R.lg,
     borderWidth: 1,
-    borderColor: T.glass.rim,
+    borderColor: t.glass.rim,
     marginRight: 8,
     marginBottom: 8,
   },
   chipSelected: {
-    backgroundColor: T.accent,
-    borderColor: T.accent,
+    backgroundColor: t.accent,
+    borderColor: t.accent,
   },
   chipText: {
-    color: T.text.body,
+    color: t.text.body,
     fontSize: 13,
     fontFamily: TY.sans.medium,
   },
   chipTextSelected: {
-    color: T.bg.elevated,
+    color: t.bg.elevated,
   },
   chipRow: {
     paddingVertical: 4,
@@ -1104,21 +1108,21 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: R.lg,
     borderWidth: 1,
-    borderColor: T.glass.rim,
+    borderColor: t.glass.rim,
     marginRight: 8,
     marginBottom: 8,
   },
   pillSelected: {
-    backgroundColor: T.accent,
-    borderColor: T.accent,
+    backgroundColor: t.accent,
+    borderColor: t.accent,
   },
   pillText: {
-    color: T.text.body,
+    color: t.text.body,
     fontSize: 13,
     fontFamily: TY.sans.medium,
   },
   pillTextSelected: {
-    color: T.bg.elevated,
+    color: t.bg.elevated,
   },
   pillRow: {
     flexDirection: 'row',
@@ -1127,7 +1131,7 @@ const styles = StyleSheet.create({
 
   // Large tile
   tile: {
-    backgroundColor: T.border,
+    backgroundColor: t.border,
     borderRadius: R.md,
     padding: 16,
     marginBottom: 10,
@@ -1135,52 +1139,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: T.border,
+    borderColor: t.border,
   },
   tileSelected: {
-    backgroundColor: T.accent,
-    borderColor: T.accent,
+    backgroundColor: t.accent,
+    borderColor: t.accent,
   },
   tileContent: {
     flex: 1,
   },
   tileLabel: {
-    color: T.text.primary,
+    color: t.text.primary,
     fontSize: 15,
     fontFamily: TY.sans.semibold,
   },
   tileLabelSelected: {
-    color: T.bg.elevated,
+    color: t.bg.elevated,
   },
   tileSub: {
-    color: T.text.secondary,
+    color: t.text.secondary,
     fontSize: 12,
     marginTop: 2,
   },
   tileSubSelected: {
-    color: T.text.muted,
+    color: t.text.muted,
   },
 
   // TextInput
   textInput: {
-    backgroundColor: T.border,
+    backgroundColor: t.border,
     borderRadius: R.sm,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    color: T.text.primary,
+    color: t.text.primary,
     fontSize: 14,
     borderWidth: 1,
-    borderColor: T.border,
+    borderColor: t.border,
   },
   textInputSmall: {
-    backgroundColor: T.border,
+    backgroundColor: t.border,
     borderRadius: R.sm,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: T.text.primary,
+    color: t.text.primary,
     fontSize: 14,
     borderWidth: 1,
-    borderColor: T.border,
+    borderColor: t.border,
     flex: 1,
   },
 
@@ -1194,7 +1198,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   ifCustomLabel: {
-    color: T.text.secondary,
+    color: t.text.secondary,
     fontSize: 12,
     marginBottom: 6,
   },
@@ -1209,21 +1213,21 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: R.sm,
     borderWidth: 1,
-    borderColor: T.glass.rim,
+    borderColor: t.glass.rim,
     alignItems: 'center',
     justifyContent: 'center',
   },
   numberButtonSelected: {
-    backgroundColor: T.accent,
-    borderColor: T.accent,
+    backgroundColor: t.accent,
+    borderColor: t.accent,
   },
   numberButtonText: {
-    color: T.text.body,
+    color: t.text.body,
     fontSize: 17,
     fontFamily: TY.sans.semibold,
   },
   numberButtonTextSelected: {
-    color: T.bg.elevated,
+    color: t.bg.elevated,
   },
 
   // Meal time rows
@@ -1234,21 +1238,21 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   mealTimeLabel: {
-    color: T.text.primary,
+    color: t.text.primary,
     fontSize: 14,
     fontFamily: TY.sans.medium,
     width: 80,
   },
   mealTimeInput: {
     flex: 1,
-    backgroundColor: T.border,
+    backgroundColor: t.border,
     borderRadius: R.sm,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: T.text.primary,
+    color: t.text.primary,
     fontSize: 14,
     borderWidth: 1,
-    borderColor: T.border,
+    borderColor: t.border,
   },
 
   // Step 6 — Done
@@ -1258,26 +1262,26 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   doneSubtitle: {
-    color: T.text.secondary,
+    color: t.text.secondary,
     fontSize: 14,
     lineHeight: 22,
     marginBottom: 28,
   },
   summaryCard: {
-    backgroundColor: T.border,
+    backgroundColor: t.border,
     borderRadius: R.md,
     padding: 18,
     borderWidth: 1,
-    borderColor: T.border,
+    borderColor: t.border,
   },
   summaryEmpty: {
-    color: T.text.muted,
+    color: t.text.muted,
     fontSize: 13,
     textAlign: 'center',
   },
   summaryDivider: {
     height: 1,
-    backgroundColor: T.bg.elevated,
+    backgroundColor: t.bg.elevated,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -1286,13 +1290,13 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   summaryLabel: {
-    color: T.text.secondary,
+    color: t.text.secondary,
     fontSize: 13,
     fontFamily: TY.sans.medium,
     flex: 1,
   },
   summaryValue: {
-    color: T.text.primary,
+    color: t.text.primary,
     fontSize: 13,
     fontFamily: TY.sans.medium,
     maxWidth: '58%',
@@ -1307,82 +1311,83 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   continueButton: {
-    backgroundColor: T.accent,
+    backgroundColor: t.accent,
     borderRadius: R.sm,
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   continueButtonText: {
-    color: T.bg.elevated,
+    color: t.bg.elevated,
     fontSize: 16,
     fontFamily: TY.sans.bold,
   },
   submitButton: {
-    backgroundColor: T.signal.load,
+    backgroundColor: t.signal.load,
   },
   submitButtonText: {
-    color: T.text.primary,
+    color: t.text.primary,
     fontSize: 16,
     fontFamily: TY.sans.bold,
   },
 
   // Diet notes
   dietNote: {
-    color: T.text.secondary, fontSize: 12, fontStyle: 'italic',
+    color: t.text.secondary, fontSize: 12, fontStyle: 'italic',
     marginTop: 4, marginBottom: 8,
   },
   dietChangeNotice: {
-    color: T.status.warn, fontSize: 12,
+    color: t.status.warn, fontSize: 12,
     marginTop: 4, marginBottom: 8,
   },
 
   // Food chip styles
-  foodModeHint: { color: T.text.muted, fontSize: 12, marginBottom: 10 },
+  foodModeHint: { color: t.text.muted, fontSize: 12, marginBottom: 10 },
   foodModeToggle: { flexDirection: 'row', marginBottom: 16, gap: 10 },
   foodModeBtn: {
     paddingHorizontal: 20, paddingVertical: 8, borderRadius: R.lg,
-    borderWidth: 1, borderColor: T.glass.rim,
+    borderWidth: 1, borderColor: t.glass.rim,
   },
-  foodModeBtnActive: { backgroundColor: T.accent, borderColor: T.accent },
-  foodModeBtnDislike: { borderColor: T.status.danger },
-  foodModeBtnText: { color: T.text.secondary, fontSize: 13, fontFamily: TY.sans.semibold },
-  foodModeBtnTextActive: { color: T.bg.elevated },
+  foodModeBtnActive: { backgroundColor: t.accent, borderColor: t.accent },
+  foodModeBtnDislike: { borderColor: t.status.danger },
+  foodModeBtnText: { color: t.text.secondary, fontSize: 13, fontFamily: TY.sans.semibold },
+  foodModeBtnTextActive: { color: t.bg.elevated },
   foodCategoryLabel: {
-    color: T.text.muted, fontSize: 11, fontFamily: TY.sans.semibold,
+    color: t.text.muted, fontSize: 11, fontFamily: TY.sans.semibold,
     textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8, marginTop: 14,
   },
   foodChip: {
     paddingHorizontal: 12, paddingVertical: 7, borderRadius: R.lg,
-    borderWidth: 1, borderColor: T.border, marginRight: 8, marginBottom: 4,
+    borderWidth: 1, borderColor: t.border, marginRight: 8, marginBottom: 4,
   },
-  foodChipLoved: { backgroundColor: T.accent, borderColor: T.accent },
-  foodChipDisliked: { backgroundColor: T.status.danger + '20', borderColor: T.status.danger },
-  foodChipText: { color: T.text.secondary, fontSize: 13, fontFamily: TY.sans.medium },
-  foodChipTextLoved: { color: T.bg.elevated },
-  foodChipTextDisliked: { color: T.status.danger },
+  foodChipLoved: { backgroundColor: t.accent, borderColor: t.accent },
+  foodChipDisliked: { backgroundColor: t.status.danger + '20', borderColor: t.status.danger },
+  foodChipText: { color: t.text.secondary, fontSize: 13, fontFamily: TY.sans.medium },
+  foodChipTextLoved: { color: t.bg.elevated },
+  foodChipTextDisliked: { color: t.status.danger },
   // Country dropdown styles
   countrySelectedChip: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: T.border, borderRadius: R.sm, paddingHorizontal: 14, paddingVertical: 12,
-    borderWidth: 1, borderColor: T.glass.rim,
+    backgroundColor: t.border, borderRadius: R.sm, paddingHorizontal: 14, paddingVertical: 12,
+    borderWidth: 1, borderColor: t.glass.rim,
   },
-  countrySelectedText: { color: T.text.primary, fontSize: 15, fontFamily: TY.sans.medium },
-  countryChangeText: { color: T.text.muted, fontSize: 13 },
+  countrySelectedText: { color: t.text.primary, fontSize: 15, fontFamily: TY.sans.medium },
+  countryChangeText: { color: t.text.muted, fontSize: 13 },
   countryPickerTrigger: {
-    backgroundColor: T.border, borderRadius: R.sm, paddingHorizontal: 14, paddingVertical: 12,
-    borderWidth: 1, borderColor: T.border,
+    backgroundColor: t.border, borderRadius: R.sm, paddingHorizontal: 14, paddingVertical: 12,
+    borderWidth: 1, borderColor: t.border,
   },
-  countryPickerTriggerText: { color: T.text.muted, fontSize: 14 },
+  countryPickerTriggerText: { color: t.text.muted, fontSize: 14 },
   countryDropdown: {
-    backgroundColor: T.bg.elevated, borderRadius: R.sm, borderWidth: 1, borderColor: T.border,
+    backgroundColor: t.bg.elevated, borderRadius: R.sm, borderWidth: 1, borderColor: t.border,
     marginTop: 8, overflow: 'hidden',
   },
   countrySearchInput: {
-    paddingHorizontal: 14, paddingVertical: 10, color: T.text.primary, fontSize: 14,
-    borderBottomWidth: 1, borderBottomColor: T.border,
+    paddingHorizontal: 14, paddingVertical: 10, color: t.text.primary, fontSize: 14,
+    borderBottomWidth: 1, borderBottomColor: t.border,
   },
   countryScrollList: { maxHeight: 220 },
-  countryItem: { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: T.border },
-  countryItemText: { color: T.text.body, fontSize: 14 },
-});
+  countryItem: { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: t.border },
+  countryItemText: { color: t.text.body, fontSize: 14 },
+  });
+}

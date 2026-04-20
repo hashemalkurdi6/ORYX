@@ -42,6 +42,7 @@ import apiClient from '@/services/api';
 import PostDetailModal from '@/components/PostDetailModal';
 import AmbientBackdrop from '@/components/AmbientBackdrop';
 import StoryCreator from '@/components/StoryCreator';
+import PostCreator from '@/components/PostCreator';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ThemeColors, theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
 import { useCountUp } from '@/services/animations';
@@ -345,14 +346,54 @@ export default function ProfileScreen() {
   const [editCaptionText, setEditCaptionText] = useState('');
   const [showEditCaption, setShowEditCaption] = useState(false);
 
-  // Create menu (+ button) and story creator
+  // Create menu (+ button) + inline story/post composers
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [showStoryCreator, setShowStoryCreator] = useState(false);
+  const [showPostCreator, setShowPostCreator] = useState(false);
 
-  // Posts tab: grid layout + long-press action menu
-  type GridLayout = '3col' | '2col' | 'list';
-  const [gridLayout, setGridLayout] = useState<GridLayout>('3col');
+  // Posts tab: portfolio-first layout + long-press action menu.
+  //   'grid'      → 3-col dense (power-user option)
+  //   'portfolio' → 2-col, natural aspect ratios (VSCO-style — horizontal
+  //                 shots show horizontal, portraits show tall)
+  //   'timeline'  → 1-col full-width with AI caption, natural aspect
+  type GridLayout = 'grid' | 'portfolio' | 'timeline';
+  const [gridLayout, setGridLayout] = useState<GridLayout>(
+    (user?.post_grid_layout as GridLayout) ?? 'portfolio',
+  );
   const [postActionMenu, setPostActionMenu] = useState<Post | null>(null);
+
+  // Per-post aspect ratios captured from Image onLoad events.
+  // Populated once per photo, shared across Portfolio + Timeline renders so
+  // switching layouts doesn't re-fetch. Default fallback (until loaded):
+  //   Portfolio = 0.8 (4:5 portrait), Timeline = 1 (square).
+  const [postAspects, setPostAspects] = useState<Record<string, number>>({});
+  const captureAspect = useCallback((postId: string) => (e: any) => {
+    const src = e?.nativeEvent?.source;
+    if (!src?.width || !src?.height) return;
+    const ratio = src.width / src.height;
+    setPostAspects((prev) => (prev[postId] === ratio ? prev : { ...prev, [postId]: ratio }));
+  }, []);
+
+  // Keep the in-memory toggle in sync with the value coming from the server
+  // (e.g. the user changed it on another device and then opened the app).
+  useEffect(() => {
+    const pref = user?.post_grid_layout;
+    if (pref && pref !== gridLayout) {
+      setGridLayout(pref as GridLayout);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.post_grid_layout]);
+
+  const changeGridLayout = useCallback(async (next: GridLayout) => {
+    if (next === gridLayout) return;
+    setGridLayout(next);                       // optimistic
+    updateUser({ post_grid_layout: next });    // local Zustand store
+    try {
+      await updateMyProfile({ post_grid_layout: next });
+    } catch {
+      // silent — the layout still works for this session even if persistence fails
+    }
+  }, [gridLayout, updateUser]);
 
   // Achievements tab: badge detail sheet
   const [selectedBadge, setSelectedBadge] = useState<typeof BADGES[number] | null>(null);
@@ -540,115 +581,44 @@ export default function ProfileScreen() {
     const photoPosts = userPosts.filter((p) => !!p.photo_url && !p.is_archived);
     const pinnedPosts = photoPosts.filter((p) => !!p.is_pinned);
     const regularPosts = photoPosts.filter((p) => !p.is_pinned);
+    const orderedPosts = [...pinnedPosts, ...regularPosts];
 
-    // Cycle icon for the grid-layout toggle
-    const nextLayout: Record<GridLayout, GridLayout> = { '3col': '2col', '2col': 'list', list: '3col' };
-    const layoutIcon: Record<GridLayout, React.ComponentProps<typeof Ionicons>['name']> = {
-      '3col': 'grid-outline',
-      '2col': 'apps-outline',
-      list: 'list-outline',
-    };
+    // Three layouts, three icons. The full-grid preview uses an icon-row
+    // rather than a cycling single-icon, so the user can see their choices.
+    const LAYOUT_ICONS: { key: GridLayout; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
+      { key: 'grid',      icon: 'grid-outline' },
+      { key: 'portfolio', icon: 'apps-outline' },
+      { key: 'timeline',  icon: 'list-outline' },
+    ];
 
     if (photoPosts.length === 0) {
       return (
-        <View style={s.tabEmptyState}>
-          <Ionicons name="images-outline" size={32} color={theme.border} />
-          <Text style={s.tabEmptyText}>No posts yet</Text>
+        <View>
+          <LayoutToggle />
+          <View style={s.tabEmptyState}>
+            <Ionicons name="images-outline" size={32} color={theme.border} />
+            <Text style={s.tabEmptyText}>No posts yet</Text>
+          </View>
         </View>
       );
     }
 
-    const columns = gridLayout === '3col' ? 3 : gridLayout === '2col' ? 2 : 1;
-    const cellSize = gridLayout === 'list'
-      ? SCREEN_WIDTH - 40
-      : (SCREEN_WIDTH - 40 - (columns - 1) * 2) / columns;
+    // Grid: 3-col dense, 1:1 cells, 1px margin — retained for power users.
+    // Portfolio: 2-col, **natural aspect per image** (VSCO portfolio style).
+    //            Horizontal shots are short + wide; portraits stay tall.
+    // Timeline:  full-width, natural aspect + AI caption + metadata row.
+    const SIDE_PADDING = 0;
+    const CONTENT_W = SCREEN_WIDTH - 40;
 
-    const PostThumb = ({ post, pinned }: { post: Post; pinned?: boolean }) => {
-      if (gridLayout === 'list') {
-        // Full-width row with photo + caption snippet
-        return (
-          <TouchableOpacity
-            key={post.id}
-            onPress={() => { setSelectedPost(post); setShowPostDetail(true); }}
-            onLongPress={() => setPostActionMenu(post)}
-            delayLongPress={260}
-            style={{
-              flexDirection: 'row',
-              gap: SP[3],
-              padding: SP[3],
-              marginBottom: SP[2],
-              borderRadius: R.sm,
-              borderWidth: 1,
-              borderColor: T.border,
-              backgroundColor: T.bg.elevated,
-            }}
-            activeOpacity={0.85}
-          >
-            <Image
-              source={{ uri: post.photo_url! }}
-              style={{ width: 72, height: 72, borderRadius: R.xs }}
-              resizeMode="cover"
-            />
-            <View style={{ flex: 1, justifyContent: 'center', gap: 2 }}>
-              {pinned ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-                  <Ionicons name="pin" size={12} color={T.accent} />
-                  <Text style={{ fontFamily: TY.mono.semibold, fontSize: TY.size.micro, color: T.accent, letterSpacing: TY.tracking.label, textTransform: 'uppercase' }}>
-                    Pinned
-                  </Text>
-                </View>
-              ) : null}
-              <Text
-                style={{ fontFamily: TY.sans.regular, fontSize: TY.size.body, color: T.text.primary, lineHeight: 18 }}
-                numberOfLines={3}
-              >
-                {post.caption || 'No caption'}
-              </Text>
-              {post.time_ago ? (
-                <Text style={{ fontFamily: TY.sans.regular, fontSize: TY.size.small, color: T.text.muted, marginTop: 2 }}>
-                  {post.time_ago}
-                </Text>
-              ) : null}
-            </View>
-          </TouchableOpacity>
-        );
-      }
+    const gridCellSize = (CONTENT_W - 2 * 2) / 3;
+    const portfolioGap = SP[2];
+    const portfolioWidth = (CONTENT_W - portfolioGap) / 2;
 
+    function LayoutToggle() {
       return (
-        <TouchableOpacity
-          key={post.id}
-          onPress={() => { setSelectedPost(post); setShowPostDetail(true); }}
-          onLongPress={() => setPostActionMenu(post)}
-          delayLongPress={260}
-          style={{ width: cellSize, height: cellSize, margin: 1, position: 'relative' }}
-          activeOpacity={0.85}
-        >
-          <Image
-            source={{ uri: post.photo_url! }}
-            style={{ width: '100%', height: '100%', borderRadius: 4 }}
-            resizeMode="cover"
-          />
-          {pinned ? (
-            <View style={{
-              position: 'absolute', top: 6, left: 6,
-              backgroundColor: T.accent,
-              borderRadius: R.pill,
-              width: 22, height: 22,
-              alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Ionicons name="pin" size={12} color={T.accentInk} />
-            </View>
-          ) : null}
-        </TouchableOpacity>
-      );
-    };
-
-    return (
-      <View>
-        {/* Grid layout toggle */}
         <View style={{
           flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-          paddingHorizontal: 4, paddingBottom: SP[2],
+          paddingHorizontal: 4, paddingBottom: SP[3],
         }}>
           <Text style={{
             fontFamily: TY.mono.semibold, fontSize: TY.size.micro,
@@ -657,36 +627,245 @@ export default function ProfileScreen() {
           }}>
             {photoPosts.length} {photoPosts.length === 1 ? 'post' : 'posts'}
           </Text>
-          <TouchableOpacity
-            onPress={() => setGridLayout(nextLayout[gridLayout])}
-            hitSlop={10}
-            style={{
-              width: 30, height: 30, borderRadius: R.xs,
-              alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <Ionicons name={layoutIcon[gridLayout]} size={18} color={T.text.body} />
-          </TouchableOpacity>
+          <View style={{
+            flexDirection: 'row',
+            backgroundColor: T.glass.pill,
+            borderWidth: 1,
+            borderColor: T.glass.border,
+            borderRadius: R.pill,
+            padding: 2,
+            gap: 2,
+          }}>
+            {LAYOUT_ICONS.map(({ key, icon }) => {
+              const active = gridLayout === key;
+              return (
+                <TouchableOpacity
+                  key={key}
+                  onPress={() => changeGridLayout(key)}
+                  hitSlop={6}
+                  style={{
+                    width: 28, height: 26, borderRadius: R.pill,
+                    alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: active ? T.accent : 'transparent',
+                  }}
+                >
+                  <Ionicons name={icon} size={14} color={active ? T.accentInk : T.text.body} />
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
+      );
+    }
 
-        {/* Pinned posts */}
-        {pinnedPosts.length > 0 && gridLayout !== 'list' ? (
-          <View style={[s.postsGrid, { marginBottom: SP[2] }]}>
-            {pinnedPosts.map((post) => <PostThumb key={post.id} post={post} pinned />)}
-          </View>
-        ) : null}
+    const PinBadge = () => (
+      <View style={{
+        position: 'absolute', top: 6, left: 6,
+        backgroundColor: T.accent,
+        borderRadius: R.pill,
+        width: 22, height: 22,
+        alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Ionicons name="pin" size={12} color={T.accentInk} />
+      </View>
+    );
 
-        {/* Regular grid / list */}
-        {gridLayout === 'list' ? (
-          <View>
-            {pinnedPosts.map((post) => <PostThumb key={post.id} post={post} pinned />)}
-            {regularPosts.map((post) => <PostThumb key={post.id} post={post} />)}
-          </View>
-        ) : (
+    // ── Grid (3-col) ────────────────────────────────────────────────────
+    if (gridLayout === 'grid') {
+      return (
+        <View>
+          <LayoutToggle />
           <View style={s.postsGrid}>
-            {regularPosts.map((post) => <PostThumb key={post.id} post={post} />)}
+            {orderedPosts.map((post) => (
+              <TouchableOpacity
+                key={post.id}
+                onPress={() => { setSelectedPost(post); setShowPostDetail(true); }}
+                onLongPress={() => setPostActionMenu(post)}
+                delayLongPress={260}
+                style={{ width: gridCellSize, height: gridCellSize, margin: 1, position: 'relative' }}
+                activeOpacity={0.85}
+              >
+                <Image
+                  source={{ uri: post.photo_url! }}
+                  style={{ width: '100%', height: '100%', borderRadius: R.xs }}
+                  resizeMode="cover"
+                />
+                {post.is_pinned ? <PinBadge /> : null}
+              </TouchableOpacity>
+            ))}
           </View>
-        )}
+        </View>
+      );
+    }
+
+    // ── Portfolio (2-col, natural aspect per image — VSCO style) ───────
+    if (gridLayout === 'portfolio') {
+      // Split posts between two columns so heights stagger naturally (masonry).
+      // Sequential fill, alternating columns, keeps the feed ordered while
+      // letting each image breathe at its true aspect ratio.
+      const leftCol: Post[] = [];
+      const rightCol: Post[] = [];
+      let leftHeight = 0;
+      let rightHeight = 0;
+      for (const post of orderedPosts) {
+        const aspect = postAspects[post.id] ?? 0.8; // 4:5 fallback until load
+        const cellHeight = portfolioWidth / aspect;
+        if (leftHeight <= rightHeight) {
+          leftCol.push(post);
+          leftHeight += cellHeight + portfolioGap;
+        } else {
+          rightCol.push(post);
+          rightHeight += cellHeight + portfolioGap;
+        }
+      }
+
+      const Cell = ({ post }: { post: Post }) => (
+        <TouchableOpacity
+          key={post.id}
+          onPress={() => { setSelectedPost(post); setShowPostDetail(true); }}
+          onLongPress={() => setPostActionMenu(post)}
+          delayLongPress={260}
+          style={{
+            width: portfolioWidth,
+            aspectRatio: postAspects[post.id] ?? 0.8,
+            marginBottom: portfolioGap,
+            borderRadius: R.md,
+            overflow: 'hidden',
+            position: 'relative',
+          }}
+          activeOpacity={0.85}
+        >
+          <Image
+            source={{ uri: post.photo_url! }}
+            style={{ width: '100%', height: '100%' }}
+            resizeMode="cover"
+            onLoad={captureAspect(post.id)}
+          />
+          {post.is_pinned ? <PinBadge /> : null}
+        </TouchableOpacity>
+      );
+
+      return (
+        <View>
+          <LayoutToggle />
+          <View style={{ flexDirection: 'row', gap: portfolioGap, paddingHorizontal: SIDE_PADDING }}>
+            <View style={{ flex: 1 }}>
+              {leftCol.map((post) => <Cell key={post.id} post={post} />)}
+            </View>
+            <View style={{ flex: 1 }}>
+              {rightCol.map((post) => <Cell key={post.id} post={post} />)}
+            </View>
+          </View>
+        </View>
+      );
+    }
+
+    // ── Timeline (1-col, natural aspect, caption + metadata) ────────────
+    const fmtDate = (iso: string | null | undefined): string => {
+      if (!iso) return '';
+      const d = new Date(iso);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase();
+    };
+
+    return (
+      <View>
+        <LayoutToggle />
+        <View style={{ gap: SP[7] }}>
+          {orderedPosts.map((post) => {
+            const session = post.oryx_data_card_json;
+            const sessionName: string | undefined =
+              (session && (session.session_name || session.custom_title)) || undefined;
+            const sportCategory: string | undefined = session?.sport_category;
+            return (
+              <TouchableOpacity
+                key={post.id}
+                onPress={() => { setSelectedPost(post); setShowPostDetail(true); }}
+                onLongPress={() => setPostActionMenu(post)}
+                delayLongPress={260}
+                activeOpacity={0.9}
+                style={{ gap: SP[3] }}
+              >
+                <View style={{ position: 'relative' }}>
+                  <Image
+                    source={{ uri: post.photo_url! }}
+                    style={{
+                      width: CONTENT_W,
+                      aspectRatio: postAspects[post.id] ?? 1,
+                      borderRadius: R.md,
+                    }}
+                    resizeMode="cover"
+                    onLoad={captureAspect(post.id)}
+                  />
+                  {post.is_pinned ? <PinBadge /> : null}
+                </View>
+
+                {post.caption ? (
+                  <Text
+                    style={{
+                      fontFamily: TY.sans.regular,
+                      fontSize: TY.size.body,
+                      color: T.text.body,
+                      lineHeight: 20,
+                    }}
+                    numberOfLines={4}
+                  >
+                    {post.caption}
+                  </Text>
+                ) : null}
+
+                {/* Metadata row — date, location, session pill */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: SP[2] }}>
+                  <Text style={{
+                    fontFamily: TY.mono.semibold,
+                    fontSize: TY.size.micro,
+                    color: T.text.muted,
+                    letterSpacing: TY.tracking.label,
+                  }}>
+                    {fmtDate(post.created_at)}
+                  </Text>
+                  {post.location_text ? (
+                    <>
+                      <View style={{ width: 2, height: 2, borderRadius: 1, backgroundColor: T.text.muted }} />
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Ionicons name="location-outline" size={11} color={T.text.muted} />
+                        <Text style={{
+                          fontFamily: TY.sans.regular,
+                          fontSize: TY.size.small,
+                          color: T.text.muted,
+                        }}>
+                          {post.location_text}
+                        </Text>
+                      </View>
+                    </>
+                  ) : null}
+                  {sessionName ? (
+                    <View style={{
+                      flexDirection: 'row', alignItems: 'center', gap: 4,
+                      backgroundColor: T.glass.pill,
+                      borderWidth: 1, borderColor: T.glass.border,
+                      borderRadius: R.pill,
+                      paddingHorizontal: SP[2] + 2, paddingVertical: 2,
+                      marginLeft: SP[1],
+                    }}>
+                      <Ionicons
+                        name={sportCategory ? getSportIcon(sportCategory) : 'fitness-outline'}
+                        size={11}
+                        color={T.text.body}
+                      />
+                      <Text style={{
+                        fontFamily: TY.sans.medium,
+                        fontSize: TY.size.small,
+                        color: T.text.body,
+                      }}>
+                        {sessionName}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
     );
   }
@@ -912,17 +1091,20 @@ export default function ProfileScreen() {
           </TouchableOpacity>
 
           <View style={s.statsTripletRow}>
+            {/* Posts — the training-adjacent headline stat, stays at full weight */}
             <View style={s.statsTripletItem}>
               <StatCountUp value={userPosts.length} style={s.statsTripletVal} />
               <Text style={s.statsTripletLabel}>posts</Text>
             </View>
+            {/* Followers / Following — de-emphasized via muted tokens so the
+                training stats remain the headline. Still tappable, still visible. */}
             <TouchableOpacity style={s.statsTripletItem} onPress={() => openSocialSheet('followers')} activeOpacity={0.7}>
-              <StatCountUp value={user?.followers_count ?? 0} style={s.statsTripletVal} />
-              <Text style={s.statsTripletLabel}>followers</Text>
+              <StatCountUp value={user?.followers_count ?? 0} style={s.statsTripletValSoft} />
+              <Text style={s.statsTripletLabelSoft}>followers</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.statsTripletItem} onPress={() => openSocialSheet('following')} activeOpacity={0.7}>
-              <StatCountUp value={user?.following_count ?? 0} style={s.statsTripletVal} />
-              <Text style={s.statsTripletLabel}>following</Text>
+              <StatCountUp value={user?.following_count ?? 0} style={s.statsTripletValSoft} />
+              <Text style={s.statsTripletLabelSoft}>following</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1115,7 +1297,9 @@ export default function ProfileScreen() {
             <TouchableOpacity
               onPress={() => {
                 setShowCreateMenu(false);
-                router.push('/(tabs)/community');
+                // Small delay so the close animation can finish before the next
+                // modal opens — avoids a glitchy double-modal flash.
+                setTimeout(() => setShowPostCreator(true), 250);
               }}
               style={{
                 flexDirection: 'row', alignItems: 'center', gap: SP[3],
@@ -1189,6 +1373,13 @@ export default function ProfileScreen() {
       visible={showStoryCreator}
       onClose={() => setShowStoryCreator(false)}
       onStoryCreated={() => setShowStoryCreator(false)}
+    />
+
+    {/* ── Post Creator (New Post) — same component community.tsx uses ── */}
+    <PostCreator
+      visible={showPostCreator}
+      onClose={() => setShowPostCreator(false)}
+      onPostCreated={() => { setShowPostCreator(false); loadUserPosts(); }}
     />
 
     {/* ── Highlight Action sheet (long-press on a highlight card) ── */}
@@ -1982,6 +2173,16 @@ function createStyles(t: ThemeColors) {
     },
     statsTripletLabel: {
       fontSize: 12, color: t.text.secondary,
+      fontFamily: TY.sans.regular,
+    },
+    // De-emphasized variants for social stats (followers/following) — signals
+    // that training stats are the headline and social context is secondary.
+    statsTripletValSoft: {
+      fontSize: 20, color: t.text.muted,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.3, ...TY.tabular,
+    },
+    statsTripletLabelSoft: {
+      fontSize: 12, color: t.text.muted,
       fontFamily: TY.sans.regular,
     },
 

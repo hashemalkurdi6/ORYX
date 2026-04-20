@@ -48,7 +48,8 @@ import WarmUpModal from '@/components/WarmUpModal';
 import OutdoorTracker, { SavedOutdoorActivity } from '@/components/OutdoorTracker';
 import OryxInsightCreator from '@/components/OryxInsightCreator';
 import AmbientBackdrop from '@/components/AmbientBackdrop';
-import { theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
+import { ThemeColors, theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
+import { useTheme } from '@/contexts/ThemeContext';
 import { useCountUp } from '@/services/animations';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -850,25 +851,38 @@ const SportSelector = ({ onSelect, onClose }: { onSelect: (s: SportType) => void
 
   return (
     <View style={{ flex: 1 }}>
-      <View style={[styles.sportSelectorHeader, { paddingTop: insets.top + 16 }]}>
-        <Text style={styles.sportSelectorTitle}>Select Activity</Text>
-        <TouchableOpacity onPress={onClose}>
-          <Ionicons name="close" size={24} color="#F0F2F6" />
+      <AmbientBackdrop />
+      <View style={[styles.sportSelectorHeader, { paddingTop: insets.top + 12 }]}>
+        <View>
+          <Text style={styles.sportSelectorTicker}>LOG · ACTIVITY</Text>
+          <Text style={styles.sportSelectorTitle}>Select activity</Text>
+        </View>
+        <TouchableOpacity
+          onPress={onClose}
+          style={styles.sportSelectorClose}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          activeOpacity={0.75}
+        >
+          <Ionicons name="close" size={18} color={T.text.body} />
         </TouchableOpacity>
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catScroll} contentContainerStyle={styles.catScrollContent}>
-        {cats.map(c => (
-          <TouchableOpacity
-            key={c}
-            style={[styles.catChip, catFilter === c && styles.catChipActive]}
-            onPress={() => setCatFilter(c)}
-          >
-            <Text style={[styles.catChipText, catFilter === c && styles.catChipTextActive]}>
-              {c === 'All' ? 'All' : c.charAt(0).toUpperCase() + c.slice(1)}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {cats.map(c => {
+          const active = catFilter === c;
+          return (
+            <TouchableOpacity
+              key={c}
+              style={[styles.catChip, active && styles.catChipActive]}
+              onPress={() => setCatFilter(c)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.catChipText, active && styles.catChipTextActive]}>
+                {c === 'All' ? 'All' : c.charAt(0).toUpperCase() + c.slice(1)}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
 
       <FlatList
@@ -876,12 +890,13 @@ const SportSelector = ({ onSelect, onClose }: { onSelect: (s: SportType) => void
         keyExtractor={s => s.id}
         numColumns={3}
         contentContainerStyle={styles.sportGrid}
+        columnWrapperStyle={{ gap: 10 }}
         renderItem={({ item }) => (
-          <TouchableOpacity style={styles.sportTile} onPress={() => onSelect(item)}>
-            <View style={[styles.sportIconWrap, { backgroundColor: item.category === 'strength' ? 'rgba(28,34,46,0.72)' : item.category === 'cardio' ? 'rgba(28,34,46,0.72)' : item.category === 'combat' ? 'rgba(28,34,46,0.72)' : item.category === 'sport' ? 'rgba(28,34,46,0.72)' : 'rgba(28,34,46,0.72)' }]}>
-              <Ionicons name={item.icon as any} size={28} color="#F0F2F6" />
+          <TouchableOpacity style={styles.sportTile} onPress={() => onSelect(item)} activeOpacity={0.8}>
+            <View style={styles.sportIconWrap}>
+              <Ionicons name={item.icon as any} size={24} color={T.text.primary} />
             </View>
-            <Text style={styles.sportTileLabel}>{item.label}</Text>
+            <Text style={styles.sportTileLabel} numberOfLines={1}>{item.label}</Text>
           </TouchableOpacity>
         )}
       />
@@ -1411,7 +1426,7 @@ const ReadinessCard = ({
           <Text style={styles.readinessCardTitle}>Readiness to Train</Text>
           <Text style={[styles.readinessLabel, { color: c }]}>{data.label}</Text>
         </View>
-        <StepsCountUp target={data.score} style={[styles.readinessScore, { color: c }]} />
+        <StepsCountUp target={data.score} style={[styles.readinessScore, { color: c }]} cacheKey="activity.readiness" />
       </View>
       <Text style={styles.readinessExplanation}>{data.explanation}</Text>
       {data.score < 60 && (
@@ -1455,7 +1470,7 @@ const WeeklyLoadCard = ({ data }: { data: WeeklyLoad }) => {
     <View style={styles.weeklyLoadCard}>
       <Text style={styles.weeklyLoadTitle}>Weekly Training Load</Text>
       <View style={styles.weeklyLoadTopRow}>
-        <StepsCountUp target={data.this_week_load} style={styles.weeklyLoadNum} />
+        <StepsCountUp target={data.this_week_load} style={styles.weeklyLoadNum} cacheKey="activity.weeklyLoad" />
         <View style={styles.weeklyLoadChange}>
           <Ionicons
             name={pctChange >= 0 ? 'arrow-up-outline' : 'arrow-down-outline'}
@@ -1556,8 +1571,19 @@ function activityTicker(): string {
 }
 
 // Count-up wrapper for integer stats. Renders via <Text style={...}/>.
-function StepsCountUp({ target, style }: { target: number; style: any }) {
-  const v = useCountUp(target, 1000, 100);
+// `cacheKey` opts the caller into the "animate once per session per value"
+// behaviour — subsequent mounts with the same target snap to the value
+// without replaying the animation.
+function StepsCountUp({
+  target,
+  style,
+  cacheKey,
+}: {
+  target: number;
+  style: any;
+  cacheKey?: string;
+}) {
+  const v = useCountUp(target, 1000, 100, cacheKey);
   return <Text style={style}>{v.toLocaleString()}</Text>;
 }
 
@@ -1566,6 +1592,8 @@ function StepsCountUp({ target, style }: { target: number; style: any }) {
 export default function ActivityScreen() {
   const user = useAuthStore(s => s.user);
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   // Data
   const [feed, setFeed] = useState<FeedItem[]>([]);
@@ -2159,7 +2187,7 @@ export default function ActivityScreen() {
       <View style={styles.stepsCard}>
         <View style={styles.stepsLeft}>
           <Ionicons name="footsteps-outline" size={18} color={T.readiness.high} />
-          <StepsCountUp target={steps} style={styles.stepsVal} />
+          <StepsCountUp target={steps} style={styles.stepsVal} cacheKey="activity.steps" />
           <Text style={styles.stepsLabel}>/ 10,000 steps</Text>
         </View>
         <View style={styles.stepsBarBg}>
@@ -2547,7 +2575,8 @@ const chartConfig = {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+function createStyles(t: ThemeColors) {
+  return StyleSheet.create({
   // Transparent so AmbientBackdrop paints the app bg.
   container: { flex: 1, backgroundColor: 'transparent' },
   listContent: { paddingBottom: 120 },
@@ -2555,26 +2584,26 @@ const styles = StyleSheet.create({
   // Title bar — mono ticker + Geist title + lime accent button.
   titleBar: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 14 },
   pageTicker: {
-    fontSize: 10, color: T.text.muted,
+    fontSize: 10, color: t.text.muted,
     fontFamily: TY.mono.medium, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4,
   },
-  screenTitle: { fontSize: 26, color: T.text.primary, fontFamily: TY.sans.medium, letterSpacing: -0.5 },
-  addFab: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: T.accent, paddingHorizontal: 16, paddingVertical: 8, borderRadius: R.pill },
-  addFabText: { color: T.accentInk, fontFamily: TY.sans.semibold, fontSize: 14, letterSpacing: -0.2 },
+  screenTitle: { fontSize: 26, color: t.text.primary, fontFamily: TY.sans.medium, letterSpacing: -0.5 },
+  addFab: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: t.accent, paddingHorizontal: 16, paddingVertical: 8, borderRadius: R.pill },
+  addFabText: { color: t.accentInk, fontFamily: TY.sans.semibold, fontSize: 14, letterSpacing: -0.2 },
 
   // Steps
   stepsCard: {
     marginHorizontal: 16, marginBottom: 12,
-    backgroundColor: T.glass.card, borderRadius: R.lg, padding: SP[4],
-    borderWidth: 1, borderColor: T.glass.border,
+    backgroundColor: t.glass.card, borderRadius: R.lg, padding: SP[4],
+    borderWidth: 1, borderColor: t.glass.border,
   },
   stepsLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   stepsVal: {
-    fontSize: 20, color: T.text.primary,
+    fontSize: 20, color: t.text.primary,
     fontFamily: TY.sans.semibold, letterSpacing: -0.3, ...TY.tabular,
   },
   stepsLabel: {
-    fontSize: 11, color: T.text.muted,
+    fontSize: 11, color: t.text.muted,
     fontFamily: TY.mono.regular, letterSpacing: 0.3,
   },
   stepsBarBg: { height: 6, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: R.pill, overflow: 'hidden' },
@@ -2583,34 +2612,34 @@ const styles = StyleSheet.create({
   // Stats bar — two rows of 3
   statsBar: {
     marginHorizontal: 16, marginBottom: 12,
-    backgroundColor: T.glass.card, borderRadius: R.lg,
-    borderWidth: 1, borderColor: T.glass.border,
+    backgroundColor: t.glass.card, borderRadius: R.lg,
+    borderWidth: 1, borderColor: t.glass.border,
     paddingVertical: 4, paddingHorizontal: 14,
   },
   statsRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
-  statsRowBorder: { borderBottomWidth: 1, borderBottomColor: T.glass.border },
+  statsRowBorder: { borderBottomWidth: 1, borderBottomColor: t.glass.border },
   statItem: { flex: 1, alignItems: 'center' },
-  statDivider: { width: 1, height: 28, backgroundColor: T.glass.border },
+  statDivider: { width: 1, height: 28, backgroundColor: t.glass.border },
   statVal: {
-    fontSize: 18, color: T.text.primary,
+    fontSize: 18, color: t.text.primary,
     fontFamily: TY.sans.semibold, letterSpacing: -0.3, ...TY.tabular,
   },
   statLabel: {
-    fontSize: 9, color: T.text.secondary, marginTop: 4, textAlign: 'center',
+    fontSize: 9, color: t.text.secondary, marginTop: 4, textAlign: 'center',
     fontFamily: TY.mono.medium, letterSpacing: 1.2, textTransform: 'uppercase',
   },
 
   // Progress toggle
   progressToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 16, marginBottom: 8, paddingVertical: 10 },
-  progressToggleText: { fontSize: 15, color: T.text.primary, fontFamily: TY.sans.semibold, letterSpacing: -0.2 },
+  progressToggleText: { fontSize: 15, color: t.text.primary, fontFamily: TY.sans.semibold, letterSpacing: -0.2 },
   progressSection: { marginBottom: 4 },
   progressCard: {
     marginHorizontal: 16, marginBottom: 12,
-    backgroundColor: T.glass.card, borderRadius: R.lg, padding: SP[4],
-    borderWidth: 1, borderColor: T.glass.border,
+    backgroundColor: t.glass.card, borderRadius: R.lg, padding: SP[4],
+    borderWidth: 1, borderColor: t.glass.border,
   },
   progressCardTitle: {
-    fontSize: 11, color: T.text.secondary, marginBottom: 12,
+    fontSize: 11, color: t.text.secondary, marginBottom: 12,
     fontFamily: TY.mono.medium, letterSpacing: 1.8, textTransform: 'uppercase',
   },
   barChart: { borderRadius: 8, marginLeft: -8 },
@@ -2624,13 +2653,13 @@ const styles = StyleSheet.create({
   // Breakdown
   breakdownRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 8 },
   breakdownLabel: {
-    width: 72, fontSize: 12, color: T.text.secondary,
+    width: 72, fontSize: 12, color: t.text.secondary,
     fontFamily: TY.sans.regular,
   },
   breakdownBarBg: { flex: 1, height: 8, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: R.pill, overflow: 'hidden' },
   breakdownBarFill: { height: 8, borderRadius: R.pill },
   breakdownPct: {
-    width: 40, fontSize: 11, color: T.text.secondary, textAlign: 'right',
+    width: 40, fontSize: 11, color: t.text.secondary, textAlign: 'right',
     fontFamily: TY.mono.regular, letterSpacing: 0.3,
   },
 
@@ -2638,35 +2667,35 @@ const styles = StyleSheet.create({
   badgesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   badgeTile: {
     width: 100, height: 100, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: T.glass.pill, borderRadius: R.md, padding: 10, gap: 6, position: 'relative',
-    borderWidth: 1, borderColor: T.glass.border,
+    backgroundColor: t.glass.pill, borderRadius: R.md, padding: 10, gap: 6, position: 'relative',
+    borderWidth: 1, borderColor: t.glass.border,
   },
   badgeLocked: { opacity: 0.35 },
   badgeLabel: {
-    fontSize: 9, color: T.text.secondary, textAlign: 'center', lineHeight: 12,
+    fontSize: 9, color: t.text.secondary, textAlign: 'center', lineHeight: 12,
     fontFamily: TY.mono.medium, letterSpacing: 0.8,
   },
-  badgeLabelLocked: { color: T.text.muted },
+  badgeLabelLocked: { color: t.text.muted },
 
   // Goals
   goalsCard: {
     marginHorizontal: 16, marginBottom: 12,
-    backgroundColor: T.glass.card, borderRadius: R.lg, padding: SP[4],
-    borderWidth: 1, borderColor: T.glass.border,
+    backgroundColor: t.glass.card, borderRadius: R.lg, padding: SP[4],
+    borderWidth: 1, borderColor: t.glass.border,
   },
   goalsTitle: {
-    fontSize: 11, color: T.text.secondary, marginBottom: 12,
+    fontSize: 11, color: t.text.secondary, marginBottom: 12,
     fontFamily: TY.mono.medium, letterSpacing: 1.8, textTransform: 'uppercase',
   },
   goalRow: { marginBottom: 14 },
   goalLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   goalLabel: {
-    fontSize: 13, color: T.text.body,
+    fontSize: 13, color: t.text.body,
     fontFamily: TY.sans.regular,
   },
   goalRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   goalProgress: {
-    fontSize: 12, color: T.text.secondary,
+    fontSize: 12, color: t.text.secondary,
     fontFamily: TY.mono.regular, letterSpacing: 0.3,
   },
   goalBarBg: { height: 6, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: R.pill, overflow: 'hidden' },
@@ -2675,54 +2704,54 @@ const styles = StyleSheet.create({
   // Journal
   journalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 8 },
   journalTitle: {
-    fontSize: 15, color: T.text.primary,
+    fontSize: 15, color: t.text.primary,
     fontFamily: TY.sans.semibold, letterSpacing: -0.2,
   },
   journalCount: {
-    fontSize: 11, color: T.text.muted,
+    fontSize: 11, color: t.text.muted,
     fontFamily: TY.mono.regular, letterSpacing: 0.3,
   },
   filterScroll: { marginBottom: 8 },
   filterContent: { paddingHorizontal: 16, gap: 8 },
   filterChip: {
     paddingHorizontal: 14, paddingVertical: 7, borderRadius: R.pill,
-    backgroundColor: T.glass.pill,
-    borderWidth: 1, borderColor: T.glass.border,
+    backgroundColor: t.glass.pill,
+    borderWidth: 1, borderColor: t.glass.border,
   },
-  filterChipActive: { backgroundColor: T.accent, borderColor: T.accent },
+  filterChipActive: { backgroundColor: t.accent, borderColor: t.accent },
   filterChipText: {
-    fontSize: 12, color: T.text.secondary,
+    fontSize: 12, color: t.text.secondary,
     fontFamily: TY.sans.medium, letterSpacing: -0.1,
   },
-  filterChipTextActive: { color: T.accentInk, fontFamily: TY.sans.semibold },
+  filterChipTextActive: { color: t.accentInk, fontFamily: TY.sans.semibold },
 
   // Feed card
   feedCard: {
     marginHorizontal: 16, marginBottom: 10,
-    backgroundColor: T.glass.card, borderRadius: R.lg, padding: SP[4],
-    borderWidth: 1, borderColor: T.glass.border,
+    backgroundColor: t.glass.card, borderRadius: R.lg, padding: SP[4],
+    borderWidth: 1, borderColor: t.glass.border,
   },
   feedCardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 8 },
   feedIconWrap: {
     width: 40, height: 40, borderRadius: R.md,
-    backgroundColor: T.glass.pill, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: T.glass.border,
+    backgroundColor: t.glass.pill, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: t.glass.border,
   },
   feedCardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
   feedCardTitle: {
-    fontSize: 15, color: T.text.primary, flex: 1,
+    fontSize: 15, color: t.text.primary, flex: 1,
     fontFamily: TY.sans.semibold, letterSpacing: -0.2,
   },
   sourceBadge: {
     paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6,
-    backgroundColor: T.glass.pill, borderWidth: 1, borderColor: T.glass.border,
+    backgroundColor: t.glass.pill, borderWidth: 1, borderColor: t.glass.border,
   },
   sourceBadgeText: {
-    fontSize: 10, color: T.text.secondary,
+    fontSize: 10, color: t.text.secondary,
     fontFamily: TY.mono.medium, letterSpacing: 0.8, textTransform: 'uppercase',
   },
   feedCardMeta: {
-    fontSize: 11, color: T.text.muted, marginTop: 2,
+    fontSize: 11, color: t.text.muted, marginTop: 2,
     fontFamily: TY.mono.regular, letterSpacing: 0.3,
   },
   feedCardStats: { flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 6 },
@@ -2732,11 +2761,11 @@ const styles = StyleSheet.create({
   },
   feedStatItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   feedStatText: {
-    fontSize: 12, color: T.text.secondary,
+    fontSize: 12, color: t.text.secondary,
     fontFamily: TY.mono.regular, letterSpacing: 0.2,
   },
   feedAutopsy: {
-    fontSize: 12, color: T.text.body, lineHeight: 18, marginBottom: 6,
+    fontSize: 12, color: t.text.body, lineHeight: 18, marginBottom: 6,
     fontFamily: TY.sans.regular,
   },
   feedMuscleRow: { flexDirection: 'row', gap: 5 },
@@ -2745,11 +2774,11 @@ const styles = StyleSheet.create({
   // Empty state
   emptyState: { alignItems: 'center', paddingVertical: 60, gap: 8 },
   emptyText: {
-    fontSize: 16, color: T.text.secondary,
+    fontSize: 16, color: t.text.secondary,
     fontFamily: TY.sans.semibold, letterSpacing: -0.2,
   },
   emptySubText: {
-    fontSize: 13, color: T.text.muted,
+    fontSize: 13, color: t.text.muted,
     fontFamily: TY.sans.regular,
   },
 
@@ -2757,20 +2786,65 @@ const styles = StyleSheet.create({
   logModalContainer: { flex: 1, backgroundColor: '#141820' },
 
   // Sport selector
-  sportSelectorHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16 },
-  sportSelectorTitle: { fontSize: 20, fontWeight: '700', color: '#F0F2F6' },
-  sportGrid: { paddingHorizontal: 12, paddingBottom: 40, gap: 8 },
-  sportTile: { flex: 1, margin: 4, alignItems: 'center', gap: 8, paddingVertical: 16 },
-  sportIconWrap: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  sportTileLabel: { fontSize: 11, color: '#8B95A8', textAlign: 'center' },
+  sportSelectorHeader: {
+    flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingBottom: 14,
+  },
+  sportSelectorTicker: {
+    fontSize: 10, color: t.text.muted,
+    fontFamily: TY.mono.medium, letterSpacing: 2,
+    textTransform: 'uppercase', marginBottom: 4,
+  },
+  sportSelectorTitle: {
+    fontSize: 26, color: t.text.primary,
+    fontFamily: TY.sans.medium, letterSpacing: -0.5,
+  },
+  sportSelectorClose: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: t.glass.pill,
+    borderWidth: 1, borderColor: t.glass.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  sportGrid: {
+    paddingHorizontal: 20, paddingBottom: 40, paddingTop: 4, gap: 10,
+  },
+  sportTile: {
+    flex: 1, alignItems: 'center', gap: 8,
+    paddingVertical: 16, paddingHorizontal: 6,
+    backgroundColor: t.glass.card,
+    borderRadius: R.lg,
+    borderWidth: 1, borderColor: t.glass.border,
+  },
+  sportIconWrap: {
+    width: 52, height: 52, borderRadius: R.md,
+    backgroundColor: t.glass.cardHi,
+    borderWidth: 1, borderColor: t.glass.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  sportTileLabel: {
+    fontSize: 12, color: t.text.body, textAlign: 'center',
+    fontFamily: TY.sans.medium, letterSpacing: -0.1,
+  },
 
   // Category scroll
-  catScroll: { maxHeight: 44, flexGrow: 0, marginBottom: 8 },
-  catScrollContent: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
-  catChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16, backgroundColor: 'rgba(28,34,46,0.72)' },
-  catChipActive: { backgroundColor: '#F0F2F6' },
-  catChipText: { fontSize: 12, color: '#8B95A8' },
-  catChipTextActive: { color: '#F0F2F6', fontWeight: '600' },
+  catScroll: { maxHeight: 50, flexGrow: 0, marginBottom: 10 },
+  catScrollContent: { paddingHorizontal: 20, gap: 8, alignItems: 'center' },
+  catChip: {
+    paddingHorizontal: 16, paddingVertical: 8,
+    borderRadius: R.pill,
+    backgroundColor: t.glass.pill,
+    borderWidth: 1, borderColor: t.glass.border,
+  },
+  catChipActive: {
+    backgroundColor: t.accent, borderColor: t.accent,
+  },
+  catChipText: {
+    fontSize: 13, color: t.text.secondary,
+    fontFamily: TY.sans.medium, letterSpacing: -0.1,
+  },
+  catChipTextActive: {
+    color: t.accentInk, fontFamily: TY.sans.semibold,
+  },
 
   // Strength builder
   strengthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(28,34,46,0.72)' },
@@ -2931,12 +3005,12 @@ const styles = StyleSheet.create({
   // Readiness card
   readinessCard: {
     marginHorizontal: 16, marginBottom: 12,
-    backgroundColor: T.glass.card, borderRadius: R.lg, padding: SP[4],
-    borderWidth: 1, borderColor: T.glass.border,
+    backgroundColor: t.glass.card, borderRadius: R.lg, padding: SP[4],
+    borderWidth: 1, borderColor: t.glass.border,
   },
   readinessTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
   readinessCardTitle: {
-    fontSize: 11, color: T.text.secondary, marginBottom: 4,
+    fontSize: 11, color: t.text.secondary, marginBottom: 4,
     fontFamily: TY.mono.medium, letterSpacing: 1.8, textTransform: 'uppercase',
   },
   readinessLabel: {
@@ -2947,7 +3021,7 @@ const styles = StyleSheet.create({
     fontFamily: TY.sans.semibold, letterSpacing: -1.4, ...TY.tabular,
   },
   readinessExplanation: {
-    fontSize: 13, color: T.text.body, lineHeight: 19,
+    fontSize: 13, color: t.text.body, lineHeight: 19,
     fontFamily: TY.sans.regular,
   },
   restDayBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: '#e67e2222', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, alignSelf: 'flex-start', borderWidth: 1, borderColor: '#e67e22' },
@@ -2983,16 +3057,16 @@ const styles = StyleSheet.create({
   // Weekly load card
   weeklyLoadCard: {
     marginHorizontal: 16, marginBottom: 12,
-    backgroundColor: T.glass.card, borderRadius: R.lg, padding: SP[4],
-    borderWidth: 1, borderColor: T.glass.border,
+    backgroundColor: t.glass.card, borderRadius: R.lg, padding: SP[4],
+    borderWidth: 1, borderColor: t.glass.border,
   },
   weeklyLoadTitle: {
-    fontSize: 11, color: T.text.secondary, marginBottom: 12,
+    fontSize: 11, color: t.text.secondary, marginBottom: 12,
     fontFamily: TY.mono.medium, letterSpacing: 1.8, textTransform: 'uppercase',
   },
   weeklyLoadTopRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, marginBottom: 12 },
   weeklyLoadNum: {
-    fontSize: 42, color: T.text.primary, lineHeight: 46,
+    fontSize: 42, color: t.text.primary, lineHeight: 46,
     fontFamily: TY.sans.semibold, letterSpacing: -1.2, ...TY.tabular,
   },
   weeklyLoadChange: { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 6 },
@@ -3007,4 +3081,5 @@ const styles = StyleSheet.create({
   acwrStatusText: { fontSize: 11, fontWeight: '600' },
   acwrInsufficient: { fontSize: 12, color: '#525E72' },
   acwrExplanation: { fontSize: 12, color: '#525E72', lineHeight: 17 },
-});
+  });
+}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,8 +18,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { createStory, createPost, uploadMedia } from '@/services/api';
-import { theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
+import { ThemeColors, theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
 
+import { useTheme } from '@/contexts/ThemeContext';
 const { width: W, height: H } = Dimensions.get('window');
 
 // Try to load CameraView — may not be available on all SDK versions
@@ -61,6 +62,8 @@ const ZOOM_LEVELS = [
 
 export default function StoryCreator({ visible, onClose, onStoryCreated, currentStats }: Props) {
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   // Camera permissions — only used if CameraView is available
   const cameraPermHook = useCameraPermissions ? useCameraPermissions() : [null, null];
@@ -794,7 +797,8 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
   return null;
 }
 
-const styles = StyleSheet.create({
+function createStyles(t: ThemeColors) {
+  return StyleSheet.create({
   cameraBottomRow: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
@@ -809,7 +813,7 @@ const styles = StyleSheet.create({
   },
   captureBtn: {
     width: 72, height: 72, borderRadius: 36,
-    borderWidth: 4, borderColor: T.text.primary,
+    borderWidth: 4, borderColor: t.text.primary,
     backgroundColor: 'rgba(255,255,255,0.3)',
   },
   toolBtn: {
@@ -822,7 +826,7 @@ const styles = StyleSheet.create({
     position: 'absolute', zIndex: 15,
   },
   stickerText: {
-    fontSize: 22, fontFamily: TY.sans.bold, color: T.text.primary,
+    fontSize: 22, fontFamily: TY.sans.bold, color: t.text.primary,
     textShadowColor: 'rgba(0,0,0,0.7)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
@@ -840,7 +844,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   statText: {
-    fontSize: 12, color: T.text.body,
+    fontSize: 12, color: t.text.body,
   },
   trashZone: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -858,12 +862,12 @@ const styles = StyleSheet.create({
     width: '100%', minHeight: 60,
     backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: R.sm, paddingHorizontal: 16, paddingVertical: 12,
-    fontSize: 20, fontFamily: TY.sans.bold, color: T.text.primary,
+    fontSize: 20, fontFamily: TY.sans.bold, color: t.text.primary,
     textAlign: 'center',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
   },
   confirmTextBtn: {
-    backgroundColor: T.accent, borderRadius: R.pill,
+    backgroundColor: t.accent, borderRadius: R.pill,
     paddingHorizontal: 32, paddingVertical: 12,
   },
   sheetOverlay: {
@@ -872,16 +876,17 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   statsSheet: {
-    backgroundColor: T.bg.elevated,
+    backgroundColor: t.bg.elevated,
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     padding: 24, gap: 16,
   },
   sheetTitle: {
-    fontSize: 10, color: T.text.muted, letterSpacing: 2,
+    fontSize: 10, color: t.text.muted, letterSpacing: 2,
     textTransform: 'uppercase', fontFamily: TY.sans.bold,
   },
   sheetStatsPill: {
-    backgroundColor: T.bg.primary,
+    backgroundColor: t.bg.primary,
     borderRadius: R.sm, padding: SP[3],
   },
-});
+  });
+}

@@ -286,8 +286,8 @@ function CalorieMacroCard({
   const diff = Math.abs(Math.round(totalCalories - calorieTarget));
 
   // Animated count-up for the big number + the arc fill.
-  const displayCalories = useCountUp(Math.round(totalCalories), 1000, 150);
-  const displayPct = useCountUp(Math.round(fillPct * 100), 1000, 150);
+  const displayCalories = useCountUp(Math.round(totalCalories), 1000, 150, 'nutrition.calories');
+  const displayPct = useCountUp(Math.round(fillPct * 100), 1000, 150, 'nutrition.caloriePct');
   const animatedFill = (circumference * Math.min(displayPct, Math.round(fillPct * 100))) / 100;
 
   return (

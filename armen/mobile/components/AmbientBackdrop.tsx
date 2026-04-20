@@ -1,21 +1,22 @@
 // AmbientBackdrop — the rich multi-colour canvas under the app.
 //
-// Matches the Claude Design v2 spec exactly:
-//   radial-gradient(700px 600px at 20% 5%,  rgba(168,239,58,0.18))
-//   radial-gradient(600px 500px at 85% 15%, rgba(91,168,255,0.16))
-//   radial-gradient(800px 600px at 50% 88%, rgba(255,107,74,0.12))
-//   radial-gradient(500px 400px at 78% 52%, rgba(222,255,71,0.10))
-//   radial-gradient(600px 500px at 10% 70%, rgba(91,168,255,0.09))
-//   linear-gradient(180deg, #141820 → #0E1118)
+// Dark mode (original Claude Design v2 spec, unchanged):
+//   radial glow stack over a #141820 → #0E1118 base
+//
+// Light mode (from Claude Design "ORYX Light" handoff):
+//   radial-gradient(ellipse at 40% 0%, #D8F2A8 0%, #EEF2FA 40%, #E4EAF8 100%)
+//   A pale green-to-periwinkle wash. Same structural idea (soft radial tint),
+//   just lightened neutrals and a single dominant tint instead of five glows.
 //
 // React Native has no radial gradient primitive, so each "glow" is an
-// absolutely-positioned circular View with a solid fill + opacity. Stacked
-// together they add up to the same layered tint. Size/position %'s are
+// absolutely-positioned circular View with a solid fill + opacity. The chosen
+// glow set / opacities change per resolvedScheme; positions + sizes are
 // computed from the device window so the effect is stable on any screen.
 
 import React from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '@/contexts/ThemeContext';
 
 // Single radial-glow blob. Circular View with `opacity` — larger than the
 // target diameter so the fade-out is softer against neighbours.
@@ -47,6 +48,24 @@ function Glow({
 }
 
 export default function AmbientBackdrop() {
+  const { resolvedScheme } = useTheme();
+
+  if (resolvedScheme === 'light') {
+    // Light mode is NOT inverted dark. Clean warm-neutral canvas with a gentle
+    // warm-ivory radial behind the readiness ring so the hero area feels
+    // anchored instead of floating on flat white. Subtle by design.
+    return (
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        {/* Warm near-white base */}
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#FAFAFA' }]} />
+        {/* Warm ivory halo centred behind the hero ring */}
+        <Glow color="#FFF2D6" opacity={0.70} size={860} x={0.50} y={0.22} />
+        <Glow color="#FFF8EA" opacity={0.60} size={540} x={0.50} y={0.22} />
+      </View>
+    );
+  }
+
+  // Dark mode — original spec, exactly as it was.
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       {/* Deep-slate base */}

@@ -1,6 +1,6 @@
 import logging
 from datetime import date, timedelta
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -89,6 +89,8 @@ class ProfilePatchIn(BaseModel):
     location: Optional[str] = Field(None, max_length=255)
     sport_tags: Optional[list] = None
     avatar_url: Optional[str] = None
+    # Posts tab layout preference — validated against the three supported modes
+    post_grid_layout: Optional[Literal['grid', 'portfolio', 'timeline']] = None
 
 
 @router.patch("/me/profile")
@@ -107,6 +109,8 @@ async def update_my_profile(
         current_user.sport_tags = body.sport_tags
     if body.avatar_url is not None:
         current_user.avatar_url = body.avatar_url
+    if body.post_grid_layout is not None:
+        current_user.post_grid_layout = body.post_grid_layout
     await db.flush()
     return {
         "id": str(current_user.id),
@@ -115,6 +119,7 @@ async def update_my_profile(
         "location": current_user.location,
         "sport_tags": current_user.sport_tags or [],
         "avatar_url": current_user.avatar_url,
+        "post_grid_layout": current_user.post_grid_layout,
     }
 
 

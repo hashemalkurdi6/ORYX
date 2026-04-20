@@ -74,7 +74,8 @@ export default function GlassCard({
   blurIntensity = 30,
   testID,
 }: GlassCardProps) {
-  const { theme, radius, space } = useTheme();
+  const { theme, radius, space, resolvedScheme } = useTheme();
+  const isLight = resolvedScheme === 'light';
 
   const fill =
     variant === 'hi' ? theme.glass.cardHi :
@@ -84,7 +85,12 @@ export default function GlassCard({
   const cornerRadius = radiusOverride ?? radius.lg; // 20
   const pad = padding ?? space[4];                   // 16
 
-  const canBlur = blur && BlurView != null && Platform.OS !== 'web';
+  // On dark: translucent fill + optional backdrop blur + rim border
+  //   (the "glass" of Design v2).
+  // On light: solid white fill + cool-blue drop shadow + hairline border
+  //   (matches tokens-light.js from the Claude Design handoff — shadow is
+  //    load-bearing in light mode since there's no glass/blur to sell depth).
+  const canBlur = !isLight && blur && BlurView != null && Platform.OS !== 'web';
 
   const outerStyle: ViewStyle = {
     borderRadius: cornerRadius,
@@ -93,6 +99,17 @@ export default function GlassCard({
     backgroundColor: canBlur ? 'transparent' : fill,
     overflow: 'hidden',
     position: 'relative',
+    // Drop shadow on light mode only. Subtle per light-mode spec — shadow
+    // reinforces edge definition without dominating the composition.
+    ...(isLight
+      ? {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.04,
+          shadowRadius: 8,
+          elevation: 2,
+        }
+      : null),
   };
 
   const Shell: any = onPress ? TouchableOpacity : View;
@@ -100,8 +117,7 @@ export default function GlassCard({
 
   const content = (
     <>
-      {/* Optional backdrop blur (soft-imported). systemChromeMaterialDark stays
-          tethered to a dark base colour on iOS so the card doesn't read cream. */}
+      {/* Optional backdrop blur (dark mode only — light mode uses shadow). */}
       {canBlur && BlurView ? (
         <BlurView
           intensity={blurIntensity}
@@ -110,16 +126,21 @@ export default function GlassCard({
         />
       ) : null}
 
-      {/* Top-edge inner highlight — the "premium" tell */}
-      <LinearGradient
-        colors={[theme.glass.highlight, 'rgba(255,255,255,0)']}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={styles.topHighlight}
-        pointerEvents="none"
-      />
+      {/* Top-edge inner highlight — the "premium" tell. On dark it's a subtle
+          white sheen; on light we skip it (the shadow does the lift instead). */}
+      {!isLight ? (
+        <LinearGradient
+          colors={[theme.glass.highlight, 'rgba(255,255,255,0)']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={styles.topHighlight}
+          pointerEvents="none"
+        />
+      ) : null}
 
-      {/* Accent edge (used by ORYX Intelligence) */}
+      {/* Accent edge (used by ORYX Intelligence). Offset by -1 to sit flush
+          against the card's left edge, overlapping the 1px border so the lime
+          bar reads as a solid strip rather than getting clipped into a hairline. */}
       {accentEdge === 'left' ? (
         <View
           pointerEvents="none"
@@ -127,8 +148,8 @@ export default function GlassCard({
             position: 'absolute',
             top: 0,
             bottom: 0,
-            left: 0,
-            width: accentThickness,
+            left: -1,
+            width: accentThickness + 1,
             backgroundColor: accentColor ?? theme.accent,
           }}
         />

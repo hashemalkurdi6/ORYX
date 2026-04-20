@@ -43,6 +43,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { fetchLast7DaysHealthData } from '@/services/healthKit';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ThemeColors, theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
+import { useCountUp } from '@/services/animations';
 
 // ── Palette (ORYX design tokens) ──────────────────────────────────────────────
 // All colour values route through services/theme so the design system is the
@@ -189,30 +190,8 @@ function formatTicker(): string {
 }
 
 // ── Animation hooks ───────────────────────────────────────────────────────────
-
-/**
- * Count-up hook — animates a number from 0 to `target` over `duration` ms
- * with an optional `delay`. Matches the design's `useCountUp` with ease-out-cubic.
- */
-function useCountUp(target: number, duration = 900, delay = 0): number {
-  const [val, setVal] = useState(0);
-  useEffect(() => {
-    let raf: number;
-    const t0 = performance.now() + delay;
-    let start = 0;
-    const run = (ts: number) => {
-      if (ts < t0) { raf = requestAnimationFrame(run); return; }
-      if (!start) start = ts;
-      const p = Math.min((ts - start) / duration, 1);
-      const ease = 1 - Math.pow(1 - p, 3);
-      setVal(Math.round(ease * target));
-      if (p < 1) raf = requestAnimationFrame(run);
-    };
-    raf = requestAnimationFrame(run);
-    return () => cancelAnimationFrame(raf);
-  }, [target, duration, delay]);
-  return val;
-}
+// useCountUp moved to services/animations.ts — imported at the top of this file
+// with cacheKey support so modal opens / tab switches don't replay the animation.
 
 /**
  * Stagger-entrance wrapper — fades + slides up children by `delay` ms.
@@ -292,7 +271,18 @@ function ConcentricHero({
   innerPct: number;
   delta?: number | null;
 }) {
+  const { resolvedScheme, theme } = useTheme();
+  const isLight = resolvedScheme === 'light';
+  // Ring track (the unfilled portion of the circle). Very subtle — guides the
+  // eye, doesn't compete with the arc.
+  const trackOuter = isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)';
+  const trackInner = isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.05)';
   const oHex  = readinessHex(color);
+  // Light mode bumps stroke width +2 and draws a soft glow halo behind the arc
+  // to compensate for the missing translucent-glow treatment dark mode gets.
+  const outerSw = isLight ? OUTER_SW + 2 : OUTER_SW;
+  const innerSw = isLight ? INNER_SW + 1 : INNER_SW;
+  // No cacheKey → animation replays every time the hero mounts.
   const displayScore = useCountUp(score, 1000, 200);
   const displayLoad  = useCountUp(Math.round(innerPct * 100), 1000, 400);
 
@@ -306,16 +296,24 @@ function ConcentricHero({
     <View style={{ width: RSIZE, height: RSIZE, alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={RSIZE} height={RSIZE} style={{ position: 'absolute' }}>
         {/* Outer track */}
-        <Circle cx={RCX} cy={RCY} r={OUTER_R} stroke="rgba(255,255,255,0.06)" strokeWidth={OUTER_SW} fill="none" />
+        <Circle cx={RCX} cy={RCY} r={OUTER_R} stroke={trackOuter} strokeWidth={outerSw} fill="none" />
+        {/* Light-mode glow halo — thicker, semi-transparent stroke behind the
+            arc giving it the depth that the dark-mode translucent glow provides */}
+        {isLight ? (
+          <Circle cx={RCX} cy={RCY} r={OUTER_R} stroke={oHex} strokeWidth={outerSw + 6}
+            fill="none" opacity={0.18}
+            strokeDasharray={`${outerFill} ${OUTER_C}`} strokeLinecap="round"
+            rotation={-90} origin={`${RCX}, ${RCY}`} />
+        ) : null}
         {/* Outer progress — readiness, rounded cap */}
-        <Circle cx={RCX} cy={RCY} r={OUTER_R} stroke={oHex} strokeWidth={OUTER_SW} fill="none"
+        <Circle cx={RCX} cy={RCY} r={OUTER_R} stroke={oHex} strokeWidth={outerSw} fill="none"
           strokeDasharray={`${outerFill} ${OUTER_C}`} strokeLinecap="round"
           rotation={-90} origin={`${RCX}, ${RCY}`} />
         {/* Inner track */}
-        <Circle cx={RCX} cy={RCY} r={INNER_R} stroke="rgba(255,255,255,0.05)" strokeWidth={INNER_SW} fill="none" />
+        <Circle cx={RCX} cy={RCY} r={INNER_R} stroke={trackInner} strokeWidth={innerSw} fill="none" />
         {/* Inner progress — weekly load */}
         {innerPct > 0 && (
-          <Circle cx={RCX} cy={RCY} r={INNER_R} stroke={CLR_LOAD} strokeWidth={INNER_SW} fill="none"
+          <Circle cx={RCX} cy={RCY} r={INNER_R} stroke={theme.signal.load} strokeWidth={innerSw} fill="none"
             strokeDasharray={`${innerFill} ${INNER_C}`} strokeLinecap="round"
             rotation={-90} origin={`${RCX}, ${RCY}`} />
         )}
@@ -324,12 +322,12 @@ function ConcentricHero({
       {/* Centre: count-up number + READINESS label */}
       <View style={{ alignItems: 'center', justifyContent: 'center' }}>
         <Text style={{
-          fontSize: fontNum, color: T.text.primary,
+          fontSize: fontNum, color: theme.text.primary,
           fontFamily: TY.mono.medium, letterSpacing: -fontNum * 0.04, lineHeight: fontNum * 1.04,
           ...TY.tabular,
         }}>{displayScore}</Text>
         <Text style={{
-          fontSize: fontLbl, color: T.text.secondary, fontFamily: TY.mono.medium,
+          fontSize: fontLbl, color: theme.text.primary, fontFamily: TY.mono.medium,
           textTransform: 'uppercase', letterSpacing: fontLbl * 0.12, marginTop: 4,
         }}>Readiness</Text>
       </View>
@@ -365,25 +363,28 @@ function VitalTile({
   unit: string;
   icon: React.ComponentProps<typeof Ionicons>['name'];
 }) {
+  // Pull from context so text colors actually flip when the user toggles light
+  // mode (module-level T is frozen at the dark palette at bundle load).
+  const { theme } = useTheme();
   const hasValue = value != null && value !== '';
   return (
     <GlassCard style={{ flex: 1 }} padding={14}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
         <Text style={{
           fontFamily: TY.mono.medium, fontSize: 10,
-          color: T.text.label, letterSpacing: 1.8,
+          color: theme.text.label, letterSpacing: 1.8,
         }}>{label}</Text>
-        <Ionicons name={icon} size={13} color={T.text.muted} />
+        <Ionicons name={icon} size={13} color={theme.text.muted} />
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
         <Text style={{
-          fontSize: 22, color: hasValue ? T.text.primary : T.text.muted,
+          fontSize: 22, color: hasValue ? theme.text.primary : theme.text.muted,
           fontFamily: TY.sans.semibold, letterSpacing: -0.4,
           ...TY.tabular,
         }}>{hasValue ? String(value) : '—'}</Text>
         {hasValue ? (
           <Text style={{
-            fontFamily: TY.mono.regular, fontSize: 11, color: T.text.muted,
+            fontFamily: TY.mono.regular, fontSize: 11, color: theme.text.muted,
             letterSpacing: 0.5,
           }}>{unit}</Text>
         ) : null}
@@ -767,7 +768,7 @@ export default function HomeScreen() {
         ) : (
           <AnimatedCard delay={0} style={s.heroContainer}>
             <TouchableOpacity style={s.infoBtn} onPress={() => setShowReadinessInfo(true)} activeOpacity={0.7}>
-              <Ionicons name="information-circle-outline" size={17} color={T.text.muted} />
+              <Ionicons name="information-circle-outline" size={17} color={T.text.secondary} />
             </TouchableOpacity>
 
             {/* Centred 260px dual-concentric ring with inline delta chip */}
@@ -799,7 +800,7 @@ export default function HomeScreen() {
               {allMissing ? (
                 <TouchableOpacity style={s.connectHint} activeOpacity={0.7}>
                   <Text style={s.connectHintText}>Connect Apple Health</Text>
-                  <Ionicons name="arrow-forward" size={12} color={CLR_ACCENT} />
+                  <Ionicons name="arrow-forward" size={12} color={T.text.primary} />
                 </TouchableOpacity>
               ) : null}
             </AnimatedCard>
@@ -866,7 +867,7 @@ export default function HomeScreen() {
             onPress={openWellnessModal}
             activeOpacity={0.75}
           >
-            <Ionicons name="happy-outline" size={14} color={T.text.body} />
+            <Ionicons name="journal-outline" size={14} color={T.text.body} />
             <Text style={s.pillLabel}>Check-in</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -877,9 +878,9 @@ export default function HomeScreen() {
             <Ionicons
               name={weightLoggedToday ? 'checkmark' : 'scale-outline'}
               size={14}
-              color={weightLoggedToday ? CLR_ACCENT : T.text.body}
+              color={weightLoggedToday ? T.accentInk : T.text.body}
             />
-            <Text style={[s.pillLabel, weightLoggedToday && { color: CLR_ACCENT }]}>
+            <Text style={[s.pillLabel, weightLoggedToday && { color: T.accentInk }]}>
               Weight
             </Text>
           </TouchableOpacity>
@@ -907,13 +908,13 @@ export default function HomeScreen() {
               : '';
             return (
               <AnimatedCard delay={120}>
-              <GlassCard variant="hi" accentEdge="left" padding={SP[4]} style={{ marginBottom: SP[3] }}>
+              <GlassCard variant="hi" accentEdge="left" accentThickness={3} padding={SP[4]} style={{ marginBottom: SP[3] }}>
                 {/* Animated scan sweep — thin bright column travels across every 4s */}
                 <ScanSweep />
                 {/* Header: lime sigil + label, timestamp on right */}
                 <View style={s.diagHeaderRow}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Ionicons name="sparkles" size={12} color={CLR_ACCENT} />
+                    <Ionicons name="sparkles" size={12} color={T.text.primary} />
                     <Text style={s.diagTitleLabel}>ORYX INTELLIGENCE</Text>
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -1550,12 +1551,16 @@ function createStyles(t: ThemeColors) {
     },
     connectHint: {
       alignSelf: 'center',
-      flexDirection: 'row', alignItems: 'center', gap: 5,
-      paddingVertical: SP[1], marginBottom: SP[3],
+      flexDirection: 'row', alignItems: 'center', gap: 6,
+      paddingVertical: 6, paddingHorizontal: SP[3],
+      marginBottom: SP[3],
+      backgroundColor: t.glass.card,
+      borderWidth: 1, borderColor: t.border,
+      borderRadius: R.pill,
     },
     connectHintText: {
-      fontFamily: TY.mono.medium, fontSize: 10,
-      color: CLR_ACCENT, letterSpacing: 1.4, textTransform: 'uppercase',
+      fontFamily: TY.mono.semibold, fontSize: 10,
+      color: t.text.primary, letterSpacing: 1.4, textTransform: 'uppercase',
     },
 
     // Error
@@ -1708,11 +1713,11 @@ function createStyles(t: ThemeColors) {
     pill: {
       flexDirection: 'row', alignItems: 'center', gap: 6,
       height: 34, paddingHorizontal: SP[3],
-      backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: R.pill,
-      borderWidth: 1, borderColor: t.divider,
+      backgroundColor: t.glass.pill, borderRadius: R.pill,
+      borderWidth: 1, borderColor: t.glass.border,
     },
-    pillHighlight: { borderColor: CLR_ACCENT, backgroundColor: T.accentDim },
-    pillDone: { borderColor: CLR_ACCENT },
+    pillHighlight: { borderColor: t.accent, backgroundColor: t.accentDim },
+    pillDone: { borderColor: t.accent, backgroundColor: t.accent },
     pillLabel: { fontSize: 13, color: t.text.primary, fontWeight: '500' },
 
     // ── Section label shared ──────────────────────────────────────────────────
@@ -1757,13 +1762,13 @@ function createStyles(t: ThemeColors) {
     },
     refreshBtnOff: { opacity: 0.35 },
     diagTitleLabel: {
-      fontSize: 10, color: CLR_ACCENT,
+      fontSize: 10, color: t.text.primary,
       textTransform: 'uppercase', letterSpacing: 2.6,
       fontFamily: TY.mono.medium,
     },
     diagHeadline: {
       fontSize: 17, lineHeight: 23, color: t.text.primary,
-      fontFamily: TY.mono.bold, letterSpacing: -0.2,
+      fontFamily: TY.sans.bold, letterSpacing: -0.2,
       marginBottom: SP[3],
     },
     diagBody: {
@@ -1771,7 +1776,7 @@ function createStyles(t: ThemeColors) {
       fontFamily: TY.sans.regular, letterSpacing: -0.1,
     },
     readMoreText: {
-      fontSize: 12, color: CLR_ACCENT, marginTop: 4,
+      fontSize: 12, color: t.text.secondary, marginTop: 4,
       fontFamily: TY.mono.medium, letterSpacing: 0.5,
     },
     factorChip: {
@@ -1785,11 +1790,11 @@ function createStyles(t: ThemeColors) {
     },
     recBox: {
       flexDirection: 'row', alignItems: 'flex-start',
-      backgroundColor: 'rgba(255,255,255,0.04)',
+      backgroundColor: t.bg.tint,
       borderRadius: R.sm, padding: SP[3], marginTop: SP[3],
       borderWidth: 1, borderColor: t.divider,
     },
-    recText: { flex: 1, fontSize: 13, color: CLR_AMBER, lineHeight: 19 },
+    recText: { flex: 1, fontSize: 13, color: t.readiness.mid, lineHeight: 19 },
 
     // ── Section 6: Training ───────────────────────────────────────────────────
     trainingCard: { gap: 0, padding: 0, overflow: 'hidden' },

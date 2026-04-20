@@ -235,6 +235,12 @@ export default function PostDetailModal({
   const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set());
   const [captionExpanded, setCaptionExpanded] = useState(false);
 
+  // Captured from the <Image> onLoad event so the photo renders at its true
+  // aspect ratio — no cropping whether the user posted a wide landscape,
+  // square, or tall portrait.
+  const [photoAspect, setPhotoAspect] = useState<number | null>(null);
+  useEffect(() => { setPhotoAspect(null); }, [initialPost?.id]);
+
   const scrollRef = useRef<ScrollView>(null);
   const commentInputRef = useRef<TextInput>(null);
   const toastTimer = useRef<any>(null);
@@ -814,7 +820,11 @@ export default function PostDetailModal({
               </View>
             </View>
 
-            {/* Photo */}
+            {/* Photo — rendered at its natural aspect ratio (captured via onLoad)
+                so horizontals stay horizontal and portraits stay tall. While the
+                aspect is still loading we fall back to 1:1 so the layout is
+                stable. `resizeMode: 'contain'` plus matching aspect means no
+                cropping in either direction. */}
             {post.photo_url && (
               <View style={{ position: 'relative' }}>
                 <Pressable onPress={handleDoubleTap}>
@@ -822,8 +832,15 @@ export default function PostDetailModal({
                     source={{ uri: post.photo_url }}
                     style={{
                       width: SCREEN_WIDTH,
-                      height: Math.min(SCREEN_WIDTH, SCREEN_HEIGHT * 0.8),
-                      resizeMode: 'cover',
+                      aspectRatio: photoAspect ?? 1,
+                      backgroundColor: T.bg.primary,
+                    }}
+                    resizeMode="contain"
+                    onLoad={(e) => {
+                      const src = (e?.nativeEvent as any)?.source;
+                      if (src?.width && src?.height) {
+                        setPhotoAspect(src.width / src.height);
+                      }
                     }}
                   />
                 </Pressable>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, Image, ScrollView, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,8 +6,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '@/services/authStore';
 import { getTodayCheckin, generateCheckinCaption, saveCheckin, getDashboard, CheckinStatus } from '@/services/api';
-import { theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
+import { ThemeColors, theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
 
+import { useTheme } from '@/contexts/ThemeContext';
 type Screen = 'window' | 'preview';
 
 const INFLUENCE_TAGS = [
@@ -26,6 +27,8 @@ const INFLUENCE_TAGS = [
 export default function CheckinScreen() {
   const insets = useSafeAreaInsets();
   const user = useAuthStore((state) => state.user);
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   // Window / status state
   const [checkinStatus, setCheckinStatus] = useState<CheckinStatus | null>(null);
@@ -465,10 +468,11 @@ export default function CheckinScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(t: ThemeColors) {
+  return StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: T.bg.primary,
+    backgroundColor: t.bg.primary,
   },
   topBar: {
     flexDirection: 'row',
@@ -480,7 +484,7 @@ const styles = StyleSheet.create({
   topBarTitle: {
     fontSize: 17,
     fontFamily: TY.sans.bold,
-    color: T.text.primary,
+    color: t.text.primary,
   },
   centered: {
     flex: 1,
@@ -497,7 +501,7 @@ const styles = StyleSheet.create({
   },
   windowLabel: {
     fontSize: 11,
-    color: T.text.muted,
+    color: t.text.muted,
     letterSpacing: 2,
     textTransform: 'uppercase',
     marginBottom: -4,
@@ -505,34 +509,34 @@ const styles = StyleSheet.create({
   countdownText: {
     fontSize: 64,
     fontFamily: TY.sans.bold,
-    color: T.text.primary,
+    color: t.text.primary,
     letterSpacing: 2,
     fontVariant: ['tabular-nums'],
   },
   bigTitle: {
     fontSize: 24,
     fontFamily: TY.sans.bold,
-    color: T.text.primary,
+    color: t.text.primary,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 14,
-    color: T.text.muted,
+    color: t.text.muted,
     textAlign: 'center',
     lineHeight: 20,
   },
   statsCard: {
     width: '100%',
-    backgroundColor: T.bg.elevated,
+    backgroundColor: t.bg.elevated,
     borderRadius: R.md,
     padding: 16,
     borderWidth: 1,
-    borderColor: T.border,
+    borderColor: t.border,
     gap: 12,
   },
   statsCardTitle: {
     fontSize: 10,
-    color: T.text.muted,
+    color: t.text.muted,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
@@ -549,17 +553,17 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 22,
     fontFamily: TY.sans.bold,
-    color: T.text.primary,
+    color: t.text.primary,
   },
   statLabel: {
     fontSize: 11,
-    color: T.text.muted,
+    color: t.text.muted,
   },
   btnPrimary: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: T.accent,
+    backgroundColor: t.accent,
     borderRadius: R.sm,
     height: 56,
     width: '100%',
@@ -568,7 +572,7 @@ const styles = StyleSheet.create({
   btnPrimaryText: {
     fontSize: 16,
     fontFamily: TY.sans.bold,
-    color: T.accentInk,
+    color: t.accentInk,
   },
   btnSecondary: {
     width: '100%',
@@ -577,11 +581,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: R.sm,
     borderWidth: 1,
-    borderColor: T.border,
+    borderColor: t.border,
   },
   btnSecondaryText: {
     fontSize: 15,
-    color: T.text.secondary,
+    color: t.text.secondary,
   },
   // Preview screen
   photoOverlay: {
@@ -601,17 +605,17 @@ const styles = StyleSheet.create({
     borderRadius: R.sm,
     padding: 12,
     borderWidth: 1,
-    borderColor: T.border,
+    borderColor: t.border,
   },
   overlayStatText: {
     fontSize: 13,
-    color: T.text.primary,
+    color: t.text.primary,
   },
   previewBottom: {
-    backgroundColor: T.bg.primary,
+    backgroundColor: t.bg.primary,
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: T.border,
+    borderTopColor: t.border,
     maxHeight: 340,
   },
   tagPill: {
@@ -619,19 +623,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: T.border,
+    borderColor: t.border,
     backgroundColor: 'transparent',
   },
   tagPillSelected: {
-    borderColor: T.text.body,
-    backgroundColor: T.bg.elevated,
+    borderColor: t.text.body,
+    backgroundColor: t.bg.elevated,
   },
   tagText: {
     fontSize: 13,
-    color: T.text.muted,
+    color: t.text.muted,
   },
   tagTextSelected: {
-    color: T.text.primary,
+    color: t.text.primary,
   },
   btnCancel: {
     flex: 1,
@@ -640,11 +644,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: R.sm,
     borderWidth: 1,
-    borderColor: T.border,
+    borderColor: t.border,
   },
   btnCancelText: {
     fontSize: 15,
-    color: T.text.secondary,
+    color: t.text.secondary,
   },
   btnPost: {
     flex: 2,
@@ -652,11 +656,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: R.sm,
-    backgroundColor: T.accent,
+    backgroundColor: t.accent,
   },
   btnPostText: {
     fontSize: 15,
     fontFamily: TY.sans.bold,
-    color: T.accentInk,
+    color: t.accentInk,
   },
-});
+  });
+}

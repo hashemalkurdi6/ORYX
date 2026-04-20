@@ -2,6 +2,7 @@
 from datetime import datetime
 from uuid import UUID
 
+from typing import Literal
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
 
 
@@ -61,6 +62,7 @@ class UserOut(BaseModel):
     preferred_training_time: str | None = None
     onboarding_complete: bool = False
     current_onboarding_step: int = 1
+    post_grid_layout: str = "portfolio"
 
     model_config = {"from_attributes": True}
 
@@ -121,6 +123,7 @@ class UserOutInternal(BaseModel):
     preferred_training_time: str | None = None
     onboarding_complete: bool = False
     current_onboarding_step: int = 1
+    post_grid_layout: str = "portfolio"
 
     model_config = {"from_attributes": True}
 
@@ -154,6 +157,7 @@ class UserOutInternal(BaseModel):
             preferred_training_time=self.preferred_training_time,
             onboarding_complete=self.onboarding_complete,
             current_onboarding_step=self.current_onboarding_step,
+            post_grid_layout=self.post_grid_layout,
         )
 
 
@@ -164,6 +168,8 @@ class UserProfileUpdate(BaseModel):
     location: str | None = None
     sports: list[str] | None = None
     weight_kg: float | None = None
+    # Posts tab layout preference — validated server-side so bad values can't land
+    post_grid_layout: Literal['grid', 'portfolio', 'timeline'] | None = None
 
 
 class OnboardingUpdate(BaseModel):

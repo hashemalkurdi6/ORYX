@@ -8,6 +8,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
 // Active tab gets a lime pill behind the icon; inactive icons stay muted.
+// Size matches Claude Design v2 spec — 44×30 pill, radius 10, icon 20.
 function TabIcon({
   name,
   focusedName,
@@ -25,30 +26,31 @@ function TabIcon({
   return (
     <View
       style={{
-        width: 36,
-        height: 26,
-        borderRadius: 13,
+        width: 44,
+        height: 30,
+        borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: focused ? theme.accent : 'transparent',
       }}
     >
-      <Ionicons name={focused ? focusedName : name} size={18} color={iconColor} />
+      <Ionicons name={focused ? focusedName : name} size={20} color={iconColor} />
     </View>
   );
 }
 
-// Small mono label below each icon — tracks active/inactive tint.
+// Small mono label below each icon. Active → primary white, inactive → muted.
+// Mono 9pt, letter-spacing 0.08em per design spec.
 function TabLabel({ focused, children }: { focused: boolean; children: string }) {
   const { theme, type } = useTheme();
   return (
     <Text
       style={{
-        fontSize: 8,
-        letterSpacing: 1.4,
+        fontSize: 9,
+        letterSpacing: 0.7,
         fontFamily: type.mono.regular,
-        color: focused ? theme.text.body : theme.text.muted,
-        marginTop: 2,
+        color: focused ? theme.text.primary : theme.text.muted,
+        marginTop: 4,
         textTransform: 'uppercase',
       }}
     >
@@ -59,31 +61,45 @@ function TabLabel({ focused, children }: { focused: boolean; children: string })
 
 // Glassy floating chrome under the tabs. BlurView on top of a subtle wash.
 function TabBarBackground() {
-  const { theme, radius } = useTheme();
+  const { theme, resolvedScheme } = useTheme();
+  const isLight = resolvedScheme === 'light';
   return (
     <View
       style={[
         StyleSheet.absoluteFillObject,
         {
-          borderRadius: radius.xxl,
+          borderRadius: 32,
           overflow: 'hidden',
           borderWidth: 1,
-          borderColor: theme.glass.border,
-          backgroundColor: Platform.OS === 'android' ? theme.bg.elevated : 'transparent',
+          borderColor: theme.glass.rim,
+          backgroundColor: Platform.OS === 'android' || isLight ? theme.bg.elevated : 'transparent',
         },
       ]}
     >
       <BlurView
-        intensity={20}
-        tint="systemChromeMaterialDark"
+        intensity={isLight ? 24 : 36}
+        tint={isLight ? 'systemChromeMaterialLight' : 'systemChromeMaterialDark'}
         style={[StyleSheet.absoluteFillObject, { backgroundColor: theme.glass.chrome }]}
+      />
+      {/* rim sheen — subtle 1px line along the top edge */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: '15%',
+          right: '15%',
+          height: 1,
+          backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.3)',
+        }}
       />
     </View>
   );
 }
 
 export default function TabsLayout() {
-  const { theme, radius } = useTheme();
+  const { theme, radius, resolvedScheme } = useTheme();
+  const isLight = resolvedScheme === 'light';
 
   return (
     <Tabs
@@ -91,27 +107,27 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarShowLabel: true,
         tabBarActiveTintColor: theme.text.primary,
-        tabBarInactiveTintColor: theme.text.muted,
+        tabBarInactiveTintColor: isLight ? theme.text.body : theme.text.muted,
         tabBarBackground: () => <TabBarBackground />,
         tabBarStyle: {
           position: 'absolute',
           left: 16,
           right: 16,
-          bottom: 16,
-          height: 60,
-          paddingTop: 6,
-          paddingBottom: 6,
+          bottom: 20,
+          height: 72,
+          paddingTop: 10,
+          paddingBottom: 12,
           borderTopWidth: 0,
-          borderRadius: radius.xxl,
+          borderRadius: 32,
           backgroundColor: 'transparent',
           elevation: 0,
           shadowColor: '#000',
-          shadowOpacity: 0.35,
-          shadowRadius: 20,
-          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: isLight ? 0.06 : 0.5,
+          shadowRadius: isLight ? 12 : 20,
+          shadowOffset: { width: 0, height: isLight ? -2 : 8 },
         },
         tabBarItemStyle: {
-          paddingTop: 2,
+          paddingTop: 0,
         },
       }}
     >

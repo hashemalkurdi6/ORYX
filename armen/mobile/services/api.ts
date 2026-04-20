@@ -34,6 +34,8 @@ export interface User {
   preferred_training_time?: string | null;
   onboarding_complete?: boolean;
   current_onboarding_step?: number;
+  // Posts tab layout preference — persisted across sessions
+  post_grid_layout?: 'grid' | 'portfolio' | 'timeline';
 }
 
 export interface OnboardingData {
@@ -1870,6 +1872,7 @@ export const updateMyProfile = async (data: {
   location?: string;
   sport_tags?: string[];
   avatar_url?: string;
+  post_grid_layout?: 'grid' | 'portfolio' | 'timeline';
 }): Promise<any> => {
   const response = await apiClient.patch('/users/me/profile', data);
   return response.data;

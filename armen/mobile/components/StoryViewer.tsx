@@ -8,13 +8,16 @@ import {
   Animated,
   PanResponder,
   Dimensions,
-  Image,
   TextInput,
   StyleSheet,
   Alert,
   Platform,
   ActivityIndicator,
 } from 'react-native';
+// expo-image uses a native image cache with memory+disk persistence and
+// GPU-backed decode, so cached sources swap in essentially instantly —
+// no flash, no decode-stall between stories.
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StoryGroup, StoryItem, getStory, toggleReaction } from '@/services/api';
@@ -236,20 +239,23 @@ export default function StoryViewer({
               <Image
                 source={{ uri: previousPhotoUrl }}
                 style={styles.media}
-                resizeMode="cover"
-                fadeDuration={0}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={0}
               />
             ) : null}
             <Image
               source={{ uri: currentStory.photo_url }}
               style={[styles.media, { opacity: mediaReady ? 1 : 0 }]}
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={0}
+              priority="high"
               onLoad={() => {
                 lastLoadedPhotoUrl.current = currentStory.photo_url;
                 setMediaReady(true);
               }}
               onError={() => setMediaReady(true)}
-              fadeDuration={0}
             />
           </>
         ) : (
@@ -259,7 +265,8 @@ export default function StoryViewer({
         )}
 
         {/* Hidden warm-cache for the next story's photo — guarantees the
-            file is in the image cache by the time the user advances. */}
+            file is decoded and in memory by the time the user advances.
+            Using the full media size so there's no re-decode on swap. */}
         {(() => {
           const nextIdx = storyIdx + 1;
           let nextUri: string | null = null;
@@ -272,9 +279,11 @@ export default function StoryViewer({
           return (
             <Image
               source={{ uri: nextUri }}
-              style={styles.preloadHidden}
-              resizeMode="cover"
-              fadeDuration={0}
+              style={styles.preloadOffscreen}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              priority="normal"
+              transition={0}
             />
           );
         })()}
@@ -463,9 +472,15 @@ const styles = StyleSheet.create({
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.35)',
   },
-  preloadHidden: {
-    position: 'absolute', top: 0, left: 0,
-    width: 1, height: 1, opacity: 0,
+  preloadOffscreen: {
+    // Positioned off-screen at the real display size so expo-image decodes
+    // and caches the bitmap at the correct resolution. The visible <Image>
+    // for the next story then reads straight from cache — no re-decode.
+    position: 'absolute',
+    top: 0,
+    left: -9999,
+    width: W,
+    height: H,
   },
   progressRow: {
     position: 'absolute', top: 0, left: 0, right: 0,

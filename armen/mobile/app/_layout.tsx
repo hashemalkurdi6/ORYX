@@ -19,10 +19,22 @@ import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import { theme as T, type as TY } from '@/services/theme';
 
 function AppStack() {
-  const { theme } = useTheme();
+  const { theme, themeReady, resolvedScheme } = useTheme();
+
+  // Hold off on rendering children until the saved appearance preference has
+  // been read + applied — guarantees first paint uses the right theme.
+  if (!themeReady) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.bg.primary, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={theme.accent} />
+      </View>
+    );
+  }
+
   return (
     <>
-      <StatusBar style="light" />
+      {/* Status-bar icons flip with the theme so they stay readable. */}
+      <StatusBar style={resolvedScheme === 'light' ? 'dark' : 'light'} />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: theme.bg.primary },

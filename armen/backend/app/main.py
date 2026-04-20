@@ -83,6 +83,7 @@ _USER_COLUMN_MIGRATIONS = [
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_training_time VARCHAR(50)",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_complete BOOLEAN NOT NULL DEFAULT FALSE",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS current_onboarding_step INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS post_grid_layout VARCHAR(20) NOT NULL DEFAULT 'portfolio'",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS date_of_birth VARCHAR(10)",
     # Food feature columns (safe to re-run — IF NOT EXISTS)
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS hevy_api_key VARCHAR(255)",

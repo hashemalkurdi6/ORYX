@@ -1,7 +1,13 @@
-// Appearance settings — for now this is purely informational. Dark mode is
-// the only theme; light/auto modes are flagged "Coming soon" until the
-// design system grows to cover a light palette.
+// Appearance settings — dark / light / match-device.
+//
+// The user's choice is persisted to AsyncStorage under `oryx.appearance` and
+// resolved on every app launch. Switching live mutates the shared theme in
+// place + bumps the context version so hook-based consumers re-render.
+// Module-level `StyleSheet.create({ ... T.bg.primary ... })` usages at import
+// scope need a full app reopen to fully repaint — we surface that below the
+// picker so nothing feels broken.
 
+import { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,17 +21,21 @@ interface ThemeOption {
   label: string;
   hint: string;
   icon: React.ComponentProps<typeof Ionicons>['name'];
-  available: boolean;
 }
 
 const OPTIONS: ThemeOption[] = [
-  { key: 'dark',  label: 'Dark',         hint: 'The ORYX look',                    icon: 'moon-outline',     available: true  },
-  { key: 'light', label: 'Light',        hint: 'Coming soon',                      icon: 'sunny-outline',    available: false },
-  { key: 'auto',  label: 'Match system', hint: 'Coming soon',                      icon: 'phone-portrait-outline', available: false },
+  { key: 'dark',  label: 'Dark',             hint: 'The ORYX look — warm blue-charcoal surfaces',          icon: 'moon-outline'      },
+  { key: 'light', label: 'Light',            hint: 'Same structure, flipped palette for daytime use',       icon: 'sunny-outline'     },
+  { key: 'auto',  label: 'Match device',     hint: 'Follow your phone\u2019s system appearance setting',    icon: 'phone-portrait-outline' },
 ];
 
 export default function AppearanceScreen() {
-  const { theme: T } = useTheme();
+  const { theme: T, appearance, setAppearance } = useTheme();
+
+  const pick = async (mode: ThemeOption['key']) => {
+    if (mode === appearance) return;
+    await setAppearance(mode);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg.primary }}>
@@ -53,18 +63,19 @@ export default function AppearanceScreen() {
           </Text>
           <View style={{ backgroundColor: T.bg.elevated, borderWidth: 1, borderColor: T.border, borderRadius: R.md }}>
             {OPTIONS.map((opt, i) => {
-              const active = opt.key === 'dark';
+              const active = appearance === opt.key;
               return (
-                <View
+                <TouchableOpacity
                   key={opt.key}
+                  onPress={() => pick(opt.key)}
+                  activeOpacity={0.75}
                   style={{
                     flexDirection: 'row', alignItems: 'center', gap: SP[3],
                     paddingHorizontal: SP[4], paddingVertical: SP[4],
                     borderTopWidth: i === 0 ? 0 : 1, borderTopColor: T.border,
-                    opacity: opt.available ? 1 : 0.55,
                   }}
                 >
-                  <Ionicons name={opt.icon} size={20} color={opt.available ? T.text.body : T.text.muted} />
+                  <Ionicons name={opt.icon} size={20} color={active ? T.accent : T.text.body} />
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontFamily: TY.sans.semibold, fontSize: TY.size.body + 1, color: T.text.primary }}>
                       {opt.label}
@@ -78,17 +89,17 @@ export default function AppearanceScreen() {
                       <Ionicons name="checkmark" size={12} color={T.accentInk} />
                     </View>
                   ) : null}
-                </View>
+                </TouchableOpacity>
               );
             })}
           </View>
 
           <Text style={{
             fontFamily: TY.sans.regular, fontSize: TY.size.small, color: T.text.muted,
-            marginTop: SP[5], lineHeight: 16, paddingHorizontal: SP[2],
+            marginTop: SP[5], lineHeight: 17, paddingHorizontal: SP[2],
           }}>
-            ORYX is built dark-first. Light + auto modes will arrive once we ship a light palette
-            for the design system.
+            Both modes share the same layout, typography, and spacing — only the
+            color palette changes. Dark stays the default.
           </Text>
         </ScrollView>
       </SafeAreaView>

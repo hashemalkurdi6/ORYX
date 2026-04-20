@@ -56,6 +56,8 @@ class User(Base):
     preferred_training_time: Mapped[str | None] = mapped_column(String(50), nullable=True)
     onboarding_complete: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
     current_onboarding_step: Mapped[int] = mapped_column(Integer, default=1, nullable=False, server_default="1")
+    # Profile Posts tab layout preference: 'grid' (3-col) | 'portfolio' (2-col, default) | 'timeline' (1-col)
+    post_grid_layout: Mapped[str] = mapped_column(String(20), default="portfolio", nullable=False, server_default="portfolio")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

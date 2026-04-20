@@ -65,9 +65,10 @@ export interface ThemeColors {
   };
 }
 
-export const theme: ThemeColors = {
-  // Design v2 — deep slate / vivid glass. App bg is NOT pitch-black; it's a
-  // warm blue-charcoal so the radial ambient gradients read properly.
+// ── Dark palette ─────────────────────────────────────────────────────────────
+// Design v2 — deep slate / vivid glass. App bg is NOT pitch-black; it's a
+// warm blue-charcoal so the radial ambient gradients read properly.
+export const themeDark: ThemeColors = {
   bg: {
     primary:  '#141820',
     tint:     '#1A1F2A',
@@ -124,6 +125,116 @@ export const theme: ThemeColors = {
     danger:  '#FF6B4A',
   },
 };
+
+// ── Light palette ────────────────────────────────────────────────────────────
+// Values aligned to the Claude Design "ORYX Light" handoff (tokens-light.js):
+// cool periwinkle bg, solid white cards with cool-blue drop shadows, darker
+// "apple green" accent (#AACC00) that reads on a light surface without going
+// radioactive, cool-grey text hierarchy. Glass treatment flips from
+// blur-on-translucent (dark) to solid-white + shadow (light) — see GlassCard.
+// Light mode is *not* inverted dark. Dark mode's design uses glow, translucency
+// and lime-as-luminous-text. Light mode uses shadows, solid borders, and lime
+// strictly as a saturated fill / stroke / accent bar — never as text. Every
+// surface is a defined solid with a visible edge instead of a translucent wash.
+export const themeLight: ThemeColors = {
+  bg: {
+    primary:  '#FAFAFA',      // clean warm-neutral canvas
+    tint:     '#F5F5F7',
+    secondary:'#F5F5F7',
+    elevated: '#FFFFFF',      // pure-white card surface
+    subtle:   'rgba(0,0,0,0.04)',   // track lines / subtle dividers (lighter)
+    ringHalo: '#FFF5E6',      // warm ivory centre behind readiness ring
+  },
+
+  // Glass on light = solid fills + 1px dark hairline border + drop shadow.
+  // GlassCard reads resolvedScheme and renders a shadowed solid on light mode.
+  glass: {
+    card:      '#FFFFFF',
+    cardHi:    '#FFFFFF',
+    cardLo:    '#F5F5F7',
+    chrome:    'rgba(255,255,255,0.88)',   // tab-bar chrome, near-opaque
+    pill:      '#FFFFFF',
+    border:    'rgba(0,0,0,0.08)',        // stronger — light needs visible edges
+    highlight: 'rgba(255,255,255,0.95)',
+    rim:       'rgba(0,0,0,0.10)',
+    shade:     'rgba(0,0,0,0.15)',
+  },
+
+  border:   'rgba(0,0,0,0.08)',
+  hairline: 'rgba(0,0,0,0.06)',
+  divider:  'rgba(0,0,0,0.08)',
+
+  text: {
+    primary:   '#0F1115',     // near-black for headlines, values, body copy
+    body:      '#2A2F3A',     // body text, slightly lighter than primary
+    secondary: '#4A515E',     // darker one step — visible labels on white
+    muted:     '#6B7180',     // timestamps, hints (darker than before)
+    label:     '#4A515E',     // uppercase labels — not near-transparent
+  },
+
+  // Accent is a darker apple-green lime — still in the lime family, readable
+  // contrast when used as a fill. NEVER used as a text color in light mode.
+  accent:    '#AACC00',
+  accentDim: 'rgba(170,204,0,0.16)',
+  accentInk: '#0F1115',       // dark text on lime fills
+
+  readiness: {
+    high: '#4A9600',
+    mid:  '#C07800',
+    low:  '#C03A18',
+  },
+
+  signal: {
+    load: '#2A6EC8',
+    ai:   '#4A9600',
+  },
+
+  status: {
+    success: '#4A9600',
+    warn:    '#C07800',
+    danger:  '#C03A18',
+  },
+};
+
+// ── Active theme ─────────────────────────────────────────────────────────────
+// The `theme` export is mutable on purpose: at app startup (inside the theme
+// bootstrap in ThemeProvider) we flood it with either themeDark or themeLight
+// based on the user's saved preference, BEFORE any child component mounts.
+// This way module-level `import { theme as T }` usages pick up the right
+// values on first render.
+//
+// When the user switches appearance live, we mutate this object in place +
+// bump a version key on ThemeContext to force re-render. Components using the
+// useTheme() hook update immediately; module-level StyleSheet.create blocks
+// only fully re-apply on the next cold start (flagged in the Appearance
+// screen).
+export const theme: ThemeColors = JSON.parse(JSON.stringify(themeDark));
+
+export type AppearanceMode = 'dark' | 'light' | 'auto';
+
+/** Apply a resolved theme object to the shared `theme` export in place. */
+export function applyThemeInPlace(next: ThemeColors) {
+  (Object.keys(next) as (keyof ThemeColors)[]).forEach((key) => {
+    const value = next[key];
+    const current = theme[key] as any;
+    if (value && typeof value === 'object' && !Array.isArray(value) && current && typeof current === 'object') {
+      Object.assign(current, value);
+    } else {
+      (theme as any)[key] = value;
+    }
+  });
+}
+
+/** Resolve the active theme from the user's preference + the device scheme. */
+export function resolveTheme(
+  mode: AppearanceMode,
+  systemScheme: 'light' | 'dark' | null | undefined,
+): ThemeColors {
+  if (mode === 'light') return themeLight;
+  if (mode === 'dark')  return themeDark;
+  // 'auto' → mirror the system. Default to dark if the device didn't report.
+  return systemScheme === 'light' ? themeLight : themeDark;
+}
 
 // ── Typography ──────────────────────────────────────────────────────────────
 // Geist = UI / headlines / body. JetBrains Mono = labels, tickers, timestamps,
