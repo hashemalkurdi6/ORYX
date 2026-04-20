@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import apiClient, { getNutritionProfile, NutritionProfile } from '@/services/api';
+import { theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -288,7 +289,7 @@ function LargeTile({ label, sub, selected, onPress }: LargeTileProps) {
         ) : null}
       </View>
       {selected && (
-        <Ionicons name="checkmark-circle" size={22} color="#1a1a1a" />
+        <Ionicons name="checkmark-circle" size={22} color={T.accentInk} />
       )}
     </TouchableOpacity>
   );
@@ -624,7 +625,7 @@ export default function NutritionSurveyScreen() {
               <TextInput
                 style={styles.textInputSmall}
                 placeholder="e.g. 20:00"
-                placeholderTextColor="#555"
+                placeholderTextColor={T.text.muted}
                 value={surveyData.fasting_start_time}
                 onChangeText={(v) => update('fasting_start_time', v)}
                 keyboardType="numbers-and-punctuation"
@@ -635,7 +636,7 @@ export default function NutritionSurveyScreen() {
               <TextInput
                 style={styles.textInputSmall}
                 placeholder="e.g. 12:00"
-                placeholderTextColor="#555"
+                placeholderTextColor={T.text.muted}
                 value={surveyData.fasting_end_time}
                 onChangeText={(v) => update('fasting_end_time', v)}
                 keyboardType="numbers-and-punctuation"
@@ -691,7 +692,7 @@ export default function NutritionSurveyScreen() {
             <TextInput
               style={styles.mealTimeInput}
               placeholder="HH:MM"
-              placeholderTextColor="#555"
+              placeholderTextColor={T.text.muted}
               value={surveyData.meal_times[i] ?? ''}
               onChangeText={(v) => updateMealTime(i, v)}
               keyboardType="numbers-and-punctuation"
@@ -818,7 +819,7 @@ export default function NutritionSurveyScreen() {
             <TextInput
               style={styles.countrySearchInput}
               placeholder="Search country..."
-              placeholderTextColor="#555"
+              placeholderTextColor={T.text.muted}
               value={countrySearch}
               onChangeText={setCountrySearch}
               autoFocus
@@ -885,7 +886,7 @@ export default function NutritionSurveyScreen() {
     return (
       <ScrollView style={styles.stepContainer} showsVerticalScrollIndicator={false}>
         <View style={styles.doneIconWrap}>
-          <Ionicons name="checkmark-circle" size={64} color="#2563eb" />
+          <Ionicons name="checkmark-circle" size={64} color={T.signal.load} />
         </View>
         <Text style={styles.stepTitle}>Your Nutrition Profile</Text>
         <Text style={styles.doneSubtitle}>
@@ -937,7 +938,7 @@ export default function NutritionSurveyScreen() {
           activeOpacity={0.85}
         >
           {saving ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={T.text.primary} />
           ) : (
             <Text style={styles.submitButtonText}>Start My Meal Plan</Text>
           )}
@@ -967,7 +968,7 @@ export default function NutritionSurveyScreen() {
       {/* Header row */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack} style={styles.headerButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="chevron-back" size={24} color="#fff" />
+          <Ionicons name="chevron-back" size={24} color={T.text.primary} />
         </TouchableOpacity>
         <Text style={styles.headerStepText}>{step} / {TOTAL_STEPS}</Text>
         {step < TOTAL_STEPS ? (
@@ -997,18 +998,18 @@ export default function NutritionSurveyScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: T.bg.elevated,
   },
 
   // Progress bar
   progressBarTrack: {
     height: 3,
-    backgroundColor: '#333',
+    backgroundColor: T.border,
     width: '100%',
   },
   progressBarFill: {
     height: 3,
-    backgroundColor: '#fff',
+    backgroundColor: T.accent,
     borderRadius: 2,
   },
 
@@ -1025,14 +1026,14 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   headerStepText: {
-    color: '#888',
+    color: T.text.secondary,
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: TY.sans.medium,
   },
   skipText: {
-    color: '#888',
+    color: T.text.secondary,
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: TY.sans.medium,
     textAlign: 'right',
     minWidth: 48,
   },
@@ -1047,16 +1048,16 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   stepTitle: {
-    color: '#fff',
+    color: T.text.primary,
     fontSize: 26,
-    fontWeight: '700',
+    fontFamily: TY.sans.bold,
     marginBottom: 24,
     lineHeight: 32,
   },
   sectionLabel: {
-    color: '#888',
+    color: T.text.secondary,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TY.sans.semibold,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 10,
@@ -1070,23 +1071,23 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: R.lg,
     borderWidth: 1,
-    borderColor: '#444',
+    borderColor: T.glass.rim,
     marginRight: 8,
     marginBottom: 8,
   },
   chipSelected: {
-    backgroundColor: '#fff',
-    borderColor: '#fff',
+    backgroundColor: T.accent,
+    borderColor: T.accent,
   },
   chipText: {
-    color: '#aaa',
+    color: T.text.body,
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: TY.sans.medium,
   },
   chipTextSelected: {
-    color: '#1a1a1a',
+    color: T.bg.elevated,
   },
   chipRow: {
     paddingVertical: 4,
@@ -1101,23 +1102,23 @@ const styles = StyleSheet.create({
   pill: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: R.lg,
     borderWidth: 1,
-    borderColor: '#444',
+    borderColor: T.glass.rim,
     marginRight: 8,
     marginBottom: 8,
   },
   pillSelected: {
-    backgroundColor: '#fff',
-    borderColor: '#fff',
+    backgroundColor: T.accent,
+    borderColor: T.accent,
   },
   pillText: {
-    color: '#aaa',
+    color: T.text.body,
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: TY.sans.medium,
   },
   pillTextSelected: {
-    color: '#1a1a1a',
+    color: T.bg.elevated,
   },
   pillRow: {
     flexDirection: 'row',
@@ -1126,60 +1127,60 @@ const styles = StyleSheet.create({
 
   // Large tile
   tile: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 16,
+    backgroundColor: T.border,
+    borderRadius: R.md,
     padding: 16,
     marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: T.border,
   },
   tileSelected: {
-    backgroundColor: '#fff',
-    borderColor: '#fff',
+    backgroundColor: T.accent,
+    borderColor: T.accent,
   },
   tileContent: {
     flex: 1,
   },
   tileLabel: {
-    color: '#fff',
+    color: T.text.primary,
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: TY.sans.semibold,
   },
   tileLabelSelected: {
-    color: '#1a1a1a',
+    color: T.bg.elevated,
   },
   tileSub: {
-    color: '#888',
+    color: T.text.secondary,
     fontSize: 12,
     marginTop: 2,
   },
   tileSubSelected: {
-    color: '#555',
+    color: T.text.muted,
   },
 
   // TextInput
   textInput: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 12,
+    backgroundColor: T.border,
+    borderRadius: R.sm,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    color: '#fff',
+    color: T.text.primary,
     fontSize: 14,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: T.border,
   },
   textInputSmall: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 12,
+    backgroundColor: T.border,
+    borderRadius: R.sm,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#fff',
+    color: T.text.primary,
     fontSize: 14,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: T.border,
     flex: 1,
   },
 
@@ -1193,7 +1194,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   ifCustomLabel: {
-    color: '#888',
+    color: T.text.secondary,
     fontSize: 12,
     marginBottom: 6,
   },
@@ -1206,23 +1207,23 @@ const styles = StyleSheet.create({
   numberButton: {
     width: 48,
     height: 48,
-    borderRadius: 12,
+    borderRadius: R.sm,
     borderWidth: 1,
-    borderColor: '#444',
+    borderColor: T.glass.rim,
     alignItems: 'center',
     justifyContent: 'center',
   },
   numberButtonSelected: {
-    backgroundColor: '#fff',
-    borderColor: '#fff',
+    backgroundColor: T.accent,
+    borderColor: T.accent,
   },
   numberButtonText: {
-    color: '#aaa',
+    color: T.text.body,
     fontSize: 17,
-    fontWeight: '600',
+    fontFamily: TY.sans.semibold,
   },
   numberButtonTextSelected: {
-    color: '#1a1a1a',
+    color: T.bg.elevated,
   },
 
   // Meal time rows
@@ -1233,21 +1234,21 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   mealTimeLabel: {
-    color: '#fff',
+    color: T.text.primary,
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: TY.sans.medium,
     width: 80,
   },
   mealTimeInput: {
     flex: 1,
-    backgroundColor: '#2a2a2a',
-    borderRadius: 12,
+    backgroundColor: T.border,
+    borderRadius: R.sm,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#fff',
+    color: T.text.primary,
     fontSize: 14,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: T.border,
   },
 
   // Step 6 — Done
@@ -1257,26 +1258,26 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   doneSubtitle: {
-    color: '#888',
+    color: T.text.secondary,
     fontSize: 14,
     lineHeight: 22,
     marginBottom: 28,
   },
   summaryCard: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 16,
+    backgroundColor: T.border,
+    borderRadius: R.md,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: T.border,
   },
   summaryEmpty: {
-    color: '#555',
+    color: T.text.muted,
     fontSize: 13,
     textAlign: 'center',
   },
   summaryDivider: {
     height: 1,
-    backgroundColor: '#2e2e2e',
+    backgroundColor: T.bg.elevated,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -1285,15 +1286,15 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   summaryLabel: {
-    color: '#888',
+    color: T.text.secondary,
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: TY.sans.medium,
     flex: 1,
   },
   summaryValue: {
-    color: '#fff',
+    color: T.text.primary,
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: TY.sans.medium,
     maxWidth: '58%',
     textAlign: 'right',
     lineHeight: 18,
@@ -1306,82 +1307,82 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   continueButton: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
+    backgroundColor: T.accent,
+    borderRadius: R.sm,
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   continueButtonText: {
-    color: '#1a1a1a',
+    color: T.bg.elevated,
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TY.sans.bold,
   },
   submitButton: {
-    backgroundColor: '#2563eb',
+    backgroundColor: T.signal.load,
   },
   submitButtonText: {
-    color: '#fff',
+    color: T.text.primary,
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TY.sans.bold,
   },
 
   // Diet notes
   dietNote: {
-    color: '#888', fontSize: 12, fontStyle: 'italic',
+    color: T.text.secondary, fontSize: 12, fontStyle: 'italic',
     marginTop: 4, marginBottom: 8,
   },
   dietChangeNotice: {
-    color: '#d97706', fontSize: 12,
+    color: T.status.warn, fontSize: 12,
     marginTop: 4, marginBottom: 8,
   },
 
   // Food chip styles
-  foodModeHint: { color: '#555', fontSize: 12, marginBottom: 10 },
+  foodModeHint: { color: T.text.muted, fontSize: 12, marginBottom: 10 },
   foodModeToggle: { flexDirection: 'row', marginBottom: 16, gap: 10 },
   foodModeBtn: {
-    paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20,
-    borderWidth: 1, borderColor: '#444',
+    paddingHorizontal: 20, paddingVertical: 8, borderRadius: R.lg,
+    borderWidth: 1, borderColor: T.glass.rim,
   },
-  foodModeBtnActive: { backgroundColor: '#fff', borderColor: '#fff' },
-  foodModeBtnDislike: { borderColor: '#7f1d1d' },
-  foodModeBtnText: { color: '#888', fontSize: 13, fontWeight: '600' },
-  foodModeBtnTextActive: { color: '#1a1a1a' },
+  foodModeBtnActive: { backgroundColor: T.accent, borderColor: T.accent },
+  foodModeBtnDislike: { borderColor: T.status.danger },
+  foodModeBtnText: { color: T.text.secondary, fontSize: 13, fontFamily: TY.sans.semibold },
+  foodModeBtnTextActive: { color: T.bg.elevated },
   foodCategoryLabel: {
-    color: '#555', fontSize: 11, fontWeight: '600',
+    color: T.text.muted, fontSize: 11, fontFamily: TY.sans.semibold,
     textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8, marginTop: 14,
   },
   foodChip: {
-    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20,
-    borderWidth: 1, borderColor: '#333', marginRight: 8, marginBottom: 4,
+    paddingHorizontal: 12, paddingVertical: 7, borderRadius: R.lg,
+    borderWidth: 1, borderColor: T.border, marginRight: 8, marginBottom: 4,
   },
-  foodChipLoved: { backgroundColor: '#fff', borderColor: '#fff' },
-  foodChipDisliked: { backgroundColor: '#2d0a0a', borderColor: '#7f1d1d' },
-  foodChipText: { color: '#888', fontSize: 13, fontWeight: '500' },
-  foodChipTextLoved: { color: '#1a1a1a' },
-  foodChipTextDisliked: { color: '#ef4444' },
+  foodChipLoved: { backgroundColor: T.accent, borderColor: T.accent },
+  foodChipDisliked: { backgroundColor: T.status.danger + '20', borderColor: T.status.danger },
+  foodChipText: { color: T.text.secondary, fontSize: 13, fontFamily: TY.sans.medium },
+  foodChipTextLoved: { color: T.bg.elevated },
+  foodChipTextDisliked: { color: T.status.danger },
   // Country dropdown styles
   countrySelectedChip: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#2a2a2a', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
-    borderWidth: 1, borderColor: '#444',
+    backgroundColor: T.border, borderRadius: R.sm, paddingHorizontal: 14, paddingVertical: 12,
+    borderWidth: 1, borderColor: T.glass.rim,
   },
-  countrySelectedText: { color: '#fff', fontSize: 15, fontWeight: '500' },
-  countryChangeText: { color: '#555', fontSize: 13 },
+  countrySelectedText: { color: T.text.primary, fontSize: 15, fontFamily: TY.sans.medium },
+  countryChangeText: { color: T.text.muted, fontSize: 13 },
   countryPickerTrigger: {
-    backgroundColor: '#2a2a2a', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
-    borderWidth: 1, borderColor: '#333',
+    backgroundColor: T.border, borderRadius: R.sm, paddingHorizontal: 14, paddingVertical: 12,
+    borderWidth: 1, borderColor: T.border,
   },
-  countryPickerTriggerText: { color: '#555', fontSize: 14 },
+  countryPickerTriggerText: { color: T.text.muted, fontSize: 14 },
   countryDropdown: {
-    backgroundColor: '#1a1a1a', borderRadius: 12, borderWidth: 1, borderColor: '#333',
+    backgroundColor: T.bg.elevated, borderRadius: R.sm, borderWidth: 1, borderColor: T.border,
     marginTop: 8, overflow: 'hidden',
   },
   countrySearchInput: {
-    paddingHorizontal: 14, paddingVertical: 10, color: '#fff', fontSize: 14,
-    borderBottomWidth: 1, borderBottomColor: '#2a2a2a',
+    paddingHorizontal: 14, paddingVertical: 10, color: T.text.primary, fontSize: 14,
+    borderBottomWidth: 1, borderBottomColor: T.border,
   },
   countryScrollList: { maxHeight: 220 },
-  countryItem: { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1f1f1f' },
-  countryItemText: { color: '#ccc', fontSize: 14 },
+  countryItem: { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: T.border },
+  countryItemText: { color: T.text.body, fontSize: 14 },
 });

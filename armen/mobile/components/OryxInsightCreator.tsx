@@ -81,13 +81,15 @@ function fmtDate(iso: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+// Background options are theme-derived so they stay coherent with the rest
+// of the app. Variety comes from different glass / bg tones, not arbitrary hex.
 const BG_STYLES: { key: string; color: string; label: string }[] = [
-  { key: 'dark_solid', color: '#0a0a0a', label: 'Dark' },
-  { key: 'warm_dark', color: '#111009', label: 'Warm' },
-  { key: 'mountain', color: '#1a2030', label: 'Mtn' },
-  { key: 'forest', color: '#0d1a0d', label: 'Forest' },
-  { key: 'ocean', color: '#0d1020', label: 'Ocean' },
-  { key: 'cosmos', color: '#0a0a1a', label: 'Cosmos' },
+  { key: 'dark_solid', color: T.bg.primary,    label: 'Dark' },
+  { key: 'warm_dark',  color: T.bg.tint,       label: 'Warm' },
+  { key: 'mountain',   color: T.bg.elevated,   label: 'Mtn' },
+  { key: 'forest',     color: T.glass.cardLo,  label: 'Forest' },
+  { key: 'ocean',      color: T.glass.chrome,  label: 'Ocean' },
+  { key: 'cosmos',     color: T.glass.pill,    label: 'Cosmos' },
 ];
 
 interface ToastState {
@@ -548,7 +550,7 @@ export default function OryxInsightCreator({
   // ── Step: Compose ──────────────────────────────────────────────────────────────
 
   const renderCardPreview = () => {
-    const bgColor = BG_STYLES.find(b => b.key === bgStyle)?.color ?? '#0a0a0a';
+    const bgColor = BG_STYLES.find(b => b.key === bgStyle)?.color ?? T.bg.primary;
 
     if (insightType === 'text') {
       return (

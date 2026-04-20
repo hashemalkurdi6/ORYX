@@ -302,7 +302,7 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
 
     return (
       <Modal visible animationType="slide" statusBarTranslucent onRequestClose={onClose}>
-        <View style={{ flex: 1, backgroundColor: '#000000' }}>
+        <View style={{ flex: 1, backgroundColor: T.bg.primary }}>
           {/* Close button */}
           <TouchableOpacity
             onPress={onClose}
@@ -461,7 +461,7 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
 
     return (
       <Modal visible animationType="fade" statusBarTranslucent onRequestClose={() => setStep('camera')}>
-        <View style={{ flex: 1, backgroundColor: '#000000' }}>
+        <View style={{ flex: 1, backgroundColor: T.bg.primary }}>
           {/* Full-bleed photo */}
           <Image source={{ uri: photoUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
 

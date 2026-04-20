@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '@/services/authStore';
 import { getTodayCheckin, generateCheckinCaption, saveCheckin, getDashboard, CheckinStatus } from '@/services/api';
+import { theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
 
 type Screen = 'window' | 'preview';
 
@@ -222,10 +223,10 @@ export default function CheckinScreen() {
   // ── Readiness color ───────────────────────────────────────────────────────
 
   const readinessColor = (score?: number) => {
-    if (!score) return '#555555';
-    if (score >= 70) return '#27ae60';
-    if (score >= 40) return '#f39c12';
-    return '#c0392b';
+    if (!score) return T.text.muted;
+    if (score >= 70) return T.readiness.high;
+    if (score >= 40) return T.readiness.mid;
+    return T.readiness.low;
   };
 
   // ── Window Screen ─────────────────────────────────────────────────────────
@@ -234,7 +235,7 @@ export default function CheckinScreen() {
     if (statusLoading) {
       return (
         <View style={styles.centered}>
-          <ActivityIndicator color="#e0e0e0" size="large" />
+          <ActivityIndicator color={T.text.body} size="large" />
         </View>
       );
     }
@@ -245,7 +246,7 @@ export default function CheckinScreen() {
     if (alreadyDone) {
       return (
         <View style={styles.centered}>
-          <Ionicons name="checkmark-circle" size={64} color="#27ae60" />
+          <Ionicons name="checkmark-circle" size={64} color={T.status.success} />
           <Text style={styles.bigTitle}>Already Checked In</Text>
           <Text style={styles.subtitle}>You've already completed today's check-in.</Text>
           <TouchableOpacity style={styles.btnSecondary} onPress={() => router.back()}>
@@ -265,7 +266,7 @@ export default function CheckinScreen() {
           </>
         ) : (
           <>
-            <Ionicons name="time-outline" size={56} color="#555555" />
+            <Ionicons name="time-outline" size={56} color={T.text.muted} />
             <Text style={styles.bigTitle}>No Active Window</Text>
             <Text style={styles.subtitle}>
               No check-in window right now. Windows typically open in the morning and evening — check back later.
@@ -306,7 +307,7 @@ export default function CheckinScreen() {
 
         {windowActive && (
           <TouchableOpacity style={styles.btnPrimary} onPress={handleTakePhoto}>
-            <Ionicons name="camera" size={20} color="#0a0a0a" style={{ marginRight: 8 }} />
+            <Ionicons name="camera" size={20} color={T.accentInk} style={{ marginRight: 8 }} />
             <Text style={styles.btnPrimaryText}>Take Photo</Text>
           </TouchableOpacity>
         )}
@@ -331,7 +332,7 @@ export default function CheckinScreen() {
             resizeMode="cover"
           />
         ) : (
-          <View style={{ flex: 1, backgroundColor: '#111111' }} />
+          <View style={{ flex: 1, backgroundColor: T.bg.elevated }} />
         )}
 
         {/* Dark overlay at bottom */}
@@ -343,23 +344,23 @@ export default function CheckinScreen() {
             {stats.readiness != null && (
               <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: readinessColor(stats.readiness) }} />
             )}
-            <Text style={{ fontSize: 11, color: '#888888', letterSpacing: 1, textTransform: 'uppercase' }}>Today's Stats</Text>
+            <Text style={{ fontSize: 11, color: T.text.secondary, letterSpacing: 1, textTransform: 'uppercase' }}>Today's Stats</Text>
           </View>
           <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
             {stats.readiness != null && (
               <Text style={styles.overlayStatText}>
-                <Text style={{ color: '#555555' }}>Readiness </Text>
+                <Text style={{ color: T.text.muted }}>Readiness </Text>
                 <Text style={{ color: readinessColor(stats.readiness) }}>{stats.readiness}%</Text>
               </Text>
             )}
             {stats.steps != null && (
               <Text style={styles.overlayStatText}>
-                <Text style={{ color: '#555555' }}>Steps </Text>{stats.steps.toLocaleString()}
+                <Text style={{ color: T.text.muted }}>Steps </Text>{stats.steps.toLocaleString()}
               </Text>
             )}
             {stats.calories_consumed != null && (
               <Text style={styles.overlayStatText}>
-                <Text style={{ color: '#555555' }}>Cal </Text>{stats.calories_consumed}
+                <Text style={{ color: T.text.muted }}>Cal </Text>{stats.calories_consumed}
                 {stats.calories_target != null ? `/${stats.calories_target}` : ''}
               </Text>
             )}
@@ -374,15 +375,15 @@ export default function CheckinScreen() {
           <View style={{ marginBottom: 12 }}>
             {captionLoading ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <ActivityIndicator size="small" color="#555555" />
-                <Text style={{ fontSize: 13, color: '#555555', fontStyle: 'italic' }}>Generating caption...</Text>
+                <ActivityIndicator size="small" color={T.text.muted} />
+                <Text style={{ fontSize: 13, color: T.text.muted, fontStyle: 'italic' }}>Generating caption...</Text>
               </View>
             ) : (
-              <Text style={{ fontSize: 14, color: '#f0f0f0', fontStyle: 'italic', lineHeight: 20 }}>{caption}</Text>
+              <Text style={{ fontSize: 14, color: T.text.primary, fontStyle: 'italic', lineHeight: 20 }}>{caption}</Text>
             )}
             {captionRegens < 3 && !captionLoading && (
               <TouchableOpacity onPress={handleRegenerateCaption} style={{ marginTop: 6 }}>
-                <Text style={{ fontSize: 12, color: '#555555' }}>
+                <Text style={{ fontSize: 12, color: T.text.muted }}>
                   Regenerate Caption ({3 - captionRegens} left)
                 </Text>
               </TouchableOpacity>
@@ -390,7 +391,7 @@ export default function CheckinScreen() {
           </View>
 
           {/* Influence tags */}
-          <Text style={{ fontSize: 11, color: '#555555', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
+          <Text style={{ fontSize: 11, color: T.text.muted, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
             What influenced your day?
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 4 }}>
@@ -416,7 +417,7 @@ export default function CheckinScreen() {
           </ScrollView>
 
           {selectedTags.length >= 3 && (
-            <Text style={{ fontSize: 11, color: '#555555', marginTop: 4 }}>Max 3 tags selected</Text>
+            <Text style={{ fontSize: 11, color: T.text.muted, marginTop: 4 }}>Max 3 tags selected</Text>
           )}
         </ScrollView>
 
@@ -434,7 +435,7 @@ export default function CheckinScreen() {
             style={[styles.btnPost, posting && { opacity: 0.6 }]}
           >
             {posting ? (
-              <ActivityIndicator size="small" color="#0a0a0a" />
+              <ActivityIndicator size="small" color={T.accentInk} />
             ) : (
               <Text style={styles.btnPostText}>Post Check-In</Text>
             )}
@@ -451,7 +452,7 @@ export default function CheckinScreen() {
       {/* Header */}
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => { if (screen === 'preview') { setScreen('window'); setPhotoUri(null); setPhotoBase64(null); setCaption(''); } else { router.back(); } }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <Ionicons name="chevron-back" size={26} color="#f0f0f0" />
+          <Ionicons name="chevron-back" size={26} color={T.text.primary} />
         </TouchableOpacity>
         <Text style={styles.topBarTitle}>Daily Check-In</Text>
         <View style={{ width: 26 }} />
@@ -467,7 +468,7 @@ export default function CheckinScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: T.bg.primary,
   },
   topBar: {
     flexDirection: 'row',
@@ -478,8 +479,8 @@ const styles = StyleSheet.create({
   },
   topBarTitle: {
     fontSize: 17,
-    fontWeight: '700',
-    color: '#f0f0f0',
+    fontFamily: TY.sans.bold,
+    color: T.text.primary,
   },
   centered: {
     flex: 1,
@@ -496,42 +497,42 @@ const styles = StyleSheet.create({
   },
   windowLabel: {
     fontSize: 11,
-    color: '#555555',
+    color: T.text.muted,
     letterSpacing: 2,
     textTransform: 'uppercase',
     marginBottom: -4,
   },
   countdownText: {
     fontSize: 64,
-    fontWeight: '800',
-    color: '#f0f0f0',
+    fontFamily: TY.sans.bold,
+    color: T.text.primary,
     letterSpacing: 2,
     fontVariant: ['tabular-nums'],
   },
   bigTitle: {
     fontSize: 24,
-    fontWeight: '700',
-    color: '#f0f0f0',
+    fontFamily: TY.sans.bold,
+    color: T.text.primary,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 14,
-    color: '#555555',
+    color: T.text.muted,
     textAlign: 'center',
     lineHeight: 20,
   },
   statsCard: {
     width: '100%',
-    backgroundColor: '#111111',
-    borderRadius: 16,
+    backgroundColor: T.bg.elevated,
+    borderRadius: R.md,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#2a2a2a',
+    borderColor: T.border,
     gap: 12,
   },
   statsCardTitle: {
     fontSize: 10,
-    color: '#555555',
+    color: T.text.muted,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
@@ -547,40 +548,40 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontSize: 22,
-    fontWeight: '700',
-    color: '#f0f0f0',
+    fontFamily: TY.sans.bold,
+    color: T.text.primary,
   },
   statLabel: {
     fontSize: 11,
-    color: '#555555',
+    color: T.text.muted,
   },
   btnPrimary: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f0f0f0',
-    borderRadius: 14,
+    backgroundColor: T.accent,
+    borderRadius: R.sm,
     height: 56,
     width: '100%',
     marginTop: 8,
   },
   btnPrimaryText: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#0a0a0a',
+    fontFamily: TY.sans.bold,
+    color: T.accentInk,
   },
   btnSecondary: {
     width: '100%',
     height: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 14,
+    borderRadius: R.sm,
     borderWidth: 1,
-    borderColor: '#2a2a2a',
+    borderColor: T.border,
   },
   btnSecondaryText: {
     fontSize: 15,
-    color: '#888888',
+    color: T.text.secondary,
   },
   // Preview screen
   photoOverlay: {
@@ -597,65 +598,65 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
     backgroundColor: 'rgba(17,17,17,0.85)',
-    borderRadius: 14,
+    borderRadius: R.sm,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#2a2a2a',
+    borderColor: T.border,
   },
   overlayStatText: {
     fontSize: 13,
-    color: '#f0f0f0',
+    color: T.text.primary,
   },
   previewBottom: {
-    backgroundColor: '#0a0a0a',
+    backgroundColor: T.bg.primary,
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#2a2a2a',
+    borderTopColor: T.border,
     maxHeight: 340,
   },
   tagPill: {
-    borderRadius: 20,
+    borderRadius: R.lg,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: '#2a2a2a',
+    borderColor: T.border,
     backgroundColor: 'transparent',
   },
   tagPillSelected: {
-    borderColor: '#e0e0e0',
-    backgroundColor: '#1a1a1a',
+    borderColor: T.text.body,
+    backgroundColor: T.bg.elevated,
   },
   tagText: {
     fontSize: 13,
-    color: '#555555',
+    color: T.text.muted,
   },
   tagTextSelected: {
-    color: '#f0f0f0',
+    color: T.text.primary,
   },
   btnCancel: {
     flex: 1,
     height: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 14,
+    borderRadius: R.sm,
     borderWidth: 1,
-    borderColor: '#2a2a2a',
+    borderColor: T.border,
   },
   btnCancelText: {
     fontSize: 15,
-    color: '#888888',
+    color: T.text.secondary,
   },
   btnPost: {
     flex: 2,
     height: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 14,
-    backgroundColor: '#f0f0f0',
+    borderRadius: R.sm,
+    backgroundColor: T.accent,
   },
   btnPostText: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#0a0a0a',
+    fontFamily: TY.sans.bold,
+    color: T.accentInk,
   },
 });
