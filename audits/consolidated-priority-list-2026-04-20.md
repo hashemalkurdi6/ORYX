@@ -50,6 +50,7 @@ Quieter than Tier 0 but these make your data untrustworthy — every downstream 
 | 1.9 | **Strength workouts stored with `intensity='Moderate'` before RPE submitted** — if backend doesn't recompute `training_load` on `PATCH /rpe`, every strength session's load is wrong. Needs verification. | Activity/Backend |
 | 1.10 | **`/signup` auto-sets `onboarding_complete=True`** — onboarding is bypassable. | Backend |
 | 1.11 | **Duplicate onboarding flows** (legacy `onboarding.tsx` 10-step vs `(auth)/signup.tsx` 12-step) with divergent schemas. Users land in different data states. | Social/Auth |
+| 1.12 | **Missing FK constraints on 10 social tables** — `social_posts`, `social_comments`, `social_follows`, `social_reactions`, `stories`, `story_views`, `post_likes`, `post_reports` (also wrong column type: String not UUID), `club_memberships`, `daily_checkins` — all have raw UUID columns with no `ForeignKey` / `ondelete=CASCADE`. Discovered during 0.1 implementation; cascade must be done explicitly in the deletion service until schema is rewritten in 1.5. | Backend |
 
 ---
 
@@ -155,5 +156,9 @@ Total: ~4–5 engineering days. Burns down 5 of the top 10 risk items.
 Alternate if you'd rather fix the most-visible-broken user experience first: swap (5) for **the light mode sweep in the Activity tab** — that's the single biggest "looks broken" complaint a beta tester will file. ~2 days of mechanical token replacement.
 
 ---
+
+## Progress log
+
+- [x] **0.1 Delete Account** — completed 2026-04-20. Commits pending. Backend: Alembic init + migration 0002 (adds `users.deleted_at`, `users.delete_requested_at`, `account_deletion_events` audit table), `app/services/account_deletion.py` (soft_delete / restore / hard_delete_user / hard_delete_expired_users), `app/services/scheduler.py` (6-hour asyncio sweeper in lifespan), `POST /auth/restore` + login pending-deletion branch, `DELETE /users/me`, `get_current_user` blocks users with `delete_requested_at IS NOT NULL`. Social filter: `app/services/user_visibility.py` + 8 routers (feed, posts, social, users, stories, clubs, messages, plus self-view exemption) — soft-deleted users vanish from every social read. Mobile: `app/settings/delete-account.tsx` (3-step warning/confirm/success), `app/settings/restore-account.tsx`, login branches on `pending_deletion` response, `api.ts` `deleteMyAccount()` + `restoreAccount()`. Pulled Alembic setup forward from Day 5 (partial); Day 5 now only needs to migrate the ~140 raw ALTERs to versioned files.
 
 End of consolidated list.
