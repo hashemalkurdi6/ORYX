@@ -642,7 +642,10 @@ export default function HomeScreen() {
   const weeklyLoadTarget   = weeklyTrainingDays * 300;
   const weeklyLoadPct      = Math.min(1, (dashboard?.weekly_load ?? 0) / weeklyLoadTarget);
   const dailyRecLoad       = Math.round((weeklyLoadTarget / weeklyTrainingDays) * (rScore >= 70 ? 1.0 : 0.8));
-  const hadSessionToday    = dashboard?.last_session?.date === todayISO();
+  // Use startsWith instead of === because last_session.date may be a full ISO
+  // timestamp ("2026-04-20T12:30:00Z"), not just "YYYY-MM-DD". With ===, the
+  // strain gauge never renders after a workout.
+  const hadSessionToday    = dashboard?.last_session?.date?.startsWith(todayISO()) ?? false;
   const todaySessionLoad   = hadSessionToday ? (dashboard?.last_session?.training_load ?? 0) : 0;
   const strainPct          = dailyRecLoad > 0 ? todaySessionLoad / dailyRecLoad : 0;
 

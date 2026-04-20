@@ -24,8 +24,12 @@ router = APIRouter(prefix="/nutrition", tags=["nutrition"])
 async def scan_food(
     payload: FoodScanRequest,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Analyze a food photo using Claude vision and return estimated nutrition data."""
+    from app.services.rate_limit import check_rate_limit
+    await check_rate_limit(db, f"food-scan:{current_user.id}", limit=30, window_seconds=86400)
+
     logger.info(
         "POST /nutrition/scan user=%s image_len=%d media_type=%s",
         current_user.id,

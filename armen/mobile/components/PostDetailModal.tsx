@@ -91,9 +91,9 @@ function Avatar({
 // ── OryxDataCard ──────────────────────────────────────────────────────────────
 
 function OryxDataCard({ data }: { data: Post['oryx_data_card_json'] }) {
+  const [expanded, setExpanded] = useState(false);
   if (!data) return null;
   const ptype = data.post_type;
-  const [expanded, setExpanded] = useState(false);
 
   if (ptype === 'workout') {
     return (

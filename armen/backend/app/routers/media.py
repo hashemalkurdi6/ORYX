@@ -1,6 +1,7 @@
 import base64
 import io
 import logging
+import os as _os
 import uuid
 
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
@@ -93,6 +94,19 @@ async def upload_media(
             logger.error("S3 upload failed: %s", exc)
             raise HTTPException(status_code=500, detail=f"Upload failed: {exc}")
     else:
-        # Dev fallback — return base64 data URL (no compression required)
+        # No S3 configured. In dev, return a small base64 data URL so the UI still
+        # works. In production, REFUSE — base64 images in the DB explode it within
+        # a week (500KB–5MB per post). Configure S3/R2 before shipping.
+        if _os.getenv("ENV", "dev").lower() in ("prod", "production"):
+            raise HTTPException(
+                status_code=503,
+                detail="Media storage not configured. Set AWS_S3_BUCKET + creds.",
+            )
+        # Cap dev fallback at 256 KB — prevents accidental large-file pollution of dev DB.
+        if len(data) > 256 * 1024:
+            raise HTTPException(
+                status_code=413,
+                detail="Image too large for dev fallback (>256 KB). Configure S3 to upload.",
+            )
         encoded = base64.b64encode(data).decode()
         return {"url": f"data:image/jpeg;base64,{encoded}"}

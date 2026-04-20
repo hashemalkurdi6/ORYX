@@ -176,9 +176,16 @@ export default function SignupFlow() {
   const weightKg = weightUnit === 'kg'
     ? parseFloat(weightStr) || 0
     : (parseFloat(weightStr) || 0) * 0.453592;
+  // Parse "5.11" as 5 feet 11 inches (not 5.11 feet). Decimal part = inches, capped at 11.
+  const parseFtIn = (s: string): number => {
+    const [ftStr, inStr] = s.trim().split('.');
+    const feet = parseInt(ftStr || '0') || 0;
+    const inches = Math.min(11, parseInt(inStr || '0') || 0);
+    return (feet * 12 + inches) * 2.54;
+  };
   const heightCm = heightUnit === 'cm'
     ? parseFloat(heightStr) || 0
-    : (parseFloat(heightStr) || 0) * 30.48;
+    : parseFtIn(heightStr);
   const age = calcAgeFromBirthday(bdDay, bdMonth, bdYear);
   const dateOfBirth = (parseInt(bdYear) >= 1900 && parseInt(bdMonth) >= 1 && parseInt(bdDay) >= 1)
     ? `${bdYear.padStart(4, '0')}-${bdMonth.padStart(2, '0')}-${bdDay.padStart(2, '0')}`

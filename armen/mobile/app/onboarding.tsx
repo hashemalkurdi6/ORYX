@@ -158,7 +158,10 @@ export default function OnboardingScreen() {
   };
 
   const saveProgress = (extraFields: Record<string, unknown> = {}) => {
-    patchOnboarding({ current_onboarding_step: step, ...extraFields } as any).catch(() => {});
+    // Log failures so we can see if the backend drops onboarding data.
+    // Don't block the UI on the network — onboarding is resumable — but never swallow silently.
+    patchOnboarding({ current_onboarding_step: step, ...extraFields } as any)
+      .catch((err) => { console.warn('[onboarding] saveProgress failed', err?.response?.status, err?.response?.data); });
   };
 
   const goNext = (fields: Record<string, unknown> = {}) => {
@@ -178,9 +181,16 @@ export default function OnboardingScreen() {
     ? parseFloat(weightStr) || 0
     : (parseFloat(weightStr) || 0) * 0.453592;
 
+  // Parse "5.11" as 5 feet 11 inches (not 5.11 feet). Decimal part = inches, capped at 11.
+  const parseFtIn = (s: string): number => {
+    const [ftStr, inStr] = s.trim().split('.');
+    const feet = parseInt(ftStr || '0') || 0;
+    const inches = Math.min(11, parseInt(inStr || '0') || 0);
+    return (feet * 12 + inches) * 2.54;
+  };
   const heightCm = heightUnit === 'cm'
     ? parseFloat(heightStr) || 0
-    : (parseFloat(heightStr) || 0) * 30.48;
+    : parseFtIn(heightStr);
 
   const age = parseInt(ageStr) || 0;
 
@@ -226,7 +236,21 @@ export default function OnboardingScreen() {
     patchOnboarding(payload)
       .then(() => getMe())
       .then((updatedUser) => { if (authToken) setAuth(authToken, updatedUser); })
-      .catch(() => {});
+      // Auto-join clubs matching the user's sport tags so the community tab
+      // isn't empty on first visit. Fire-and-forget; errors are non-fatal.
+      .then(async () => {
+        try {
+          const { autoJoinClubs } = await import('@/services/api');
+          await autoJoinClubs();
+        } catch { /* non-fatal */ }
+      })
+      .catch((err) => {
+        console.warn('[onboarding] final save failed', err?.response?.status, err?.response?.data);
+        Alert.alert(
+          'Could not save your profile',
+          'Your setup is done locally but we couldn\'t sync it to the server. Check your connection and try again from Settings.',
+        );
+      });
   };
 
   const canSkip = step !== 6 && step !== 7;

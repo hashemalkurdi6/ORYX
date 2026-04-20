@@ -85,7 +85,7 @@ function formatJoinDate(dateStr: string | null | undefined): string {
 
 function computeCurrentStreak(activities: Activity[]): number {
   if (activities.length === 0) return 0;
-  const dates = new Set(activities.map((a) => a.start_date.split('T')[0]));
+  const dates = new Set(activities.map((a) => (a.start_date ?? '').split('T')[0]).filter(Boolean));
   let streak = 0;
   const today = new Date();
   for (let i = 0; i < 365; i++) {
@@ -103,7 +103,7 @@ function computeCurrentStreak(activities: Activity[]): number {
 
 function computeLongestStreak(activities: Activity[]): number {
   if (activities.length === 0) return 0;
-  const dateSet = new Set(activities.map((a) => a.start_date.split('T')[0]));
+  const dateSet = new Set(activities.map((a) => (a.start_date ?? '').split('T')[0]).filter(Boolean));
   const sortedDates = Array.from(dateSet).sort();
   let longest = 1;
   let current = 1;
@@ -185,6 +185,7 @@ const BADGES: Badge[] = [
     color: '#888888',
     earned: (a) =>
       a.some((act) => {
+        if (!act.start_date) return false;
         const hour = new Date(act.start_date).getHours();
         return hour < 6;
       }),
@@ -224,6 +225,7 @@ function WorkoutHeatmap({ activities }: { activities: Activity[] }) {
 
   const dateCounts: Record<string, number> = {};
   activities.forEach((a) => {
+    if (!a.start_date) return;
     const d = a.start_date.split('T')[0];
     dateCounts[d] = (dateCounts[d] ?? 0) + 1;
   });
@@ -260,7 +262,7 @@ function WorkoutHeatmap({ activities }: { activities: Activity[] }) {
     }
   });
 
-  const totalWorkouts = new Set(activities.map((a) => a.start_date.split('T')[0])).size;
+  const totalWorkouts = new Set(activities.map((a) => (a.start_date ?? '').split('T')[0]).filter(Boolean)).size;
 
   function cellColor(count: number): string {
     if (count === 0) return theme.border;

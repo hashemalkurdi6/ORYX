@@ -251,6 +251,16 @@ interface PillProps {
   onPress: () => void;
 }
 
+// Module-level styles so sub-components defined outside the main component
+// (Pill, etc.) can reference `styles` without hitting a ReferenceError.
+let _moduleStyles: ReturnType<typeof createStyles> | null = null;
+const styles = new Proxy({} as ReturnType<typeof createStyles>, {
+  get(_, prop: string) {
+    if (!_moduleStyles) _moduleStyles = createStyles(T);
+    return (_moduleStyles as any)[prop];
+  },
+});
+
 function Pill({ label, selected, onPress }: PillProps) {
   return (
     <TouchableOpacity
@@ -328,7 +338,22 @@ export default function NutritionSurveyScreen() {
   const [dietChangeNotice, setDietChangeNotice] = useState(false);
 
   useEffect(() => {
-    getNutritionProfile().then(setProfileData).catch(() => {});
+    getNutritionProfile()
+      .then((profile) => {
+        setProfileData(profile);
+        // Hydrate survey state from the saved profile so editing an existing
+        // profile doesn't wipe preferences by PATCHing empty DEFAULT_SURVEY fields.
+        // Only overwrite fields that exist on the profile; keep defaults for anything missing.
+        setSurveyData((prev) => {
+          const next: SurveyData = { ...prev };
+          (Object.keys(prev) as (keyof SurveyData)[]).forEach((key) => {
+            const v = (profile as any)?.[key];
+            if (v !== undefined && v !== null) (next as any)[key] = v;
+          });
+          return next;
+        });
+      })
+      .catch(() => {});
   }, []);
 
   // ── Navigation ──────────────────────────────────────────────────────────────

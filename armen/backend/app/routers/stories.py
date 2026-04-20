@@ -155,6 +155,11 @@ async def get_stories_feed(
         groups[uid]["stories"].append(story_dict)
         if str(story.id) not in seen_story_ids:
             groups[uid]["has_unseen_story"] = True
+        # Pull readiness color from the latest story's overlay if available so
+        # each user's avatar ring reflects their current readiness, not a flat grey.
+        overlay = story.oryx_data_overlay_json or {}
+        if isinstance(overlay, dict) and overlay.get("readiness_color"):
+            groups[uid]["readiness_color"] = overlay["readiness_color"]
 
     # Sort: own first, then unseen, then seen
     group_list = list(groups.values())

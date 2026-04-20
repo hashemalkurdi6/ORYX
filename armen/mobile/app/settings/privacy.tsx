@@ -23,42 +23,42 @@ const DM_OPTIONS: { key: DmAudience; label: string; hint: string }[] = [
   { key: 'following', label: 'People you follow', hint: 'Only people in your following list' },
 ];
 
-export default function PrivacyScreen() {
-  const { theme: T } = useTheme();
-  const [isPrivate, setIsPrivate] = useState(false);
-  const [dmAudience, setDmAudience] = useState<DmAudience>('everyone');
-  const [showHeatmap, setShowHeatmap] = useState(true);
-  const [showPRs, setShowPRs] = useState(true);
+// Defined at module scope so React doesn't unmount/remount them on every parent
+// re-render — that was causing toggle flicker and color glitches.
+type Theme = ReturnType<typeof useTheme>['theme'];
 
-  const Section = ({ label, children }: { label: string; children: React.ReactNode }) => (
+function Section({ label, children, theme }: { label: string; children: React.ReactNode; theme: Theme }) {
+  return (
     <>
       <Text style={{
-        fontFamily: TY.mono.semibold, fontSize: TY.size.micro, color: T.text.muted,
+        fontFamily: TY.mono.semibold, fontSize: TY.size.micro, color: theme.text.muted,
         textTransform: 'uppercase', letterSpacing: TY.tracking.label,
         marginTop: SP[5], marginBottom: SP[2],
       }}>
         {label}
       </Text>
-      <View style={{ backgroundColor: T.bg.elevated, borderWidth: 1, borderColor: T.border, borderRadius: R.md }}>
+      <View style={{ backgroundColor: theme.bg.elevated, borderWidth: 1, borderColor: theme.border, borderRadius: R.md }}>
         {children}
       </View>
     </>
   );
+}
 
-  const ToggleRow = ({ label, hint, value, onChange, divider }: {
-    label: string; hint?: string; value: boolean; onChange: (v: boolean) => void; divider?: boolean;
-  }) => (
+function ToggleRow({ label, hint, value, onChange, divider, theme }: {
+  label: string; hint?: string; value: boolean; onChange: (v: boolean) => void; divider?: boolean; theme: Theme;
+}) {
+  return (
     <View style={{
       flexDirection: 'row', alignItems: 'center',
       paddingHorizontal: SP[4], paddingVertical: SP[3] + 2,
-      borderTopWidth: divider ? 1 : 0, borderTopColor: T.border,
+      borderTopWidth: divider ? 1 : 0, borderTopColor: theme.border,
     }}>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: TY.sans.medium, fontSize: TY.size.body + 1, color: T.text.primary }}>
+        <Text style={{ fontFamily: TY.sans.medium, fontSize: TY.size.body + 1, color: theme.text.primary }}>
           {label}
         </Text>
         {hint ? (
-          <Text style={{ fontFamily: TY.sans.regular, fontSize: TY.size.small, color: T.text.muted, marginTop: 2 }}>
+          <Text style={{ fontFamily: TY.sans.regular, fontSize: TY.size.small, color: theme.text.muted, marginTop: 2 }}>
             {hint}
           </Text>
         ) : null}
@@ -66,11 +66,19 @@ export default function PrivacyScreen() {
       <Switch
         value={value}
         onValueChange={onChange}
-        trackColor={{ false: T.border, true: T.accent }}
-        thumbColor={value ? T.accentInk : T.text.muted}
+        trackColor={{ false: theme.border, true: theme.accent }}
+        thumbColor={value ? theme.accentInk : theme.text.muted}
       />
     </View>
   );
+}
+
+export default function PrivacyScreen() {
+  const { theme: T } = useTheme();
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [dmAudience, setDmAudience] = useState<DmAudience>('everyone');
+  const [showHeatmap, setShowHeatmap] = useState(true);
+  const [showPRs, setShowPRs] = useState(true);
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg.primary }}>
@@ -90,16 +98,17 @@ export default function PrivacyScreen() {
         </View>
 
         <ScrollView contentContainerStyle={{ paddingHorizontal: SP[5], paddingBottom: SP[10] }}>
-          <Section label="ACCOUNT">
+          <Section label="ACCOUNT" theme={T}>
             <ToggleRow
               label="Private account"
               hint="Approve every follower request manually"
               value={isPrivate}
               onChange={setIsPrivate}
+              theme={T}
             />
           </Section>
 
-          <Section label="DIRECT MESSAGES">
+          <Section label="DIRECT MESSAGES" theme={T}>
             {DM_OPTIONS.map((opt, i) => {
               const active = dmAudience === opt.key;
               return (
@@ -133,12 +142,13 @@ export default function PrivacyScreen() {
             })}
           </Section>
 
-          <Section label="VISIBILITY">
+          <Section label="VISIBILITY" theme={T}>
             <ToggleRow
               label="Show activity heatmap"
               hint="Lets others see your training calendar"
               value={showHeatmap}
               onChange={setShowHeatmap}
+              theme={T}
             />
             <ToggleRow
               label="Show personal bests"
@@ -146,10 +156,11 @@ export default function PrivacyScreen() {
               value={showPRs}
               onChange={setShowPRs}
               divider
+              theme={T}
             />
           </Section>
 
-          <Section label="BLOCKED USERS">
+          <Section label="BLOCKED USERS" theme={T}>
             <TouchableOpacity
               style={{
                 flexDirection: 'row', alignItems: 'center',

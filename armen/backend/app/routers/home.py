@@ -544,6 +544,29 @@ async def get_dashboard(
     # ── Readiness — single source of truth via readiness_service ──────────────
     readiness = await calculate_readiness(current_user.id, db)
 
+    # 7-day readiness delta: today's score vs this user's score 7 days ago (or
+    # None if no history). Kept light — no trend chart, just a delta number.
+    from datetime import timedelta as _td
+    from app.models.diagnosis import Diagnosis as _DiagModel
+    try:
+        past_cutoff = (datetime.utcnow() - _td(days=7)).date()
+        past_res = await db.execute(
+            select(_DiagModel.readiness_score)
+            .where(
+                _DiagModel.user_id == current_user.id,
+                cast(_DiagModel.generated_at, Date) <= past_cutoff,
+                _DiagModel.readiness_score.is_not(None),
+            )
+            .order_by(_DiagModel.generated_at.desc())
+            .limit(1)
+        )
+        past_score = past_res.scalar_one_or_none()
+        readiness_delta_7d: int | None = (
+            int(readiness["score"] - past_score) if past_score is not None else None
+        )
+    except Exception:
+        readiness_delta_7d = None
+
     last_session_out = None
     if last_session:
         last_session_out = {
@@ -566,6 +589,7 @@ async def get_dashboard(
         "readiness_score": readiness["score"],
         "readiness_label": readiness["label"],
         "readiness_color": readiness["color"],
+        "readiness_delta_7d": readiness_delta_7d,
         "readiness_primary_factor": readiness["primary_factor"],
         "data_confidence": readiness["data_confidence"],
         "components_used": readiness["components_used"],

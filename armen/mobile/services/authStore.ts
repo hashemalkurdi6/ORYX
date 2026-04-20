@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 
 export interface User {
   id: string;
@@ -34,12 +36,49 @@ export interface User {
   current_onboarding_step?: number;
 }
 
+// ── Token storage (SecureStore on native, localStorage on web) ────────────────
+// SecureStore persists to iOS Keychain / Android Keystore — encrypted at rest.
+// Web fallback uses localStorage since SecureStore isn't available.
+const TOKEN_KEY = 'oryx_auth_token';
+const isWeb = Platform.OS === 'web';
+
+export async function getStoredToken(): Promise<string | null> {
+  if (isWeb) {
+    try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+  }
+  try { return await SecureStore.getItemAsync(TOKEN_KEY); } catch { return null; }
+}
+
+async function setStoredToken(token: string): Promise<void> {
+  if (isWeb) {
+    try { localStorage.setItem(TOKEN_KEY, token); } catch {}
+    return;
+  }
+  try { await SecureStore.setItemAsync(TOKEN_KEY, token); } catch {}
+}
+
+async function clearStoredToken(): Promise<void> {
+  if (isWeb) {
+    try { localStorage.removeItem(TOKEN_KEY); } catch {}
+    return;
+  }
+  try { await SecureStore.deleteItemAsync(TOKEN_KEY); } catch {}
+}
+
+// ── User profile storage (AsyncStorage, non-sensitive) ────────────────────────
+const userStorage: StateStorage = {
+  getItem: (name) => AsyncStorage.getItem(name),
+  setItem: (name, value) => AsyncStorage.setItem(name, value),
+  removeItem: (name) => AsyncStorage.removeItem(name),
+};
+
 interface AuthState {
   token: string | null;
   user: User | null;
   setAuth: (token: string, user: User) => void;
   updateUser: (partial: Partial<User>) => void;
   clearAuth: () => void;
+  hydrateToken: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -47,14 +86,26 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       token: null,
       user: null,
-      setAuth: (token: string, user: User) => set({ token, user }),
+      setAuth: (token: string, user: User) => {
+        void setStoredToken(token);
+        set({ token, user });
+      },
       updateUser: (partial: Partial<User>) =>
         set((state) => ({ user: state.user ? { ...state.user, ...partial } : state.user })),
-      clearAuth: () => set({ token: null, user: null }),
+      clearAuth: () => {
+        void clearStoredToken();
+        set({ token: null, user: null });
+      },
+      hydrateToken: async () => {
+        const token = await getStoredToken();
+        if (token) set({ token });
+      },
     }),
     {
       name: 'oryx-auth-storage',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => userStorage),
+      // Only persist user profile to AsyncStorage. Token lives in SecureStore.
+      partialize: (state) => ({ user: state.user }) as AuthState,
     }
   )
 );

@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-ARMEN is a fitness intelligence app. The backend ingests Strava activities and Apple HealthKit data, then uses the Claude API to generate plain-English performance diagnoses and per-workout autopsies. It includes a full social layer (posts, stories, likes, comments, follows, clubs).
+ARMEN is a fitness intelligence app. The backend ingests Strava activities and Apple HealthKit data, then uses AI (currently OpenAI gpt-4o-mini for diagnosis/autopsy/meal plans/assistant, Claude vision for food photo scanning) to generate plain-English performance diagnoses and per-workout autopsies. It includes a full social layer (posts, stories, likes, comments, follows, clubs).
 
 ## Running the App
 
@@ -88,7 +88,10 @@ armen/
 
 **HealthKit**: Dynamic `require('react-native-health')` in try/catch — no-op on Android/web.
 
-**Missing API keys**: Strava and Anthropic keys are optional. Routes return `503` rather than crashing.
+**Missing API keys**:
+- `OPENAI_API_KEY` is LOAD-BEARING for prod. Without it, diagnosis, autopsy, meal plans, nutrition assistant, and food scanning all return 503.
+- `ANTHROPIC_API_KEY` is optional; only used by Claude-vision food photo scan.
+- `STRAVA_CLIENT_ID`/`STRAVA_CLIENT_SECRET` are optional; routes 503 when missing.
 
 ## Environment Variables
 
@@ -96,10 +99,13 @@ Backend `armen/backend/.env`:
 ```
 DATABASE_URL=postgresql+asyncpg://postgres:<password>@localhost:5432/oryx
 SECRET_KEY=<random string>
-ANTHROPIC_API_KEY=<optional>
+OPENAI_API_KEY=<REQUIRED for diagnosis, autopsy, meal plans, assistant, scan>
+ANTHROPIC_API_KEY=<optional, only for Claude vision food photo scan>
 STRAVA_CLIENT_ID=<optional>
 STRAVA_CLIENT_SECRET=<optional>
 STRAVA_REDIRECT_URI=http://localhost:8000/strava/callback
+CORS_ORIGINS=<optional comma-separated; defaults to localhost dev origins>
+ENV=dev  # set to "prod" or "production" to disable base64 media fallback
 ```
 
 Mobile `armen/mobile/.env`:

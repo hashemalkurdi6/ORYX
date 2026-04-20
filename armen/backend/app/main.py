@@ -46,6 +46,8 @@ from app.models import saved_post as saved_post_model  # noqa: F401
 from app.models import hidden_post as hidden_post_model  # noqa: F401
 from app.models import post_view as post_view_model  # noqa: F401
 from app.models import post_like as post_like_model  # noqa: F401
+from app.models import comment_like as comment_like_model  # noqa: F401
+from app.models import rate_limit_event as rate_limit_event_model  # noqa: F401
 from app.models import conversation as conversation_model  # noqa: F401
 from app.models import account_deletion_event as account_deletion_event_model  # noqa: F401
 
@@ -99,9 +101,10 @@ _USER_COLUMN_MIGRATIONS = [
     "ALTER TABLE wellness_checkins ADD COLUMN IF NOT EXISTS stress INTEGER",
     "ALTER TABLE wellness_checkins ADD COLUMN IF NOT EXISTS muscle_soreness INTEGER",
     # Make legacy wellness fields nullable (existing data stays; new clients send Hooper fields)
-    "ALTER TABLE wellness_checkins ALTER COLUMN mood DROP NOT NULL",
-    "ALTER TABLE wellness_checkins ALTER COLUMN energy DROP NOT NULL",
-    "ALTER TABLE wellness_checkins ALTER COLUMN soreness DROP NOT NULL",
+    # Legacy wellness columns may not exist on fresh DBs — guard before DROP NOT NULL
+    """DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='wellness_checkins' AND column_name='mood') THEN ALTER TABLE wellness_checkins ALTER COLUMN mood DROP NOT NULL; END IF; END $$""",
+    """DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='wellness_checkins' AND column_name='energy') THEN ALTER TABLE wellness_checkins ALTER COLUMN energy DROP NOT NULL; END IF; END $$""",
+    """DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='wellness_checkins' AND column_name='soreness') THEN ALTER TABLE wellness_checkins ALTER COLUMN soreness DROP NOT NULL; END IF; END $$""",
     # Nutrition profile — foods_disliked + foods_loved JSON migration
     "ALTER TABLE nutrition_profiles ADD COLUMN IF NOT EXISTS foods_disliked JSON",
     """DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='nutrition_profiles' AND column_name='foods_loved' AND udt_name='text') THEN ALTER TABLE nutrition_profiles ALTER COLUMN foods_loved TYPE JSON USING NULL; END IF; END $$""",
@@ -183,7 +186,7 @@ _USER_COLUMN_MIGRATIONS = [
     "ALTER TABLE daily_water_intake ADD COLUMN IF NOT EXISTS amount_ml INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE daily_water_intake ADD COLUMN IF NOT EXISTS container_size_ml INTEGER NOT NULL DEFAULT 250",
     # Migrate legacy glasses_count → amount_ml (250ml per glass)
-    "UPDATE daily_water_intake SET amount_ml = glasses_count * 250 WHERE amount_ml = 0 AND glasses_count > 0",
+    """DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='daily_water_intake' AND column_name='glasses_count') THEN UPDATE daily_water_intake SET amount_ml = glasses_count * 250 WHERE amount_ml = 0 AND glasses_count > 0; END IF; END $$""",
     # Nutrition targets — personalized water target
     "ALTER TABLE nutrition_targets ADD COLUMN IF NOT EXISTS water_target_ml INTEGER",
     # Nutrition profile — water preferences
@@ -354,9 +357,20 @@ _USER_COLUMN_MIGRATIONS = [
     """,
     # ── Stories table: new schema columns ──────────────────────────────────────
     "ALTER TABLE stories ADD COLUMN IF NOT EXISTS photo_url TEXT",
-    "UPDATE stories SET photo_url = media_url WHERE photo_url IS NULL AND media_url IS NOT NULL",
+    # Guard legacy-column backfills: only run if the old column actually exists.
+    # Fresh DBs never had `media_url` / `stats_overlay_json`, and without the guard
+    # these UPDATEs crash uvicorn startup with UndefinedColumnError.
+    """DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='stories' AND column_name='media_url')
+      THEN UPDATE stories SET photo_url = media_url WHERE photo_url IS NULL AND media_url IS NOT NULL;
+      END IF;
+    END $$""",
     "ALTER TABLE stories ADD COLUMN IF NOT EXISTS oryx_data_overlay_json JSON",
-    "UPDATE stories SET oryx_data_overlay_json = stats_overlay_json WHERE oryx_data_overlay_json IS NULL AND stats_overlay_json IS NOT NULL",
+    """DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='stories' AND column_name='stats_overlay_json')
+      THEN UPDATE stories SET oryx_data_overlay_json = stats_overlay_json WHERE oryx_data_overlay_json IS NULL AND stats_overlay_json IS NOT NULL;
+      END IF;
+    END $$""",
     "ALTER TABLE stories ADD COLUMN IF NOT EXISTS text_overlay TEXT",
     """
     DO $$ BEGIN
@@ -369,10 +383,10 @@ _USER_COLUMN_MIGRATIONS = [
     END $$
     """,
     # ── Social posts table: new schema columns ─────────────────────────────────
-    "ALTER TABLE social_posts ALTER COLUMN post_type DROP NOT NULL",
-    "ALTER TABLE social_posts ALTER COLUMN is_public DROP NOT NULL",
+    """DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='social_posts' AND column_name='post_type') THEN ALTER TABLE social_posts ALTER COLUMN post_type DROP NOT NULL; END IF; END $$""",
+    """DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='social_posts' AND column_name='is_public') THEN ALTER TABLE social_posts ALTER COLUMN is_public DROP NOT NULL; END IF; END $$""",
     "ALTER TABLE social_posts ADD COLUMN IF NOT EXISTS oryx_data_card_json JSON",
-    "UPDATE social_posts SET oryx_data_card_json = content_json WHERE oryx_data_card_json IS NULL AND content_json IS NOT NULL",
+    """DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='social_posts' AND column_name='content_json') THEN UPDATE social_posts SET oryx_data_card_json = content_json WHERE oryx_data_card_json IS NULL AND content_json IS NOT NULL; END IF; END $$""",
     "ALTER TABLE social_posts ADD COLUMN IF NOT EXISTS also_shared_as_story BOOLEAN NOT NULL DEFAULT FALSE",
     """
     DO $$ BEGIN
@@ -473,6 +487,27 @@ CREATE TABLE IF NOT EXISTS posts_likes (
 """,
     "CREATE INDEX IF NOT EXISTS idx_posts_likes_post ON posts_likes (post_id)",
     "CREATE INDEX IF NOT EXISTS idx_posts_likes_user ON posts_likes (user_id)",
+    # Comment likes table
+    """
+CREATE TABLE IF NOT EXISTS comment_likes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    comment_id UUID NOT NULL REFERENCES social_comments(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    liked_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_comment_like UNIQUE (comment_id, user_id)
+)
+""",
+    "CREATE INDEX IF NOT EXISTS idx_comment_likes_comment ON comment_likes (comment_id)",
+    "CREATE INDEX IF NOT EXISTS idx_comment_likes_user ON comment_likes (user_id)",
+    # Rate limit events table
+    """
+CREATE TABLE IF NOT EXISTS rate_limit_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    key VARCHAR(128) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+)
+""",
+    "CREATE INDEX IF NOT EXISTS idx_rate_limit_events_key_ts ON rate_limit_events (key, created_at)",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT",
     "ALTER TABLE users ALTER COLUMN avatar_url TYPE TEXT USING avatar_url::TEXT",
     # ── Direct Messages (Phase 1) ───────────────────────────────────────────
@@ -520,16 +555,19 @@ CREATE TABLE IF NOT EXISTS posts_likes (
 async def lifespan(app: FastAPI):
     # Log API key status at startup
     from app.config import settings as _settings
+    # NOTE: diagnosis + workout autopsy migrated to OpenAI (gpt-4o-mini). OPENAI_API_KEY
+    # is now the load-bearing key for ALL AI features (meal plan, scan, assistant,
+    # diagnosis, autopsy). ANTHROPIC_API_KEY is kept only for /nutrition/scan Claude vision.
     anthropic_key = _settings.ANTHROPIC_API_KEY
     if anthropic_key:
         logger.info("ANTHROPIC_API_KEY present (len=%d, starts=%s...)", len(anthropic_key), anthropic_key[:8])
     else:
-        logger.warning("ANTHROPIC_API_KEY is MISSING — daily diagnosis / workout autopsy will fail")
+        logger.warning("ANTHROPIC_API_KEY is MISSING — Claude vision food scan will fail (not diagnosis/autopsy)")
     openai_key = _settings.OPENAI_API_KEY
     if openai_key:
         logger.info("OPENAI_API_KEY present (len=%d, starts=%s...)", len(openai_key), openai_key[:7])
     else:
-        logger.warning("OPENAI_API_KEY is MISSING — food photo scanning will fail")
+        logger.warning("OPENAI_API_KEY is MISSING — diagnosis, autopsy, meal plans, nutrition assistant, food photo scanning will all fail")
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -566,13 +604,23 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware
+# CORS middleware — scope to known origins, not wildcard.
+# Mobile apps don't send Origin headers so they aren't affected by CORS at all.
+# This only affects web clients (expo start --web, a future web build, etc.).
+import os as _os
+_cors_env = _os.getenv("CORS_ORIGINS", "")
+_cors_origins = [o.strip() for o in _cors_env.split(",") if o.strip()] or [
+    "http://localhost:8081",
+    "http://localhost:19006",
+    "http://localhost:3000",
+    "exp://localhost:8081",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
 )
 
 # Include routers

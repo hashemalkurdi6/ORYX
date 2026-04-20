@@ -125,7 +125,10 @@ async def get_current_user(
 
 
 @router.post("/signup", response_model=Token, status_code=status.HTTP_201_CREATED)
-async def signup(payload: UserCreate, db: AsyncSession = Depends(get_db)):
+async def signup(payload: UserCreate, request: Request, db: AsyncSession = Depends(get_db)):
+    from app.services.rate_limit import check_rate_limit, client_ip
+    await check_rate_limit(db, f"signup:{client_ip(request)}", limit=5, window_seconds=3600)
+
     result = await db.execute(select(User).where(User.email == payload.email))
     existing = result.scalar_one_or_none()
     if existing:
@@ -160,8 +163,10 @@ async def signup(payload: UserCreate, db: AsyncSession = Depends(get_db)):
         biological_sex=payload.biological_sex,
         daily_calorie_target=payload.daily_calorie_target,
         preferred_training_time=payload.preferred_training_time,
-        onboarding_complete=True,
-        current_onboarding_step=12,
+        # Onboarding is marked complete via a later PATCH /auth/me/onboarding,
+        # not here. Flipping it true at signup lets users skip the flow entirely.
+        onboarding_complete=False,
+        current_onboarding_step=0,
     )
     db.add(user)
     await db.flush()
@@ -172,6 +177,9 @@ async def signup(payload: UserCreate, db: AsyncSession = Depends(get_db)):
 
 @router.post("/login")
 async def login(payload: UserLogin, request: Request, db: AsyncSession = Depends(get_db)):
+    from app.services.rate_limit import check_rate_limit, client_ip
+    await check_rate_limit(db, f"login:{client_ip(request)}", limit=10, window_seconds=60)
+
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
     if user is None or not verify_password(payload.password, user.hashed_password):
@@ -229,8 +237,11 @@ async def restore_account(
 
 
 @router.get("/check-username")
-async def check_username(username: str, db: AsyncSession = Depends(get_db)):
+async def check_username(username: str, request: Request, db: AsyncSession = Depends(get_db)):
     """Return whether a username is available (no auth required)."""
+    from app.services.rate_limit import check_rate_limit, client_ip
+    await check_rate_limit(db, f"check-username:{client_ip(request)}", limit=30, window_seconds=60)
+
     result = await db.execute(select(User).where(User.username == username))
     exists = result.scalar_one_or_none() is not None
     return {"available": not exists}

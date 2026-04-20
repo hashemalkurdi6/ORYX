@@ -231,6 +231,7 @@ function SportPill({ tag }: { tag: string }) {
 // ── OryxDataCard ──────────────────────────────────────────────────────────────
 
 function OryxDataCard({ data }: { data: Post['oryx_data_card_json'] }) {
+  const [expanded, setExpanded] = useState(false);
   if (!data) return null;
   const ptype = data.post_type;
 
@@ -269,7 +270,6 @@ function OryxDataCard({ data }: { data: Post['oryx_data_card_json'] }) {
   }
 
   if (ptype === 'insight') {
-    const [expanded, setExpanded] = useState(false);
     const text: string = data.diagnosis_text || '';
     const isLong = text.length > 160;
     return (
@@ -389,15 +389,15 @@ function PostCard({ post, currentUserId, onLike, onComment, onDeletePost, onProf
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12, gap: 12 }}>
         <TouchableOpacity
-          onPress={() => post.author.id && onProfilePress(post.author.id)}
+          onPress={() => post.author?.id && onProfilePress(post.author.id)}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 11, flex: 1 }}
           activeOpacity={0.7}
         >
-          <Avatar initials={post.author.initials} avatarUrl={post.author.avatar_url} size={40} />
+          <Avatar initials={post.author?.initials ?? '?'} avatarUrl={post.author?.avatar_url} size={40} />
           <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ fontSize: 15, fontWeight: '700', color: '#F0F2F6', letterSpacing: 0.1 }} numberOfLines={1}>{post.author.display_name}</Text>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#F0F2F6', letterSpacing: 0.1 }} numberOfLines={1}>{post.author?.display_name ?? 'Unknown'}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text style={{ fontSize: 12, color: '#525E72' }}>@{post.author.username}</Text>
+              <Text style={{ fontSize: 12, color: '#525E72' }}>@{post.author?.username ?? 'unknown'}</Text>
               <Text style={{ fontSize: 12, color: '#525E72' }}>·</Text>
               <Text style={{ fontSize: 12, color: '#525E72' }}>{post.time_ago}</Text>
               {post.location_text ? (

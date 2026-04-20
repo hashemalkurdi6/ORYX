@@ -968,15 +968,13 @@ export default function NutritionScreen() {
               <Text style={s.pageTitle}>Intake</Text>
             </View>
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              {surveyComplete && (
-                <TouchableOpacity
-                  style={s.headerIconBtn}
-                  onPress={() => router.push('/nutrition-survey' as any)}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="settings-outline" size={16} color={theme.text.secondary} />
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity
+                style={s.headerIconBtn}
+                onPress={() => router.push('/nutrition-survey' as any)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="settings-outline" size={16} color={theme.text.secondary} />
+              </TouchableOpacity>
               <TouchableOpacity
                 style={s.scanFoodPill}
                 onPress={handleScanPhoto}

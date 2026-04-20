@@ -111,6 +111,17 @@ const CATEGORY_ICONS: Record<string, string> = {
   other: 'compass-outline',
 };
 
+// Module-level styles so sub-components defined outside the main component
+// (RestTimerOverlay, ExerciseSearchModal, etc.) can reference `styles` without
+// hitting a ReferenceError. Lazy so it doesn't run before createStyles is defined.
+let _moduleStyles: ReturnType<typeof createStyles> | null = null;
+const styles = new Proxy({} as ReturnType<typeof createStyles>, {
+  get(_, prop: string) {
+    if (!_moduleStyles) _moduleStyles = createStyles(T);
+    return (_moduleStyles as any)[prop];
+  },
+});
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function newSetId() {
@@ -1180,7 +1191,7 @@ const FeedCard = ({ item, onPress, onShare }: { item: FeedItem; onPress: () => v
               <Ionicons name="share-outline" size={16} color="#525E72" />
             </TouchableOpacity>
           </View>
-          <Text style={styles.feedCardMeta}>{fmtDate(s.start_date)} · {formatDuration(Math.round(s.elapsed_time_seconds / 60))}</Text>
+          <Text style={styles.feedCardMeta}>{fmtDate(s.start_date)} · {s.elapsed_time_seconds ? formatDuration(Math.round(s.elapsed_time_seconds / 60)) : '—'}</Text>
         </View>
       </View>
       <View style={styles.feedCardStats}>

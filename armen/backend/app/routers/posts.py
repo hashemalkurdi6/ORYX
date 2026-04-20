@@ -17,6 +17,7 @@ from app.models.saved_post import SavedPost
 from app.models.hidden_post import HiddenPost
 from app.models.post_view import PostView
 from app.models.post_like import PostLike
+from app.models.comment_like import CommentLike
 from app.routers.auth import get_current_user
 from app.services.user_visibility import active_user_ids_subquery
 
@@ -179,7 +180,10 @@ async def create_post(
     # Merge insight card metadata into oryx_data_card_json
     card_json: dict = dict(body.oryx_data_card_json or {})
     if body.insight_type is not None:
+        # Store under BOTH keys for now: `post_type` is what the feed filter + mobile
+        # UI read, `insight_type` is legacy. Migrate readers to `post_type` then drop.
         card_json["insight_type"] = body.insight_type
+        card_json["post_type"] = body.insight_type
     if body.session_id is not None:
         card_json["session_id"] = str(body.session_id)
     if body.custom_title is not None:
@@ -759,6 +763,45 @@ async def edit_comment(
     comment.comment_text = body.comment_text.strip()
     await db.flush()
     return {"comment": {"id": str(comment.id), "comment_text": comment.comment_text}}
+
+
+@router.post("/{post_id}/comments/{comment_id}/like")
+async def like_comment(
+    post_id: str,
+    comment_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    res = await db.execute(select(SocialComment).where(SocialComment.id == comment_id))
+    comment = res.scalar_one_or_none()
+    if not comment or str(comment.post_id) != post_id:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    existing_res = await db.execute(
+        select(CommentLike).where(
+            CommentLike.comment_id == uuid_module.UUID(comment_id),
+            CommentLike.user_id == current_user.id,
+        )
+    )
+    existing = existing_res.scalar_one_or_none()
+    liked: bool
+    if existing:
+        await db.delete(existing)
+        liked = False
+    else:
+        db.add(CommentLike(
+            id=uuid_module.uuid4(),
+            comment_id=uuid_module.UUID(comment_id),
+            user_id=current_user.id,
+        ))
+        liked = True
+    await db.flush()
+    count_res = await db.execute(
+        select(func.count(CommentLike.id)).where(CommentLike.comment_id == uuid_module.UUID(comment_id))
+    )
+    like_count = int(count_res.scalar() or 0)
+    comment.like_count = like_count
+    await db.flush()
+    return {"liked": liked, "like_count": like_count}
 
 
 @router.post("/{post_id}/save")

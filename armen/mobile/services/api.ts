@@ -470,8 +470,18 @@ export interface InsightData {
 
 // ── Axios Instance ─────────────────────────────────────────────────────────
 
+// EXPO_PUBLIC_API_URL is baked in at bundle time. If missing, fall back to a dev IP
+// in __DEV__, but throw a clear error in production builds so we don't ship a broken
+// binary that silently points at a stale LAN IP.
+const API_URL = process.env.EXPO_PUBLIC_API_URL || (__DEV__ ? 'http://10.130.103.33:8000' : '');
+if (!API_URL) {
+  throw new Error(
+    'EXPO_PUBLIC_API_URL is not set. Set it in armen/mobile/.env before building.'
+  );
+}
+
 const apiClient: AxiosInstance = axios.create({
-  baseURL: process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.160:8000',
+  baseURL: API_URL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
