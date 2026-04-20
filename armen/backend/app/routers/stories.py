@@ -13,6 +13,7 @@ from app.models.story import Story
 from app.models.story_view import StoryView
 from app.models.social_follow import SocialFollow
 from app.routers.auth import get_current_user
+from app.services.user_visibility import active_user_ids_subquery
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/stories", tags=["stories"])
@@ -111,6 +112,7 @@ async def get_stories_feed(
             Story.user_id.in_(relevant_user_ids),
             Story.is_expired == False,
             Story.expires_at > now,
+            Story.user_id.in_(active_user_ids_subquery()),
         ).order_by(Story.user_id, Story.created_at.asc())
     )
     stories = stories_res.scalars().all()
@@ -212,6 +214,13 @@ async def get_story(
     story = res.scalar_one_or_none()
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
+
+    # Hide stories from soft-deleted authors (author self-view still allowed)
+    if str(story.user_id) != str(current_user.id):
+        author_guard_res = await db.execute(select(User).where(User.id == story.user_id))
+        author_guard = author_guard_res.scalar_one_or_none()
+        if not author_guard or author_guard.delete_requested_at is not None:
+            raise HTTPException(status_code=404, detail="Story not found")
 
     # Record view if not own story
     if str(story.user_id) != str(current_user.id):

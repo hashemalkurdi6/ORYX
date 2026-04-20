@@ -17,6 +17,7 @@ from app.models.conversation import Conversation, ConversationParticipant, Messa
 from app.models.social_follow import SocialFollow
 from app.models.user_block import UserBlock
 from app.routers.auth import get_current_user
+from app.services.user_visibility import active_user_filter, active_user_ids_subquery
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/messages", tags=["messages"])
@@ -222,6 +223,7 @@ async def _build_conversation_out(
             .where(
                 ConversationParticipant.conversation_id == conversation.id,
                 ConversationParticipant.user_id != me_id,
+                active_user_filter(),
             )
             .limit(1)
         )
@@ -296,7 +298,11 @@ async def list_conversations(
 
     out: list[ConversationOut] = []
     for conv, part in rows:
-        out.append(await _build_conversation_out(db, conv, part, me_id))
+        built = await _build_conversation_out(db, conv, part, me_id)
+        # Hide direct conversations whose other participant is soft-deleted.
+        if conv.type == "direct" and built.other_participant is None:
+            continue
+        out.append(built)
     return ConversationListResponse(conversations=out)
 
 
@@ -320,7 +326,12 @@ async def list_message_requests(
         .order_by(Conversation.updated_at.desc())
     )
     rows = (await db.execute(q)).all()
-    out = [await _build_conversation_out(db, conv, part, me_id) for conv, part in rows]
+    out = []
+    for conv, part in rows:
+        built = await _build_conversation_out(db, conv, part, me_id)
+        if conv.type == "direct" and built.other_participant is None:
+            continue
+        out.append(built)
     return ConversationListResponse(conversations=out)
 
 
@@ -435,10 +446,10 @@ async def start_conversation(
     if recipient_uuid == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot DM yourself")
 
-    # Recipient must exist.
+    # Recipient must exist and not be soft-deleted.
     recipient_res = await db.execute(select(User).where(User.id == recipient_uuid))
     recipient = recipient_res.scalar_one_or_none()
-    if not recipient:
+    if not recipient or recipient.delete_requested_at is not None:
         raise HTTPException(status_code=404, detail="User not found")
 
     # Block check.
@@ -691,7 +702,7 @@ async def dm_candidates(
     follow_q = (
         select(User)
         .join(SocialFollow, SocialFollow.following_id == User.id)
-        .where(SocialFollow.follower_id == me_id)
+        .where(SocialFollow.follower_id == me_id, active_user_filter())
     )
     if q:
         like = f"%{q.strip()}%"

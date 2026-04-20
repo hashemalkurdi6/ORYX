@@ -10,6 +10,7 @@ from app.models.club import Club
 from app.models.club_membership import ClubMembership
 from app.models.user_activity import UserActivity
 from app.routers.auth import get_current_user
+from app.services.user_visibility import active_user_ids_subquery, active_user_filter
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/clubs", tags=["clubs"])
@@ -62,7 +63,10 @@ def _format_countdown(week_start: datetime) -> str:
 
 async def _club_dict(club: Club, user_id, db: AsyncSession) -> dict:
     member_res = await db.execute(
-        select(func.count(ClubMembership.id)).where(ClubMembership.club_id == club.id)
+        select(func.count(ClubMembership.id)).where(
+            ClubMembership.club_id == club.id,
+            ClubMembership.user_id.in_(active_user_ids_subquery()),
+        )
     )
     actual_count = int(member_res.scalar() or 0)
     is_member_res = await db.execute(
@@ -126,12 +130,17 @@ async def get_club(
 
     # Members
     mem_res = await db.execute(
-        select(ClubMembership.user_id).where(ClubMembership.club_id == club_id)
+        select(ClubMembership.user_id).where(
+            ClubMembership.club_id == club_id,
+            ClubMembership.user_id.in_(active_user_ids_subquery()),
+        )
     )
     member_ids = [r for r in mem_res.scalars().all()]
     members_out = []
     if member_ids:
-        users_res = await db.execute(select(User).where(User.id.in_(member_ids)).limit(50))
+        users_res = await db.execute(
+            select(User).where(User.id.in_(member_ids), active_user_filter()).limit(50)
+        )
         for u in users_res.scalars().all():
             name = u.display_name or u.username or "Athlete"
             parts = name.split()
@@ -199,7 +208,10 @@ async def get_club_leaderboard(
         raise HTTPException(status_code=404, detail="Club not found")
 
     mem_res = await db.execute(
-        select(ClubMembership.user_id).where(ClubMembership.club_id == club_id)
+        select(ClubMembership.user_id).where(
+            ClubMembership.club_id == club_id,
+            ClubMembership.user_id.in_(active_user_ids_subquery()),
+        )
     )
     member_ids = [r for r in mem_res.scalars().all()]
     if not member_ids:

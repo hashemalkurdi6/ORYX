@@ -18,6 +18,7 @@ from app.models.hidden_post import HiddenPost
 from app.models.post_view import PostView
 from app.models.post_like import PostLike
 from app.routers.auth import get_current_user
+from app.services.user_visibility import active_user_ids_subquery
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/posts", tags=["posts"])
@@ -235,6 +236,12 @@ async def get_user_posts(
     db: AsyncSession = Depends(get_db),
 ):
     """Return all non-deleted posts for a user's profile grid, paginated."""
+    # If target user is soft-deleted, hide their posts from everyone (including self-views? no — self views go through profile flows; here we treat it as gone).
+    if str(user_id) != str(current_user.id):
+        target_res = await db.execute(select(User).where(User.id == user_id))
+        target = target_res.scalar_one_or_none()
+        if not target or target.delete_requested_at is not None:
+            raise HTTPException(status_code=404, detail="User not found")
     posts_res = await db.execute(
         select(SocialPost)
         .where(
@@ -443,6 +450,7 @@ async def search_posts(
         .where(
             SocialPost.is_deleted == False,
             SocialPost.caption.ilike(f"%{q}%"),
+            SocialPost.user_id.in_(active_user_ids_subquery()),
         )
         .order_by(SocialPost.created_at.desc())
         .offset(page * limit)
@@ -468,6 +476,12 @@ async def get_post(
     post = res.scalar_one_or_none()
     if not post or post.is_deleted:
         raise HTTPException(status_code=404, detail="Post not found")
+    # Hide posts whose author is soft-deleted (except from the author themselves)
+    if str(post.user_id) != str(current_user.id):
+        author_res = await db.execute(select(User).where(User.id == post.user_id))
+        author = author_res.scalar_one_or_none()
+        if not author or author.delete_requested_at is not None:
+            raise HTTPException(status_code=404, detail="Post not found")
     built = await _build_post(post, str(current_user.id), db)
     return {"post": built}
 
@@ -612,7 +626,10 @@ async def get_comments(
     # Get all comments for this post ordered oldest first
     all_res = await db.execute(
         select(SocialComment)
-        .where(SocialComment.post_id == post_id)
+        .where(
+            SocialComment.post_id == post_id,
+            SocialComment.user_id.in_(active_user_ids_subquery()),
+        )
         .order_by(SocialComment.created_at.asc())
     )
     all_comments = all_res.scalars().all()

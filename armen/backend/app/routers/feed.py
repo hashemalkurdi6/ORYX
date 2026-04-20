@@ -9,6 +9,7 @@ from app.models.social_post import SocialPost
 from app.models.social_follow import SocialFollow
 from app.routers.auth import get_current_user
 from app.routers.posts import _build_post
+from app.services.user_visibility import active_user_ids_subquery
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/feed", tags=["feed"])
@@ -45,11 +46,13 @@ async def get_feed(
         query = select(SocialPost).where(
             SocialPost.is_deleted == False,
             SocialPost.club_id.isnot(None),
+            SocialPost.user_id.in_(active_user_ids_subquery()),
         )
     else:
         query = select(SocialPost).where(
             SocialPost.user_id.in_(feed_user_ids),
             SocialPost.is_deleted == False,
+            SocialPost.user_id.in_(active_user_ids_subquery()),
         )
 
     # Apply filter-specific conditions

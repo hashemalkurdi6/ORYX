@@ -8,6 +8,7 @@ from app.models.user import User
 from app.models.social_follow import SocialFollow
 from app.models.user_block import UserBlock
 from app.routers.auth import get_current_user
+from app.services.user_visibility import active_user_filter
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/social", tags=["social"])
@@ -111,7 +112,9 @@ async def get_followers(
     )
     following_back = {str(r) for r in back_res.scalars().all()}
 
-    users_res = await db.execute(select(User).where(User.id.in_(follower_ids)))
+    users_res = await db.execute(
+        select(User).where(User.id.in_(follower_ids), active_user_filter())
+    )
     users = users_res.scalars().all()
     return {"followers": [_user_preview(u, str(u.id) in following_back) for u in users]}
 
@@ -128,7 +131,9 @@ async def get_following(
     following_ids = [f.following_id for f in follows]
     if not following_ids:
         return {"following": []}
-    users_res = await db.execute(select(User).where(User.id.in_(following_ids)))
+    users_res = await db.execute(
+        select(User).where(User.id.in_(following_ids), active_user_filter())
+    )
     users = users_res.scalars().all()
     return {"following": [_user_preview(u, True) for u in users]}
 
@@ -140,6 +145,11 @@ async def get_user_followers(
     db: AsyncSession = Depends(get_db),
 ):
     """Return followers of the given user_id."""
+    # If the target user is soft-deleted, pretend they don't exist
+    target_res = await db.execute(select(User).where(User.id == user_id))
+    target = target_res.scalar_one_or_none()
+    if not target or target.delete_requested_at is not None:
+        raise HTTPException(status_code=404, detail="User not found")
     follows_res = await db.execute(
         select(SocialFollow).where(SocialFollow.following_id == user_id)
     )
@@ -157,7 +167,9 @@ async def get_user_followers(
     )
     following_back = {str(r) for r in back_res.scalars().all()}
 
-    users_res = await db.execute(select(User).where(User.id.in_(follower_ids)))
+    users_res = await db.execute(
+        select(User).where(User.id.in_(follower_ids), active_user_filter())
+    )
     users = users_res.scalars().all()
     return {"followers": [_user_preview(u, str(u.id) in following_back) for u in users]}
 
@@ -169,6 +181,11 @@ async def get_user_following(
     db: AsyncSession = Depends(get_db),
 ):
     """Return users that the given user_id follows."""
+    # If the target user is soft-deleted, pretend they don't exist
+    target_res = await db.execute(select(User).where(User.id == user_id))
+    target = target_res.scalar_one_or_none()
+    if not target or target.delete_requested_at is not None:
+        raise HTTPException(status_code=404, detail="User not found")
     follows_res = await db.execute(
         select(SocialFollow).where(SocialFollow.follower_id == user_id)
     )
@@ -186,7 +203,9 @@ async def get_user_following(
     )
     i_follow = {str(r) for r in my_follows_res.scalars().all()}
 
-    users_res = await db.execute(select(User).where(User.id.in_(following_ids)))
+    users_res = await db.execute(
+        select(User).where(User.id.in_(following_ids), active_user_filter())
+    )
     users = users_res.scalars().all()
     return {"following": [_user_preview(u, str(u.id) in i_follow) for u in users]}
 
@@ -203,7 +222,9 @@ async def get_suggestions(
     already_following = {str(r) for r in follows_res.scalars().all()}
     already_following.add(str(current_user.id))
 
-    users_res = await db.execute(select(User).where(User.id != current_user.id))
+    users_res = await db.execute(
+        select(User).where(User.id != current_user.id, active_user_filter())
+    )
     all_users = users_res.scalars().all()
 
     my_tags = set(current_user.sport_tags or [])
@@ -242,6 +263,7 @@ async def search_users(
     users_res = await db.execute(
         select(User).where(
             User.id != current_user.id,
+            active_user_filter(),
         ).limit(30)
     )
     all_users = users_res.scalars().all()
