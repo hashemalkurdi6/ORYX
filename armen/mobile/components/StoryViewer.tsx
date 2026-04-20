@@ -50,6 +50,18 @@ export default function StoryViewer({
   const [replyText, setReplyText] = useState('');
   const [myReactions, setMyReactions] = useState<Record<string, string[]>>({});
 
+  // Tracks whether the currently-visible story's image has finished decoding.
+  // Overlays / caption are suppressed and the progress bar is held at 0 until
+  // the media is actually on screen, so we never flash text on top of either
+  // the previous photo or a blank frame during the load.
+  const [mediaReady, setMediaReady] = useState(false);
+
+  // The previous story's photo stays visible underneath the new image while
+  // the new one loads, so the user never sees a blank/loading frame between
+  // stories.
+  const [previousPhotoUrl, setPreviousPhotoUrl] = useState<string | null>(null);
+  const lastLoadedPhotoUrl = useRef<string | null>(null);
+
   const progressAnim = useRef(new Animated.Value(0)).current;
   const progressRef = useRef<Animated.CompositeAnimation | null>(null);
   const slideAnim = useRef(new Animated.Value(0)).current; // 0 = normal, positive = sliding down
@@ -86,6 +98,18 @@ export default function StoryViewer({
     progressRef.current?.stop();
   }, []);
 
+  // Reset the load gate the moment we point at a new story. The progress
+  // bar is restarted later by the mediaReady effect, not here, so the timer
+  // never ticks during the network/decoding wait. Stash the previously-loaded
+  // image so it can sit behind the new one until the new one is ready.
+  useEffect(() => {
+    const nextUrl = currentStory?.photo_url ?? null;
+    if (lastLoadedPhotoUrl.current && lastLoadedPhotoUrl.current !== nextUrl) {
+      setPreviousPhotoUrl(lastLoadedPhotoUrl.current);
+    }
+    setMediaReady(!nextUrl); // text-only stories are "ready" immediately
+  }, [currentStory?.id, currentStory?.photo_url]);
+
   // Mark story as seen
   useEffect(() => {
     if (!visible || !currentStory) return;
@@ -93,18 +117,33 @@ export default function StoryViewer({
       getStory(currentStory.id).catch(() => {});
       onMarkSeen(currentStory.id, currentGroup.user_id);
     }
-    startProgress();
     return () => stopProgress();
   }, [visible, groupIdx, storyIdx]);
 
-  // Pause when paused
+  // Run the progress bar only once the media is on screen and we're not paused.
   useEffect(() => {
-    if (paused) {
+    if (!visible || !mediaReady || paused) {
       stopProgress();
-    } else if (visible) {
-      startProgress();
+      return;
     }
-  }, [paused]);
+    startProgress();
+    return () => stopProgress();
+  }, [visible, mediaReady, paused, groupIdx, storyIdx]);
+
+  // Prefetch the next story's image so the transition into it is instant.
+  useEffect(() => {
+    if (!visible || !currentGroup) return;
+    const nextIdx = storyIdx + 1;
+    let nextUri: string | null = null;
+    if (nextIdx < currentGroup.stories.length) {
+      nextUri = currentGroup.stories[nextIdx]?.photo_url ?? null;
+    } else if (groupIdx + 1 < groups.length) {
+      nextUri = groups[groupIdx + 1]?.stories[0]?.photo_url ?? null;
+    }
+    if (nextUri) {
+      Image.prefetch(nextUri).catch(() => {});
+    }
+  }, [visible, groupIdx, storyIdx, currentGroup, groups]);
 
   const advance = useCallback(() => {
     const group = groups[groupIdx];
@@ -190,12 +229,55 @@ export default function StoryViewer({
       >
         {/* Background */}
         {hasMedia ? (
-          <Image source={{ uri: currentStory.photo_url }} style={styles.media} resizeMode="cover" />
+          <>
+            {/* Previous photo sits behind so the swap is seamless — the
+                new image fades over the top of it once decoded. */}
+            {previousPhotoUrl && !mediaReady ? (
+              <Image
+                source={{ uri: previousPhotoUrl }}
+                style={styles.media}
+                resizeMode="cover"
+                fadeDuration={0}
+              />
+            ) : null}
+            <Image
+              source={{ uri: currentStory.photo_url }}
+              style={[styles.media, { opacity: mediaReady ? 1 : 0 }]}
+              resizeMode="cover"
+              onLoad={() => {
+                lastLoadedPhotoUrl.current = currentStory.photo_url;
+                setMediaReady(true);
+              }}
+              onError={() => setMediaReady(true)}
+              fadeDuration={0}
+            />
+          </>
         ) : (
           <View style={[styles.media, { backgroundColor: '#0a0a0a' }]}>
             <View style={[styles.gradientOverlay, { backgroundColor: bgTint }]} />
           </View>
         )}
+
+        {/* Hidden warm-cache for the next story's photo — guarantees the
+            file is in the image cache by the time the user advances. */}
+        {(() => {
+          const nextIdx = storyIdx + 1;
+          let nextUri: string | null = null;
+          if (nextIdx < currentGroup.stories.length) {
+            nextUri = currentGroup.stories[nextIdx]?.photo_url ?? null;
+          } else if (groupIdx + 1 < groups.length) {
+            nextUri = groups[groupIdx + 1]?.stories[0]?.photo_url ?? null;
+          }
+          if (!nextUri) return null;
+          return (
+            <Image
+              source={{ uri: nextUri }}
+              style={styles.preloadHidden}
+              resizeMode="cover"
+              fadeDuration={0}
+            />
+          );
+        })()}
 
         {/* Dark vignette */}
         <View style={styles.vignette} />
@@ -270,12 +352,14 @@ export default function StoryViewer({
           </TouchableWithoutFeedback>
         </View>
 
-        {/* Story overlays (absolutely positioned) */}
-        <StoryOverlay story={currentStory} />
+        {/* Story overlays (absolutely positioned) — held back until the
+            underlying photo has actually decoded so they don't flash on top
+            of the previous frame mid-transition. */}
+        {mediaReady ? <StoryOverlay story={currentStory} /> : null}
 
         {/* Caption area */}
         <View style={[styles.bottomArea, { paddingBottom: insets.bottom + 60 }]}>
-          {currentStory.caption ? (
+          {mediaReady && currentStory.caption ? (
             <View style={styles.captionContainer}>
               <Text style={styles.caption}>{currentStory.caption}</Text>
             </View>
@@ -378,6 +462,10 @@ const styles = StyleSheet.create({
   vignette: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  preloadHidden: {
+    position: 'absolute', top: 0, left: 0,
+    width: 1, height: 1, opacity: 0,
   },
   progressRow: {
     position: 'absolute', top: 0, left: 0, right: 0,

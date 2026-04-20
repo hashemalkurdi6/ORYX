@@ -11,6 +11,7 @@ import {
   Image,
   Alert,
   TextInput,
+  Share,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,17 +26,22 @@ import {
   getUserPosts,
   editPostCaption,
   deletePost,
+  patchPost,
   createStory,
   uploadMedia,
   updateMyProfile,
+  getUserHighlights,
+  deleteHighlight,
   Activity,
   UserPreview,
   Post,
+  Highlight,
 } from '@/services/api';
 import { useAuthStore } from '@/services/authStore';
 import apiClient from '@/services/api';
 import PostDetailModal from '@/components/PostDetailModal';
 import AmbientBackdrop from '@/components/AmbientBackdrop';
+import StoryCreator from '@/components/StoryCreator';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ThemeColors, theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
 import { useCountUp } from '@/services/animations';
@@ -43,9 +49,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Count-up wrapper for integer stats.
-function StatCountUp({ value, style }: { value: number; style: any }) {
-  const v = useCountUp(value, 900, 100);
+// Count-up wrapper for integer stats. `cacheKey` avoids replaying the
+// animation when the screen re-mounts (tab switch, modal dismiss, etc.).
+function StatCountUp({ value, style, cacheKey }: { value: number; style: any; cacheKey?: string }) {
+  const v = useCountUp(value, 900, 100, cacheKey);
   return <Text style={style}>{v.toLocaleString()}</Text>;
 }
 
@@ -338,8 +345,21 @@ export default function ProfileScreen() {
   const [editCaptionText, setEditCaptionText] = useState('');
   const [showEditCaption, setShowEditCaption] = useState(false);
 
-  // Highlights sheet
-  const [showHighlightSheet, setShowHighlightSheet] = useState(false);
+  // Create menu (+ button) and story creator
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
+  const [showStoryCreator, setShowStoryCreator] = useState(false);
+
+  // Posts tab: grid layout + long-press action menu
+  type GridLayout = '3col' | '2col' | 'list';
+  const [gridLayout, setGridLayout] = useState<GridLayout>('3col');
+  const [postActionMenu, setPostActionMenu] = useState<Post | null>(null);
+
+  // Achievements tab: badge detail sheet
+  const [selectedBadge, setSelectedBadge] = useState<typeof BADGES[number] | null>(null);
+
+  // Highlights row
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
+  const [highlightActionMenu, setHighlightActionMenu] = useState<Highlight | null>(null);
 
   // Followers / Following sheet
   const [socialSheet, setSocialSheet] = useState<'followers' | 'following' | null>(null);
@@ -431,7 +451,33 @@ export default function ProfileScreen() {
     loadUserPosts();
   }, [loadUserPosts]);
 
+  // ── Highlights load (refresh on focus so Create Highlight reflects back) ──
+
+  const loadHighlights = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const res = await getUserHighlights(user.id);
+      setHighlights(res.highlights);
+    } catch {
+      setHighlights([]);
+    }
+  }, [user?.id]);
+
+  useFocusEffect(useCallback(() => { loadHighlights(); }, [loadHighlights]));
+
   // ── Avatar upload ────────────────────────────────────────────────────────
+
+  const handleShareProfile = useCallback(async () => {
+    const handle = user?.username ?? (user?.email?.split('@')[0] || 'me');
+    try {
+      await Share.share({
+        message: `Check out @${handle} on ORYX`,
+        url: `https://oryx.app/u/${handle}`,
+      });
+    } catch {
+      // user cancelled
+    }
+  }, [user?.username, user?.email]);
 
   const handleAvatarPress = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -491,7 +537,18 @@ export default function ProfileScreen() {
         </View>
       );
     }
-    const photoPosts = userPosts.filter((p) => !!p.photo_url);
+    const photoPosts = userPosts.filter((p) => !!p.photo_url && !p.is_archived);
+    const pinnedPosts = photoPosts.filter((p) => !!p.is_pinned);
+    const regularPosts = photoPosts.filter((p) => !p.is_pinned);
+
+    // Cycle icon for the grid-layout toggle
+    const nextLayout: Record<GridLayout, GridLayout> = { '3col': '2col', '2col': 'list', list: '3col' };
+    const layoutIcon: Record<GridLayout, React.ComponentProps<typeof Ionicons>['name']> = {
+      '3col': 'grid-outline',
+      '2col': 'apps-outline',
+      list: 'list-outline',
+    };
+
     if (photoPosts.length === 0) {
       return (
         <View style={s.tabEmptyState}>
@@ -500,25 +557,136 @@ export default function ProfileScreen() {
         </View>
       );
     }
+
+    const columns = gridLayout === '3col' ? 3 : gridLayout === '2col' ? 2 : 1;
+    const cellSize = gridLayout === 'list'
+      ? SCREEN_WIDTH - 40
+      : (SCREEN_WIDTH - 40 - (columns - 1) * 2) / columns;
+
+    const PostThumb = ({ post, pinned }: { post: Post; pinned?: boolean }) => {
+      if (gridLayout === 'list') {
+        // Full-width row with photo + caption snippet
+        return (
+          <TouchableOpacity
+            key={post.id}
+            onPress={() => { setSelectedPost(post); setShowPostDetail(true); }}
+            onLongPress={() => setPostActionMenu(post)}
+            delayLongPress={260}
+            style={{
+              flexDirection: 'row',
+              gap: SP[3],
+              padding: SP[3],
+              marginBottom: SP[2],
+              borderRadius: R.sm,
+              borderWidth: 1,
+              borderColor: T.border,
+              backgroundColor: T.bg.elevated,
+            }}
+            activeOpacity={0.85}
+          >
+            <Image
+              source={{ uri: post.photo_url! }}
+              style={{ width: 72, height: 72, borderRadius: R.xs }}
+              resizeMode="cover"
+            />
+            <View style={{ flex: 1, justifyContent: 'center', gap: 2 }}>
+              {pinned ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                  <Ionicons name="pin" size={12} color={T.accent} />
+                  <Text style={{ fontFamily: TY.mono.semibold, fontSize: TY.size.micro, color: T.accent, letterSpacing: TY.tracking.label, textTransform: 'uppercase' }}>
+                    Pinned
+                  </Text>
+                </View>
+              ) : null}
+              <Text
+                style={{ fontFamily: TY.sans.regular, fontSize: TY.size.body, color: T.text.primary, lineHeight: 18 }}
+                numberOfLines={3}
+              >
+                {post.caption || 'No caption'}
+              </Text>
+              {post.time_ago ? (
+                <Text style={{ fontFamily: TY.sans.regular, fontSize: TY.size.small, color: T.text.muted, marginTop: 2 }}>
+                  {post.time_ago}
+                </Text>
+              ) : null}
+            </View>
+          </TouchableOpacity>
+        );
+      }
+
+      return (
+        <TouchableOpacity
+          key={post.id}
+          onPress={() => { setSelectedPost(post); setShowPostDetail(true); }}
+          onLongPress={() => setPostActionMenu(post)}
+          delayLongPress={260}
+          style={{ width: cellSize, height: cellSize, margin: 1, position: 'relative' }}
+          activeOpacity={0.85}
+        >
+          <Image
+            source={{ uri: post.photo_url! }}
+            style={{ width: '100%', height: '100%', borderRadius: 4 }}
+            resizeMode="cover"
+          />
+          {pinned ? (
+            <View style={{
+              position: 'absolute', top: 6, left: 6,
+              backgroundColor: T.accent,
+              borderRadius: R.pill,
+              width: 22, height: 22,
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Ionicons name="pin" size={12} color={T.accentInk} />
+            </View>
+          ) : null}
+        </TouchableOpacity>
+      );
+    };
+
     return (
-      <View style={s.postsGrid}>
-        {photoPosts.map((post) => {
-          const cellSize = (SCREEN_WIDTH - 40 - 4) / 3;
-          return (
-            <TouchableOpacity
-              key={post.id}
-              onPress={() => { setSelectedPost(post); setShowPostDetail(true); }}
-              style={{ width: cellSize, height: cellSize, margin: 0.5 }}
-              activeOpacity={0.85}
-            >
-              <Image
-                source={{ uri: post.photo_url! }}
-                style={{ width: '100%', height: '100%', borderRadius: 4 }}
-                resizeMode="cover"
-              />
-            </TouchableOpacity>
-          );
-        })}
+      <View>
+        {/* Grid layout toggle */}
+        <View style={{
+          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+          paddingHorizontal: 4, paddingBottom: SP[2],
+        }}>
+          <Text style={{
+            fontFamily: TY.mono.semibold, fontSize: TY.size.micro,
+            color: T.text.muted, letterSpacing: TY.tracking.label,
+            textTransform: 'uppercase',
+          }}>
+            {photoPosts.length} {photoPosts.length === 1 ? 'post' : 'posts'}
+          </Text>
+          <TouchableOpacity
+            onPress={() => setGridLayout(nextLayout[gridLayout])}
+            hitSlop={10}
+            style={{
+              width: 30, height: 30, borderRadius: R.xs,
+              alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Ionicons name={layoutIcon[gridLayout]} size={18} color={T.text.body} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Pinned posts */}
+        {pinnedPosts.length > 0 && gridLayout !== 'list' ? (
+          <View style={[s.postsGrid, { marginBottom: SP[2] }]}>
+            {pinnedPosts.map((post) => <PostThumb key={post.id} post={post} pinned />)}
+          </View>
+        ) : null}
+
+        {/* Regular grid / list */}
+        {gridLayout === 'list' ? (
+          <View>
+            {pinnedPosts.map((post) => <PostThumb key={post.id} post={post} pinned />)}
+            {regularPosts.map((post) => <PostThumb key={post.id} post={post} />)}
+          </View>
+        ) : (
+          <View style={s.postsGrid}>
+            {regularPosts.map((post) => <PostThumb key={post.id} post={post} />)}
+          </View>
+        )}
       </View>
     );
   }
@@ -543,19 +711,8 @@ export default function ProfileScreen() {
 
     return (
       <View style={s.achievementsContainer}>
-        {/* Personal Bests */}
-        <Text style={s.sectionLabel}>PERSONAL BESTS</Text>
-        <View style={s.pbGrid}>
-          {pbStats.map((stat) => (
-            <View key={stat.label} style={s.pbCard}>
-              <Text style={s.pbCardLabel}>{stat.label}</Text>
-              <Text style={s.pbCardValue}>{stat.value}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Badges */}
-        <Text style={[s.sectionLabel, { marginTop: 8 }]}>BADGES</Text>
+        {/* Badges (earned first, then locked) */}
+        <Text style={s.sectionLabel}>ACHIEVEMENTS</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -565,8 +722,10 @@ export default function ProfileScreen() {
           {BADGES.map((badge) => {
             const earned = badge.earned(activities);
             return (
-              <View
+              <TouchableOpacity
                 key={badge.id}
+                onPress={() => setSelectedBadge(badge)}
+                activeOpacity={0.75}
                 style={[s.badgeCard, !earned && s.badgeCardLocked]}
               >
                 <Ionicons
@@ -586,13 +745,24 @@ export default function ProfileScreen() {
                   {badge.name}
                 </Text>
                 <Text style={s.badgeSubtitle}>{badge.subtitle}</Text>
-              </View>
+              </TouchableOpacity>
             );
           })}
         </ScrollView>
 
-        {/* Workout Heatmap */}
-        <Text style={[s.sectionLabel, { marginTop: 8 }]}>WORKOUT HISTORY</Text>
+        {/* Personal Bests */}
+        <Text style={[s.sectionLabel, { marginTop: 8 }]}>PERSONAL BESTS</Text>
+        <View style={s.pbGrid}>
+          {pbStats.map((stat) => (
+            <View key={stat.label} style={s.pbCard}>
+              <Text style={s.pbCardLabel}>{stat.label}</Text>
+              <Text style={s.pbCardValue}>{stat.value}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Training Activity heatmap */}
+        <Text style={[s.sectionLabel, { marginTop: 8 }]}>TRAINING ACTIVITY</Text>
         <View style={s.card}>
           <WorkoutHeatmap activities={activities} />
         </View>
@@ -650,6 +820,31 @@ export default function ProfileScreen() {
             ) : null}
           </View>
         </View>
+
+        {/* Connected apps — renders only integrations the user has connected */}
+        {(() => {
+          const apps: { key: string; label: string; icon: React.ComponentProps<typeof Ionicons>['name']; connected: boolean }[] = [
+            { key: 'strava', label: 'Strava', icon: 'bicycle-outline', connected: !!user?.strava_connected },
+            { key: 'whoop', label: 'Whoop', icon: 'fitness-outline', connected: !!user?.whoop_connected },
+            { key: 'oura', label: 'Oura', icon: 'ellipse-outline', connected: !!user?.oura_connected },
+            { key: 'hevy', label: 'Hevy', icon: 'barbell-outline', connected: !!user?.hevy_connected },
+          ];
+          const connectedApps = apps.filter((a) => a.connected);
+          if (connectedApps.length === 0) return null;
+          return (
+            <View style={s.aboutSection}>
+              <Text style={s.aboutSectionLabel}>CONNECTED APPS</Text>
+              <View style={s.aboutTagsWrap}>
+                {connectedApps.map((app) => (
+                  <View key={app.key} style={s.sportTag}>
+                    <Ionicons name={app.icon} size={13} color={theme.text.secondary} />
+                    <Text style={s.sportTagText}>{app.label}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          );
+        })()}
       </View>
     );
   }
@@ -675,6 +870,7 @@ export default function ProfileScreen() {
           <View style={{ flex: 1 }} />
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity
+              onPress={() => setShowCreateMenu(true)}
               style={s.topBarBtn}
               activeOpacity={0.75}
             >
@@ -751,7 +947,28 @@ export default function ProfileScreen() {
           ) : null}
         </View>
 
-        {/* Action row — Edit profile / Share / follow-users icon */}
+        {/* Sport tags — horizontal scrollable pills */}
+        {(() => {
+          const sports = user?.sports ?? user?.sport_tags ?? [];
+          if (!sports || sports.length === 0) return null;
+          return (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={s.sportTagsScroll}
+              contentContainerStyle={[s.sportTagsContent, { paddingHorizontal: 0 }]}
+            >
+              {sports.map((sport) => (
+                <View key={sport} style={s.sportTag}>
+                  <Ionicons name={getSportIcon(sport)} size={13} color={theme.text.secondary} />
+                  <Text style={s.sportTagText}>{sport}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          );
+        })()}
+
+        {/* Action row — Edit profile / Customize / Share / follow-users icon */}
         <View style={s.profileActionRow}>
           <TouchableOpacity
             style={s.profileActionBtn}
@@ -760,41 +977,79 @@ export default function ProfileScreen() {
           >
             <Text style={s.profileActionBtnText}>Edit profile</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.profileActionBtn} activeOpacity={0.75}>
+          <TouchableOpacity
+            style={s.profileActionBtn}
+            onPress={() => router.push('/profile/customize')}
+            activeOpacity={0.75}
+          >
+            <Text style={s.profileActionBtnText}>Customize</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.profileActionBtn} onPress={handleShareProfile} activeOpacity={0.75}>
             <Text style={s.profileActionBtnText}>Share</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.profileActionIconBtn} activeOpacity={0.75}>
+          <TouchableOpacity
+            style={s.profileActionIconBtn}
+            onPress={() => router.push('/profile/find-friends')}
+            activeOpacity={0.75}
+          >
             <Ionicons name="person-add-outline" size={18} color={T.text.body} />
           </TouchableOpacity>
         </View>
 
-        {/* Highlights row — round count tiles */}
+        {/* Highlights row — circular bubbles, title + stat below. First is "New". */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 20, gap: 14, paddingVertical: 4 }}
           style={{ marginTop: 16, marginHorizontal: -20 }}
         >
-          {[
-            { n: activities.length, label: 'sessions' },
-            { n: currentStreak, label: 'streak' },
-            { n: longestStreak, label: 'best' },
-            { n: sessionsThisMonth, label: 'month' },
-            { n: userPosts.length, label: 'posts' },
-          ].map((h, i) => (
-            <View key={i} style={s.highlightTile}>
-              <View style={s.highlightCircle}>
-                <Text style={s.highlightNum}>{h.n}</Text>
-              </View>
-              <Text style={s.highlightLabel}>{h.label}</Text>
+          {/* New Highlight — always first */}
+          <TouchableOpacity
+            style={s.highlightItem}
+            onPress={() => router.push('/profile/highlights/create')}
+            activeOpacity={0.8}
+          >
+            <View style={[s.highlightCircle, s.highlightCircleNew]}>
+              <Ionicons name="add" size={26} color={T.accent} />
             </View>
-          ))}
-          <TouchableOpacity style={s.highlightTile} onPress={() => setShowHighlightSheet(true)} activeOpacity={0.75}>
-            <View style={[s.highlightCircle, s.highlightCircleAdd]}>
-              <Ionicons name="add" size={22} color={T.text.secondary} />
-            </View>
-            <Text style={s.highlightLabel}>new</Text>
+            <Text style={s.highlightCardNewLabel} numberOfLines={1}>New</Text>
           </TouchableOpacity>
+
+          {/* Existing highlights */}
+          {highlights.map((h) => {
+            const statLabel =
+              h.featured_stat === 'sessions' ? 'sessions' :
+              h.featured_stat === 'load' ? 'load' :
+              h.featured_stat === 'prs' ? 'PRs' :
+              'readiness';
+            const statShow = h.stat_value != null ? `${h.stat_value} ${statLabel}` : null;
+            return (
+              <TouchableOpacity
+                key={h.id}
+                style={s.highlightItem}
+                onPress={() => router.push(`/profile/highlights/${h.id}`)}
+                onLongPress={() => setHighlightActionMenu(h)}
+                delayLongPress={260}
+                activeOpacity={0.8}
+              >
+                <View style={s.highlightCircle}>
+                  {h.cover_photo_url ? (
+                    <Image
+                      source={{ uri: h.cover_photo_url }}
+                      style={{ width: '100%', height: '100%' }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Ionicons name="sparkles-outline" size={24} color={T.text.muted} />
+                  )}
+                </View>
+                <Text style={s.highlightCardTitle} numberOfLines={1}>{h.title}</Text>
+                {statShow ? (
+                  <Text style={s.highlightStatLabel} numberOfLines={1}>{statShow}</Text>
+                ) : null}
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </SafeAreaView>
 
@@ -834,16 +1089,569 @@ export default function ProfileScreen() {
       <View style={s.bottomPadding} />
     </ScrollView>
 
-    {/* ── Highlight Sheet Modal ── */}
-    <Modal visible={showHighlightSheet} transparent animationType="slide" onRequestClose={() => setShowHighlightSheet(false)}>
-      <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} onPress={() => setShowHighlightSheet(false)} />
-      <View style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 }}>
-        <Text style={{ color: '#F0F2F6', fontSize: 17, fontWeight: '600', marginBottom: 8 }}>New Highlight</Text>
-        <Text style={{ color: '#8B95A8', fontSize: 14 }}>Create highlights from your stories (coming soon)</Text>
-        <TouchableOpacity onPress={() => setShowHighlightSheet(false)} style={{ marginTop: 20, alignItems: 'center' }}>
-          <Text style={{ color: '#5BA8FF', fontSize: 16 }}>Close</Text>
+    {/* ── Create Menu (+ button) ── */}
+    <Modal
+      visible={showCreateMenu}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowCreateMenu(false)}
+    >
+      <TouchableOpacity
+        style={{ flex: 1, backgroundColor: T.glass.shade, justifyContent: 'flex-end' }}
+        activeOpacity={1}
+        onPress={() => setShowCreateMenu(false)}
+      >
+        <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+          <View style={{
+            backgroundColor: T.glass.card,
+            borderTopLeftRadius: R.lg,
+            borderTopRightRadius: R.lg,
+            paddingHorizontal: SP[5],
+            paddingTop: SP[5],
+            paddingBottom: insets.bottom + SP[5],
+            gap: SP[2],
+          }}>
+            <View style={{ width: 40, height: 4, backgroundColor: T.border, borderRadius: 2, alignSelf: 'center', marginBottom: SP[3] }} />
+            <TouchableOpacity
+              onPress={() => {
+                setShowCreateMenu(false);
+                router.push('/(tabs)/community');
+              }}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: SP[3],
+                padding: SP[4], backgroundColor: T.bg.elevated, borderRadius: R.sm,
+                borderWidth: 1, borderColor: T.border,
+              }}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="image-outline" size={20} color={T.text.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: TY.sans.semibold, fontSize: TY.size.body + 1, color: T.text.primary }}>New Post</Text>
+                <Text style={{ fontFamily: TY.sans.regular, fontSize: TY.size.small, color: T.text.muted, marginTop: 2 }}>Share a photo, workout or insight</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={T.text.muted} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => {
+                setShowCreateMenu(false);
+                router.push('/profile/highlights/create');
+              }}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: SP[3],
+                padding: SP[4], backgroundColor: T.bg.elevated, borderRadius: R.sm,
+                borderWidth: 1, borderColor: T.border,
+              }}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="sparkles-outline" size={20} color={T.accent} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: TY.sans.semibold, fontSize: TY.size.body + 1, color: T.text.primary }}>New Highlight</Text>
+                <Text style={{ fontFamily: TY.sans.regular, fontSize: TY.size.small, color: T.text.muted, marginTop: 2 }}>Group stories into a themed reel</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={T.text.muted} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => {
+                setShowCreateMenu(false);
+                setShowStoryCreator(true);
+              }}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: SP[3],
+                padding: SP[4], backgroundColor: T.bg.elevated, borderRadius: R.sm,
+                borderWidth: 1, borderColor: T.border,
+              }}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="camera-outline" size={20} color={T.text.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: TY.sans.semibold, fontSize: TY.size.body + 1, color: T.text.primary }}>New Story</Text>
+                <Text style={{ fontFamily: TY.sans.regular, fontSize: TY.size.small, color: T.text.muted, marginTop: 2 }}>A moment that disappears in 24h</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={T.text.muted} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setShowCreateMenu(false)}
+              style={{ alignItems: 'center', paddingVertical: SP[3], marginTop: SP[2] }}
+              activeOpacity={0.7}
+            >
+              <Text style={{ fontFamily: TY.sans.medium, fontSize: TY.size.body + 1, color: T.text.muted }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
         </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
+    </Modal>
+
+    {/* ── Story Creator (New Story) ── */}
+    <StoryCreator
+      visible={showStoryCreator}
+      onClose={() => setShowStoryCreator(false)}
+      onStoryCreated={() => setShowStoryCreator(false)}
+    />
+
+    {/* ── Highlight Action sheet (long-press on a highlight card) ── */}
+    <Modal
+      visible={highlightActionMenu !== null}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setHighlightActionMenu(null)}
+    >
+      <TouchableOpacity
+        style={{ flex: 1, backgroundColor: T.glass.shade, justifyContent: 'flex-end' }}
+        activeOpacity={1}
+        onPress={() => setHighlightActionMenu(null)}
+      >
+        <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+          <View style={{
+            backgroundColor: T.glass.card,
+            borderTopLeftRadius: R.lg,
+            borderTopRightRadius: R.lg,
+            paddingHorizontal: SP[5],
+            paddingTop: SP[5],
+            paddingBottom: insets.bottom + SP[5],
+            gap: SP[2],
+          }}>
+            <View style={{ width: 40, height: 4, backgroundColor: T.border, borderRadius: 2, alignSelf: 'center', marginBottom: SP[3] }} />
+
+            <TouchableOpacity
+              onPress={() => {
+                setHighlightActionMenu(null);
+                Alert.alert('Edit highlight', 'Editing existing highlights lands in the next release — for now, delete and create a new one.');
+              }}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: SP[3],
+                padding: SP[4], backgroundColor: T.bg.elevated, borderRadius: R.sm,
+                borderWidth: 1, borderColor: T.border,
+              }}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="pencil-outline" size={20} color={T.text.primary} />
+              <Text style={{ flex: 1, fontFamily: TY.sans.semibold, fontSize: TY.size.body + 1, color: T.text.primary }}>
+                Edit
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => {
+                setHighlightActionMenu(null);
+                Alert.alert('Reorder highlights', 'Reorder support lands in the next release.');
+              }}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: SP[3],
+                padding: SP[4], backgroundColor: T.bg.elevated, borderRadius: R.sm,
+                borderWidth: 1, borderColor: T.border,
+              }}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="swap-vertical-outline" size={20} color={T.text.primary} />
+              <Text style={{ flex: 1, fontFamily: TY.sans.semibold, fontSize: TY.size.body + 1, color: T.text.primary }}>
+                Reorder
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => {
+                const h = highlightActionMenu;
+                if (!h) return;
+                setHighlightActionMenu(null);
+                Alert.alert('Delete highlight', `Delete "${h.title}"? This cannot be undone.`, [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        await deleteHighlight(h.id);
+                        setHighlights((prev) => prev.filter((x) => x.id !== h.id));
+                      } catch {
+                        Alert.alert('Error', 'Could not delete highlight.');
+                      }
+                    },
+                  },
+                ]);
+              }}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: SP[3],
+                padding: SP[4], backgroundColor: T.bg.elevated, borderRadius: R.sm,
+                borderWidth: 1, borderColor: T.status.danger,
+              }}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="trash-outline" size={20} color={T.status.danger} />
+              <Text style={{ flex: 1, fontFamily: TY.sans.semibold, fontSize: TY.size.body + 1, color: T.status.danger }}>
+                Delete
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setHighlightActionMenu(null)}
+              style={{ alignItems: 'center', paddingVertical: SP[3], marginTop: SP[2] }}
+              activeOpacity={0.7}
+            >
+              <Text style={{ fontFamily: TY.sans.medium, fontSize: TY.size.body + 1, color: T.text.muted }}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+
+    {/* ── Badge Detail sheet ── */}
+    <Modal
+      visible={selectedBadge !== null}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setSelectedBadge(null)}
+    >
+      <TouchableOpacity
+        style={{ flex: 1, backgroundColor: T.glass.shade, justifyContent: 'flex-end' }}
+        activeOpacity={1}
+        onPress={() => setSelectedBadge(null)}
+      >
+        <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+          {selectedBadge ? (() => {
+            const earned = selectedBadge.earned(activities);
+            return (
+              <View style={{
+                backgroundColor: T.glass.card,
+                borderTopLeftRadius: R.lg,
+                borderTopRightRadius: R.lg,
+                paddingHorizontal: SP[6],
+                paddingTop: SP[5],
+                paddingBottom: insets.bottom + SP[6],
+                alignItems: 'center',
+                gap: SP[3],
+              }}>
+                <View style={{ width: 40, height: 4, backgroundColor: T.border, borderRadius: 2, marginBottom: SP[3] }} />
+                <View style={{
+                  width: 88, height: 88, borderRadius: R.pill,
+                  backgroundColor: earned ? T.accentDim : T.bg.elevated,
+                  borderWidth: 1, borderColor: earned ? T.accent : T.border,
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Ionicons name={selectedBadge.icon} size={40} color={earned ? selectedBadge.color : T.text.muted} />
+                </View>
+                <Text style={{
+                  fontFamily: TY.sans.bold,
+                  fontSize: TY.size.h2,
+                  color: T.text.primary,
+                  textAlign: 'center',
+                  letterSpacing: TY.tracking.tight,
+                }}>
+                  {selectedBadge.name}
+                </Text>
+                <Text style={{
+                  fontFamily: TY.sans.regular,
+                  fontSize: TY.size.body + 1,
+                  color: T.text.body,
+                  textAlign: 'center',
+                  lineHeight: 22,
+                }}>
+                  {selectedBadge.subtitle}
+                </Text>
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center', gap: SP[2],
+                  backgroundColor: earned ? T.accentDim : T.bg.elevated,
+                  borderWidth: 1, borderColor: earned ? T.accent : T.border,
+                  borderRadius: R.pill,
+                  paddingHorizontal: SP[4], paddingVertical: SP[2],
+                  marginTop: SP[2],
+                }}>
+                  <Ionicons
+                    name={earned ? 'checkmark-circle' : 'lock-closed'}
+                    size={14}
+                    color={earned ? T.accent : T.text.muted}
+                  />
+                  <Text style={{
+                    fontFamily: TY.mono.semibold,
+                    fontSize: TY.size.micro,
+                    color: earned ? T.accent : T.text.muted,
+                    letterSpacing: TY.tracking.label,
+                    textTransform: 'uppercase',
+                  }}>
+                    {earned ? 'Earned' : 'Not yet earned'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setSelectedBadge(null)}
+                  style={{ paddingVertical: SP[3], marginTop: SP[2] }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ fontFamily: TY.sans.medium, fontSize: TY.size.body + 1, color: T.text.muted }}>
+                    Close
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })() : null}
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+
+    {/* ── Edit Caption modal (shared with PostDetailModal) ── */}
+    <Modal
+      visible={showEditCaption}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowEditCaption(false)}
+    >
+      <TouchableOpacity
+        style={{ flex: 1, backgroundColor: T.glass.shade, justifyContent: 'center', padding: SP[6] }}
+        activeOpacity={1}
+        onPress={() => setShowEditCaption(false)}
+      >
+        <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+          <View style={{
+            backgroundColor: T.bg.elevated,
+            borderRadius: R.md,
+            borderWidth: 1,
+            borderColor: T.border,
+            padding: SP[5],
+            gap: SP[4],
+          }}>
+            <Text style={{ fontFamily: TY.sans.bold, fontSize: TY.size.h3, color: T.text.primary }}>
+              Edit caption
+            </Text>
+            <TextInput
+              value={editCaptionText}
+              onChangeText={setEditCaptionText}
+              multiline
+              maxLength={2200}
+              placeholder="Write a caption..."
+              placeholderTextColor={T.text.muted}
+              autoFocus
+              style={{
+                backgroundColor: T.bg.primary,
+                borderRadius: R.sm,
+                borderWidth: 1,
+                borderColor: T.border,
+                padding: SP[3],
+                minHeight: 100,
+                textAlignVertical: 'top',
+                fontFamily: TY.sans.regular,
+                fontSize: TY.size.body + 1,
+                color: T.text.primary,
+              }}
+            />
+            <View style={{ flexDirection: 'row', gap: SP[3] }}>
+              <TouchableOpacity
+                onPress={() => setShowEditCaption(false)}
+                style={{
+                  flex: 1, paddingVertical: SP[3] + 2, alignItems: 'center',
+                  borderRadius: R.sm, borderWidth: 1, borderColor: T.border,
+                }}
+                activeOpacity={0.75}
+              >
+                <Text style={{ fontFamily: TY.sans.medium, fontSize: TY.size.body, color: T.text.muted }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={async () => {
+                  if (!selectedPost) { setShowEditCaption(false); return; }
+                  try {
+                    await editPostCaption(selectedPost.id, editCaptionText);
+                    setUserPosts((prev) => prev.map((x) =>
+                      x.id === selectedPost.id ? { ...x, caption: editCaptionText } : x,
+                    ));
+                    setShowEditCaption(false);
+                  } catch {
+                    Alert.alert('Error', 'Could not save caption.');
+                  }
+                }}
+                style={{
+                  flex: 1, paddingVertical: SP[3] + 2, alignItems: 'center',
+                  borderRadius: R.sm, backgroundColor: T.accent,
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={{ fontFamily: TY.sans.bold, fontSize: TY.size.body, color: T.accentInk }}>
+                  Save
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+
+    {/* ── Post Action Menu (long-press on own post) ── */}
+    <Modal
+      visible={postActionMenu !== null}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setPostActionMenu(null)}
+    >
+      <TouchableOpacity
+        style={{ flex: 1, backgroundColor: T.glass.shade, justifyContent: 'flex-end' }}
+        activeOpacity={1}
+        onPress={() => setPostActionMenu(null)}
+      >
+        <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+          <View style={{
+            backgroundColor: T.glass.card,
+            borderTopLeftRadius: R.lg,
+            borderTopRightRadius: R.lg,
+            paddingHorizontal: SP[5],
+            paddingTop: SP[5],
+            paddingBottom: insets.bottom + SP[5],
+            gap: SP[2],
+          }}>
+            <View style={{ width: 40, height: 4, backgroundColor: T.border, borderRadius: 2, alignSelf: 'center', marginBottom: SP[3] }} />
+
+            {/* Pin / Unpin */}
+            <TouchableOpacity
+              onPress={async () => {
+                const p = postActionMenu;
+                if (!p) return;
+                setPostActionMenu(null);
+                const wasPinned = !!p.is_pinned;
+                try {
+                  await patchPost(p.id, { is_pinned: !wasPinned });
+                  setUserPosts((prev) => prev.map((x) =>
+                    x.id === p.id ? { ...x, is_pinned: !wasPinned } : x,
+                  ));
+                } catch {
+                  Alert.alert('Error', 'Could not update post.');
+                }
+              }}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: SP[3],
+                padding: SP[4], backgroundColor: T.bg.elevated, borderRadius: R.sm,
+                borderWidth: 1, borderColor: T.border,
+              }}
+              activeOpacity={0.75}
+            >
+              <Ionicons name={postActionMenu?.is_pinned ? 'pin' : 'pin-outline'} size={20} color={T.text.primary} />
+              <Text style={{ flex: 1, fontFamily: TY.sans.semibold, fontSize: TY.size.body + 1, color: T.text.primary }}>
+                {postActionMenu?.is_pinned ? 'Unpin from profile' : 'Pin to profile'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Edit caption */}
+            <TouchableOpacity
+              onPress={() => {
+                const p = postActionMenu;
+                if (!p) return;
+                setPostActionMenu(null);
+                setSelectedPost(p);
+                setEditCaptionText(p.caption || '');
+                setShowEditCaption(true);
+              }}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: SP[3],
+                padding: SP[4], backgroundColor: T.bg.elevated, borderRadius: R.sm,
+                borderWidth: 1, borderColor: T.border,
+              }}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="pencil-outline" size={20} color={T.text.primary} />
+              <Text style={{ flex: 1, fontFamily: TY.sans.semibold, fontSize: TY.size.body + 1, color: T.text.primary }}>
+                Edit caption
+              </Text>
+            </TouchableOpacity>
+
+            {/* Share */}
+            <TouchableOpacity
+              onPress={async () => {
+                const p = postActionMenu;
+                if (!p) return;
+                setPostActionMenu(null);
+                try {
+                  await Share.share({ message: `Check out this post on ORYX — https://oryx.app/p/${p.id}` });
+                } catch {
+                  // cancelled
+                }
+              }}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: SP[3],
+                padding: SP[4], backgroundColor: T.bg.elevated, borderRadius: R.sm,
+                borderWidth: 1, borderColor: T.border,
+              }}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="share-outline" size={20} color={T.text.primary} />
+              <Text style={{ flex: 1, fontFamily: TY.sans.semibold, fontSize: TY.size.body + 1, color: T.text.primary }}>
+                Share
+              </Text>
+            </TouchableOpacity>
+
+            {/* Archive */}
+            <TouchableOpacity
+              onPress={async () => {
+                const p = postActionMenu;
+                if (!p) return;
+                setPostActionMenu(null);
+                try {
+                  await patchPost(p.id, { is_archived: true });
+                  setUserPosts((prev) => prev.filter((x) => x.id !== p.id));
+                } catch {
+                  Alert.alert('Error', 'Could not archive post.');
+                }
+              }}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: SP[3],
+                padding: SP[4], backgroundColor: T.bg.elevated, borderRadius: R.sm,
+                borderWidth: 1, borderColor: T.border,
+              }}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="archive-outline" size={20} color={T.text.primary} />
+              <Text style={{ flex: 1, fontFamily: TY.sans.semibold, fontSize: TY.size.body + 1, color: T.text.primary }}>
+                Archive
+              </Text>
+            </TouchableOpacity>
+
+            {/* Delete (destructive) */}
+            <TouchableOpacity
+              onPress={() => {
+                const p = postActionMenu;
+                if (!p) return;
+                setPostActionMenu(null);
+                Alert.alert('Delete post', 'This cannot be undone.', [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        await deletePost(p.id);
+                        setUserPosts((prev) => prev.filter((x) => x.id !== p.id));
+                      } catch {
+                        Alert.alert('Error', 'Could not delete post.');
+                      }
+                    },
+                  },
+                ]);
+              }}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: SP[3],
+                padding: SP[4], backgroundColor: T.bg.elevated, borderRadius: R.sm,
+                borderWidth: 1, borderColor: T.status.danger,
+              }}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="trash-outline" size={20} color={T.status.danger} />
+              <Text style={{ flex: 1, fontFamily: TY.sans.semibold, fontSize: TY.size.body + 1, color: T.status.danger }}>
+                Delete post
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setPostActionMenu(null)}
+              style={{ alignItems: 'center', paddingVertical: SP[3], marginTop: SP[2] }}
+              activeOpacity={0.7}
+            >
+              <Text style={{ fontFamily: TY.sans.medium, fontSize: TY.size.body + 1, color: T.text.muted }}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
 
     {/* ── Post Detail Modal ── */}
@@ -1220,6 +2028,50 @@ function createStyles(t: ThemeColors) {
       fontSize: 10, color: t.text.secondary,
       fontFamily: TY.mono.medium, letterSpacing: 0.8, textTransform: 'uppercase',
     },
+
+    // Highlights — circular bubbles with title + stat caption below
+    highlightItem: {
+      width: 78,
+      alignItems: 'center',
+      gap: 6,
+    },
+    highlightCircle: {
+      width: 64,
+      height: 64,
+      borderRadius: R.pill,
+      backgroundColor: t.glass.cardLo,
+      borderWidth: 1.5,
+      borderColor: t.glass.border,
+      overflow: 'hidden',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    highlightCircleNew: {
+      borderStyle: 'dashed',
+      borderColor: t.accent,
+      borderWidth: 1.5,
+    },
+    highlightCardTitle: {
+      fontSize: 11,
+      color: t.text.primary,
+      fontFamily: TY.sans.semibold,
+      letterSpacing: -0.1,
+      textAlign: 'center',
+    },
+    highlightCardNewLabel: {
+      fontSize: 11,
+      color: t.accent,
+      fontFamily: TY.sans.semibold,
+      textAlign: 'center',
+    },
+    highlightStatLabel: {
+      fontSize: 9,
+      color: t.accent,
+      fontFamily: TY.mono.bold,
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+      textAlign: 'center',
+    },
     sportTagsScroll: {
       maxHeight: 36,
     },
@@ -1508,67 +2360,80 @@ function createStyles(t: ThemeColors) {
       justifyContent: 'flex-end',
     },
     sheetContainer: {
-      backgroundColor: t.bg.secondary,
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
+      // Concrete height so the inner ScrollView's flex:1 has something to
+      // expand into — previously maxHeight-only caused the sheet to collapse
+      // to just the header when the list was small/empty.
+      height: '80%',
+      backgroundColor: t.bg.primary,
+      borderTopLeftRadius: R.xl,
+      borderTopRightRadius: R.xl,
+      borderTopWidth: 1,
+      borderColor: t.glass.border,
       paddingHorizontal: 20,
       paddingBottom: 0,
-      maxHeight: '80%',
     },
     sheetHandle: {
       width: 36, height: 4, borderRadius: 2,
-      backgroundColor: t.border,
+      backgroundColor: t.glass.border,
       alignSelf: 'center', marginTop: 12, marginBottom: 4,
     },
     sheetHeader: {
       flexDirection: 'row', alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: 16,
-      borderBottomWidth: 1, borderBottomColor: t.border,
+      borderBottomWidth: 1, borderBottomColor: t.glass.border,
     },
     sheetTitle: {
-      fontSize: 16, fontWeight: '700', color: t.text.primary,
+      fontSize: 17, color: t.text.primary,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.3,
     },
     sheetEmpty: {
-      paddingVertical: 48, alignItems: 'center',
+      flex: 1, paddingVertical: 48, alignItems: 'center', justifyContent: 'center',
     },
     sheetEmptyText: {
       fontSize: 14, color: t.text.muted,
+      fontFamily: TY.sans.regular,
     },
     sheetRow: {
       flexDirection: 'row', alignItems: 'center',
       paddingVertical: 12, gap: 12,
-      borderBottomWidth: 1, borderBottomColor: t.border,
+      borderBottomWidth: 1, borderBottomColor: t.glass.border,
     },
     sheetAvatar: {
       width: 44, height: 44, borderRadius: 22,
-      backgroundColor: t.bg.elevated,
+      backgroundColor: t.glass.cardHi,
+      borderWidth: 1, borderColor: t.glass.border,
       alignItems: 'center', justifyContent: 'center',
     },
     sheetAvatarText: {
-      fontSize: 15, fontWeight: '700', color: t.text.primary,
+      fontSize: 15, color: t.text.primary,
+      fontFamily: TY.sans.semibold, letterSpacing: 0.3,
     },
     sheetRowInfo: {
       flex: 1, gap: 2,
     },
     sheetRowName: {
-      fontSize: 14, fontWeight: '600', color: t.text.primary,
+      fontSize: 14, color: t.text.primary,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.1,
     },
     sheetRowTags: {
       fontSize: 11, color: t.text.muted,
+      fontFamily: TY.mono.regular, letterSpacing: 0.3,
     },
     sheetFollowBtn: {
-      paddingHorizontal: 16, paddingVertical: 7,
-      borderRadius: 20, borderWidth: 1, borderColor: t.accent,
+      paddingHorizontal: 14, paddingVertical: 7,
+      borderRadius: R.pill, borderWidth: 1, borderColor: t.accent,
+      backgroundColor: t.accent,
     },
     sheetFollowBtnActive: {
-      backgroundColor: t.bg.elevated, borderColor: t.border,
+      backgroundColor: t.glass.pill, borderColor: t.glass.border,
     },
     sheetFollowBtnText: {
-      fontSize: 13, fontWeight: '600', color: t.accent,
+      fontSize: 13, color: t.accentInk,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.1,
     },
     sheetFollowBtnTextActive: {
-      color: t.text.muted,
+      color: t.text.body,
     },
   });
 }

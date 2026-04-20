@@ -37,6 +37,7 @@ from app.models import club_membership as club_membership_model  # noqa: F401
 from app.models import daily_checkin as daily_checkin_model  # noqa: F401
 from app.models import story as story_model  # noqa: F401
 from app.models import story_view as story_view_model  # noqa: F401
+from app.models import highlight as highlight_model  # noqa: F401
 from app.models import user_block as user_block_model  # noqa: F401
 from app.models import user_report as user_report_model  # noqa: F401
 from app.models import post_report as post_report_model  # noqa: F401
@@ -63,6 +64,7 @@ from app.routers import feed as feed_router
 from app.routers import clubs as clubs_router
 from app.routers import checkin as checkin_router
 from app.routers import stories as stories_router
+from app.routers import highlights as highlights_router
 from app.routers import media as media_router
 from app.routers import users as users_router
 from app.routers import messages as messages_router
@@ -581,6 +583,7 @@ app.include_router(feed_router.router)
 app.include_router(clubs_router.router)
 app.include_router(checkin_router.router)
 app.include_router(stories_router.router)
+app.include_router(highlights_router.router)
 app.include_router(media_router.router)
 app.include_router(users_router.router)
 app.include_router(messages_router.router)

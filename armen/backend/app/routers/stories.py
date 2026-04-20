@@ -167,16 +167,36 @@ async def get_stories_feed(
 @router.get("/my")
 async def get_my_stories(
     current_user: User = Depends(get_current_user),
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    from datetime import date
+    """
+    Returns the current user's stories. Default: today only (for the story
+    composer). When start_date + end_date are supplied (YYYY-MM-DD), returns
+    every story in that inclusive range — used by the Create Highlight flow.
+    """
+    from datetime import date, time
     from sqlalchemy import cast, Date
-    today = date.today()
+
+    conditions = [Story.user_id == current_user.id]
+
+    if start_date or end_date:
+        try:
+            s = date.fromisoformat(start_date) if start_date else date(1970, 1, 1)
+            e = date.fromisoformat(end_date) if end_date else date.today()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Dates must be YYYY-MM-DD")
+        start_dt = datetime.combine(s, time.min)
+        end_dt = datetime.combine(e, time.max)
+        conditions.append(Story.created_at >= start_dt)
+        conditions.append(Story.created_at <= end_dt)
+    else:
+        today = date.today()
+        conditions.append(cast(Story.created_at, Date) == today)
+
     res = await db.execute(
-        select(Story).where(
-            Story.user_id == current_user.id,
-            cast(Story.created_at, Date) == today,
-        ).order_by(Story.created_at.desc())
+        select(Story).where(*conditions).order_by(Story.created_at.desc())
     )
     stories = res.scalars().all()
     return {"stories": [_build_story_dict(s) for s in stories]}

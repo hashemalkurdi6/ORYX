@@ -481,16 +481,28 @@ export default function SettingsScreen() {
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          title: 'Settings',
-          headerStyle: { backgroundColor: theme.bg.primary },
-          headerShadowVisible: false,
-          headerTintColor: theme.text.primary,
-          headerTitleStyle: { fontFamily: TY.sans.bold, fontSize: TY.size.h3 - 1 },
-          headerShown: true,
-        }}
-      />
+      <Stack.Screen options={{ headerShown: false }} />
+
+      {/* Custom header — matches the rest of the pushed sub-screens */}
+      <SafeAreaView edges={['top']} style={{ backgroundColor: theme.bg.primary }}>
+        <View style={{
+          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+          paddingHorizontal: SP[5], paddingTop: SP[2], paddingBottom: SP[3] + 2,
+        }}>
+          <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
+            <Ionicons name="chevron-back" size={24} color={theme.text.primary} />
+          </TouchableOpacity>
+          <Text style={{
+            fontSize: TY.size.h3 - 1,
+            color: theme.text.primary,
+            fontFamily: TY.sans.semibold,
+            letterSpacing: -0.3,
+          }}>
+            Settings
+          </Text>
+          <View style={{ width: 24 }} />
+        </View>
+      </SafeAreaView>
 
       <ScrollView style={s.container} contentContainerStyle={s.contentContainer}>
         <SafeAreaView edges={['bottom']}>
@@ -521,6 +533,50 @@ export default function SettingsScreen() {
             >
               <Ionicons name="mail-outline" size={18} color={theme.text.secondary} />
               <Text style={s.settingsRowText}>Change Email</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.text.secondary} />
+            </TouchableOpacity>
+            <View style={s.rowDivider} />
+            <TouchableOpacity
+              style={s.settingsRow}
+              onPress={() =>
+                Alert.alert(
+                  'Delete account',
+                  'This will permanently delete your account and all associated data. This cannot be undone.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete', style: 'destructive',
+                      onPress: () => Alert.alert('Coming Soon', 'Account deletion will land before launch — for now, contact support to delete your account.'),
+                    },
+                  ],
+                )
+              }
+              activeOpacity={0.75}
+            >
+              <Ionicons name="trash-outline" size={18} color={theme.status.danger} />
+              <Text style={[s.settingsRowText, { color: theme.status.danger }]}>Delete Account</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.text.secondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* ── PREFERENCES (pushed sub-screens) ── */}
+          <Text style={s.sectionLabel}>PREFERENCES</Text>
+          <View style={s.card}>
+            <TouchableOpacity style={s.settingsRow} onPress={() => router.push('/settings/notifications')} activeOpacity={0.75}>
+              <Ionicons name="notifications-outline" size={18} color={theme.text.secondary} />
+              <Text style={s.settingsRowText}>Notifications</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.text.secondary} />
+            </TouchableOpacity>
+            <View style={s.rowDivider} />
+            <TouchableOpacity style={s.settingsRow} onPress={() => router.push('/settings/privacy')} activeOpacity={0.75}>
+              <Ionicons name="lock-closed-outline" size={18} color={theme.text.secondary} />
+              <Text style={s.settingsRowText}>Privacy</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.text.secondary} />
+            </TouchableOpacity>
+            <View style={s.rowDivider} />
+            <TouchableOpacity style={s.settingsRow} onPress={() => router.push('/settings/appearance')} activeOpacity={0.75}>
+              <Ionicons name="contrast-outline" size={18} color={theme.text.secondary} />
+              <Text style={s.settingsRowText}>Appearance</Text>
               <Ionicons name="chevron-forward" size={16} color={theme.text.secondary} />
             </TouchableOpacity>
           </View>
@@ -630,6 +686,22 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
               </>
             )}
+          </View>
+
+          {/* ── SUPPORT (pushed sub-screens) ── */}
+          <Text style={s.sectionLabel}>SUPPORT</Text>
+          <View style={s.card}>
+            <TouchableOpacity style={s.settingsRow} onPress={() => router.push('/settings/about')} activeOpacity={0.75}>
+              <Ionicons name="information-circle-outline" size={18} color={theme.text.secondary} />
+              <Text style={s.settingsRowText}>About ORYX</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.text.secondary} />
+            </TouchableOpacity>
+            <View style={s.rowDivider} />
+            <TouchableOpacity style={s.settingsRow} onPress={() => router.push('/settings/help')} activeOpacity={0.75}>
+              <Ionicons name="help-circle-outline" size={18} color={theme.text.secondary} />
+              <Text style={s.settingsRowText}>Help &amp; Support</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.text.secondary} />
+            </TouchableOpacity>
           </View>
 
           {/* ── DANGER ZONE ── */}

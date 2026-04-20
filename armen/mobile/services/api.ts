@@ -1739,8 +1739,10 @@ export interface StoryGroup {
 export const getStoriesFeed = async (): Promise<{ story_groups: StoryGroup[] }> =>
   (await apiClient.get('/stories/feed')).data;
 
-export const getMyStories = async (): Promise<{ stories: StoryItem[] }> =>
-  (await apiClient.get('/stories/my')).data;
+export const getMyStories = async (
+  params?: { start_date?: string; end_date?: string },
+): Promise<{ stories: StoryItem[] }> =>
+  (await apiClient.get('/stories/my', { params })).data;
 
 export const getStory = async (storyId: string): Promise<{ story: StoryItem }> =>
   (await apiClient.get(`/stories/${storyId}`)).data;
@@ -1784,6 +1786,83 @@ export const uploadMedia = async (uri: string, maxWidth = 1080): Promise<{ url: 
 
 export const deleteStory = async (storyId: string): Promise<{ message: string }> =>
   (await apiClient.delete(`/stories/${storyId}`)).data;
+
+// ── Highlights ─────────────────────────────────────────────────────────────
+
+export type HighlightFeaturedStat = 'sessions' | 'load' | 'prs' | 'readiness';
+
+export interface Highlight {
+  id: string;
+  user_id: string;
+  title: string;
+  cover_photo_url: string | null;
+  start_date: string;   // ISO date (YYYY-MM-DD)
+  end_date: string;     // ISO date
+  featured_stat: HighlightFeaturedStat;
+  story_ids: string[];
+  position: number;
+  stat_value: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HighlightStory {
+  id: string;
+  user_id: string;
+  photo_url: string | null;
+  caption: string | null;
+  oryx_data_overlay_json: any | null;
+  text_overlay: string | null;
+  created_at: string;
+}
+
+export const getUserHighlights = async (userId: string): Promise<{ highlights: Highlight[] }> =>
+  (await apiClient.get(`/users/${userId}/highlights`)).data;
+
+export const createHighlight = async (data: {
+  title: string;
+  start_date: string;
+  end_date: string;
+  story_ids: string[];
+  cover_photo_url?: string | null;
+  featured_stat?: HighlightFeaturedStat;
+}): Promise<{ highlight: Highlight }> =>
+  (await apiClient.post('/highlights', data)).data;
+
+export const patchHighlight = async (
+  id: string,
+  data: Partial<{
+    title: string;
+    start_date: string;
+    end_date: string;
+    story_ids: string[];
+    cover_photo_url: string | null;
+    featured_stat: HighlightFeaturedStat;
+    position: number;
+  }>,
+): Promise<{ highlight: Highlight }> =>
+  (await apiClient.patch(`/highlights/${id}`, data)).data;
+
+export const deleteHighlight = async (id: string): Promise<{ ok: boolean }> =>
+  (await apiClient.delete(`/highlights/${id}`)).data;
+
+export const reorderHighlights = async (
+  items: { id: string; position: number }[],
+): Promise<{ ok: boolean }> =>
+  (await apiClient.post('/highlights/reorder', { items })).data;
+
+export const getHighlightStories = async (id: string): Promise<{ highlight_id: string; stories: HighlightStory[] }> =>
+  (await apiClient.get(`/highlights/${id}/stories`)).data;
+
+export const getHighlightStats = async (id: string): Promise<{
+  highlight_id: string;
+  featured_stat: HighlightFeaturedStat;
+  sessions: number;
+  load: number;
+  prs: number;
+  readiness: number | null;
+}> =>
+  (await apiClient.get(`/highlights/${id}/stats`)).data;
 
 export const updateMyProfile = async (data: {
   display_name?: string;
