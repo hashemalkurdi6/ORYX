@@ -67,3 +67,10 @@ class User(Base):
         onupdate=datetime.utcnow,
         nullable=False,
     )
+    # Soft-delete / account deletion lifecycle (NULL = active account)
+    delete_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

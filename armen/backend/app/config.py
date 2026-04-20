@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     OURA_CLIENT_ID: str = ""
     OURA_CLIENT_SECRET: str = ""
     OURA_REDIRECT_URI: str = "http://localhost:8000/oura/callback"
+    # Account deletion
+    ACCOUNT_DELETION_GRACE_DAYS: int = 30
+    PENDING_TOKEN_EXPIRE_MINUTES: int = 10
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

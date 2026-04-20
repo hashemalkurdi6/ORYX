@@ -4,7 +4,8 @@ from datetime import datetime, timedelta
 from uuid import UUID
 
 import bcrypt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from sqlalchemy import select
@@ -14,6 +15,7 @@ from app.config import settings
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user import UserCreate, UserLogin, UserOut, UserOutInternal, Token, TokenData, UserProfileUpdate, OnboardingUpdate
+from app.services.account_deletion import restore_user, _log_event
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -44,6 +46,52 @@ def create_access_token(user_id: UUID) -> str:
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
+def create_pending_restore_token(user_id: UUID) -> str:
+    """Short-lived JWT scoped only to /auth/restore."""
+    expire = datetime.utcnow() + timedelta(minutes=settings.PENDING_TOKEN_EXPIRE_MINUTES)
+    payload = {
+        "sub": str(user_id),
+        "exp": expire,
+        "iat": datetime.utcnow(),
+        "scope": "restore",
+    }
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+async def get_user_from_pending_token(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Validate a restore-scoped pending token and return the user.
+
+    Does NOT reject pending-deletion users — that is the whole point.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired restore token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(
+            credentials.credentials,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+        )
+        if payload.get("scope") != "restore":
+            raise credentials_exception
+        user_id_str = payload.get("sub")
+        if not user_id_str:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    result = await db.execute(select(User).where(User.id == UUID(user_id_str)))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise credentials_exception
+    return user
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db),
@@ -68,6 +116,10 @@ async def get_current_user(
     )
     user = result.scalar_one_or_none()
     if user is None:
+        raise credentials_exception
+    # Block any in-flight token from a pending-deletion account. The only
+    # way back in is via /auth/restore, which uses a separate pending_token.
+    if user.delete_requested_at is not None:
         raise credentials_exception
     return user
 
@@ -118,8 +170,8 @@ async def signup(payload: UserCreate, db: AsyncSession = Depends(get_db)):
     return Token(access_token=token)
 
 
-@router.post("/login", response_model=Token)
-async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)):
+@router.post("/login")
+async def login(payload: UserLogin, request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
     if user is None or not verify_password(payload.password, user.hashed_password):
@@ -127,6 +179,51 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
         )
+    # Account pending deletion — don't issue a real token; hand back a restore token
+    if user.delete_requested_at is not None:
+        await _log_event(
+            db,
+            user_id=user.id,
+            event_type="login_blocked_pending_delete",
+            ip=request.client.host if request.client else None,
+            ua=request.headers.get("user-agent"),
+        )
+        pending_token = create_pending_restore_token(user.id)
+        return JSONResponse(
+            status_code=200,
+            content={
+                "pending_deletion": True,
+                "deletion_date": user.deleted_at.isoformat() if user.deleted_at else None,
+                "user_id": str(user.id),
+                "pending_token": pending_token,
+            },
+        )
+    token = create_access_token(user.id)
+    return {"access_token": token, "token_type": "bearer"}
+
+
+@router.post("/restore", response_model=Token)
+async def restore_account(
+    request: Request,
+    user: User = Depends(get_user_from_pending_token),
+    db: AsyncSession = Depends(get_db),
+):
+    """Restore a pending-deletion account during the grace window."""
+    if user.delete_requested_at is None:
+        raise HTTPException(status_code=400, detail="Account is not pending deletion")
+    now = datetime.utcnow()
+    # deleted_at is timezone-aware; compare naive UTC safely
+    if user.deleted_at is not None:
+        deleted_at_naive = user.deleted_at.replace(tzinfo=None) if user.deleted_at.tzinfo else user.deleted_at
+        if deleted_at_naive <= now:
+            raise HTTPException(status_code=410, detail="Grace period has expired")
+    await restore_user(
+        user,
+        db,
+        ip=request.client.host if request.client else None,
+        ua=request.headers.get("user-agent"),
+    )
+    await db.flush()
     token = create_access_token(user.id)
     return Token(access_token=token)
 

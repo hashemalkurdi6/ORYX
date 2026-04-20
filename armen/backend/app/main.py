@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -46,6 +47,7 @@ from app.models import hidden_post as hidden_post_model  # noqa: F401
 from app.models import post_view as post_view_model  # noqa: F401
 from app.models import post_like as post_like_model  # noqa: F401
 from app.models import conversation as conversation_model  # noqa: F401
+from app.models import account_deletion_event as account_deletion_event_model  # noqa: F401
 
 from app.routers import auth, strava, health, diagnosis
 from app.routers import whoop, oura, wellness, nutrition
@@ -540,8 +542,21 @@ async def lifespan(app: FastAPI):
     async with AsyncSessionLocal() as seed_session:
         async with seed_session.begin():
             await seed_default_clubs(seed_session)
-    yield
-    await engine.dispose()
+
+    # Background: hard-delete expired soft-deleted users every 6h
+    from app.services.scheduler import run_deletion_sweeper
+    stop_event = asyncio.Event()
+    sweeper_task = asyncio.create_task(run_deletion_sweeper(stop_event))
+
+    try:
+        yield
+    finally:
+        stop_event.set()
+        try:
+            await asyncio.wait_for(sweeper_task, timeout=10)
+        except (asyncio.TimeoutError, Exception):
+            sweeper_task.cancel()
+        await engine.dispose()
 
 
 app = FastAPI(

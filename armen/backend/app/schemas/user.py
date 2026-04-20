@@ -189,6 +189,13 @@ class OnboardingUpdate(BaseModel):
     current_onboarding_step: int | None = None
 
 
+class PendingDeletionResponse(BaseModel):
+    pending_deletion: bool = True
+    deletion_date: str | None
+    user_id: str
+    pending_token: str
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"

@@ -2,7 +2,7 @@ import logging
 from datetime import date, timedelta
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import cast, Date, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +16,7 @@ from app.models.user_block import UserBlock
 from app.models.user_report import UserReport
 from app.routers.auth import get_current_user
 from app.routers.posts import _build_post
+from app.services.account_deletion import soft_delete_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/users", tags=["users"])
@@ -93,6 +94,27 @@ class ProfilePatchIn(BaseModel):
     post_grid_layout: Optional[Literal['grid', 'portfolio', 'timeline']] = None
 
 
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_my_account(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Soft-delete the current user's account. Hard delete happens after the
+    grace window (see scheduler). The user can restore via /auth/restore
+    while the window is open."""
+    if current_user.delete_requested_at is not None:
+        raise HTTPException(status_code=409, detail="Account already pending deletion")
+    await soft_delete_user(
+        current_user,
+        db,
+        ip=request.client.host if request.client else None,
+        ua=request.headers.get("user-agent"),
+    )
+    await db.flush()
+    return None
+
+
 @router.patch("/me/profile")
 async def update_my_profile(
     body: ProfilePatchIn,
@@ -133,6 +155,10 @@ async def get_user_profile(
     target_res = await db.execute(select(User).where(User.id == user_id))
     target = target_res.scalar_one_or_none()
     if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    # Hide soft-deleted users from everyone except themselves (self-view allowed
+    # so the pending-deletion user can still see their data during the grace window).
+    if target.delete_requested_at is not None and str(target.id) != str(current_user.id):
         raise HTTPException(status_code=404, detail="User not found")
 
     # is_following?
@@ -199,6 +225,8 @@ async def get_user_posts(
     target_res = await db.execute(select(User).where(User.id == user_id))
     target = target_res.scalar_one_or_none()
     if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.delete_requested_at is not None and str(target.id) != str(current_user.id):
         raise HTTPException(status_code=404, detail="User not found")
 
     is_private = getattr(target, "is_private", False) or False
@@ -323,6 +351,12 @@ async def get_activity_heatmap(
     db: AsyncSession = Depends(get_db),
 ):
     """Return dates with session counts for the last 365 days (non-rest days only)."""
+    target_res = await db.execute(select(User).where(User.id == user_id))
+    target = target_res.scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.delete_requested_at is not None and str(target.id) != str(current_user.id):
+        raise HTTPException(status_code=404, detail="User not found")
     today = date.today()
     cutoff = today - timedelta(days=365)
     date_col = cast(UserActivity.logged_at, Date)
@@ -353,6 +387,12 @@ async def get_personal_bests(
     db: AsyncSession = Depends(get_db),
 ):
     """Return personal bests from activity data."""
+    target_res = await db.execute(select(User).where(User.id == user_id))
+    target = target_res.scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.delete_requested_at is not None and str(target.id) != str(current_user.id):
+        raise HTTPException(status_code=404, detail="User not found")
     res = await db.execute(
         select(
             func.max(UserActivity.distance_meters).label("max_distance_meters"),
