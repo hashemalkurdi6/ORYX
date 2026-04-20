@@ -32,7 +32,7 @@ import {
 } from '@/services/api';
 import { useAuthStore } from '@/services/authStore';
 import { useTheme } from '@/contexts/ThemeContext';
-import { ThemeColors } from '@/services/theme';
+import { ThemeColors, theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -72,14 +72,14 @@ function Toast({ message, onHide }: { message: ToastMessage | null; onHide: () =
     <Animated.View
       style={[
         toastStyles.container,
-        { opacity, backgroundColor: message.kind === 'success' ? '#27ae60' : '#c0392b' },
+        { opacity, backgroundColor: message.kind === 'success' ? T.status.success : T.status.danger },
       ]}
       pointerEvents="none"
     >
       <Ionicons
         name={message.kind === 'success' ? 'checkmark-circle' : 'alert-circle'}
         size={16}
-        color="#FFFFFF"
+        color={T.accentInk}
       />
       <Text style={toastStyles.text}>{message.text}</Text>
     </Animated.View>
@@ -90,14 +90,14 @@ const toastStyles = StyleSheet.create({
   container: {
     position: 'absolute',
     bottom: 100,
-    left: 20,
-    right: 20,
+    left: SP[5],
+    right: SP[5],
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
+    gap: SP[2],
+    paddingHorizontal: SP[4],
+    paddingVertical: SP[3],
+    borderRadius: R.sm,
     zIndex: 999,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
@@ -105,7 +105,7 @@ const toastStyles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  text: { color: '#f0f0f0', fontSize: 14, fontWeight: '600', flex: 1 },
+  text: { fontFamily: TY.sans.semibold, color: T.accentInk, fontSize: TY.size.body, flex: 1 },
 });
 
 // ── Provider Row Component ────────────────────────────────────────────────────
@@ -205,18 +205,18 @@ function ProviderRow({
 }
 
 const pRowStyles = StyleSheet.create({
-  container: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 12 },
-  iconCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  container: { flexDirection: 'row', alignItems: 'center', paddingVertical: SP[4] - 2, gap: SP[3] },
+  iconCircle: { width: 40, height: 40, borderRadius: R.pill, alignItems: 'center', justifyContent: 'center' },
   info: { flex: 1, gap: 2 },
-  name: { fontSize: 15, fontWeight: '600' },
-  status: { fontSize: 13 },
-  note: { fontSize: 11, marginTop: 1 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 },
-  chipText: { fontSize: 12, fontWeight: '600' },
-  button: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
-  buttonText: { fontSize: 13, fontWeight: '600' },
-  connectingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  connectingText: { fontSize: 13, fontWeight: '600' },
+  name: { fontFamily: TY.sans.semibold, fontSize: TY.size.body + 1 },
+  status: { fontFamily: TY.sans.regular, fontSize: TY.size.small + 1 },
+  note: { fontFamily: TY.sans.regular, fontSize: TY.size.micro + 1, marginTop: 1 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: SP[1], borderWidth: 1, borderRadius: R.pill, paddingHorizontal: SP[3] - 2, paddingVertical: SP[1] + 1 },
+  chipText: { fontFamily: TY.sans.semibold, fontSize: TY.size.small },
+  button: { borderWidth: 1, borderRadius: R.pill, paddingHorizontal: SP[3], paddingVertical: SP[2] - 2 },
+  buttonText: { fontFamily: TY.sans.semibold, fontSize: TY.size.small + 1 },
+  connectingRow: { flexDirection: 'row', alignItems: 'center', gap: SP[2] - 2 },
+  connectingText: { fontFamily: TY.sans.semibold, fontSize: TY.size.small + 1 },
 });
 
 // ── Main Component ─────────────────────────────────────────────────────────────
@@ -487,7 +487,7 @@ export default function SettingsScreen() {
           headerStyle: { backgroundColor: theme.bg.primary },
           headerShadowVisible: false,
           headerTintColor: theme.text.primary,
-          headerTitleStyle: { fontWeight: '700', fontSize: 17 },
+          headerTitleStyle: { fontFamily: TY.sans.bold, fontSize: TY.size.h3 - 1 },
           headerShown: true,
         }}
       />
@@ -775,42 +775,42 @@ export default function SettingsScreen() {
 function createStyles(t: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: t.bg.primary },
-    contentContainer: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40 },
-    sectionLabel: { fontSize: 11, fontWeight: '600', color: t.text.muted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, marginTop: 4 },
-    card: { backgroundColor: t.bg.elevated, borderRadius: 16, paddingHorizontal: 16, borderWidth: 1, borderColor: t.border, marginBottom: 24 },
-    settingsRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 12 },
-    settingsRowText: { flex: 1, fontSize: 15, color: t.text.primary },
+    contentContainer: { paddingHorizontal: SP[5], paddingTop: SP[4], paddingBottom: SP[8] },
+    sectionLabel: { fontFamily: TY.mono.semibold, fontSize: TY.size.tick, color: t.text.muted, textTransform: 'uppercase', letterSpacing: TY.tracking.label, marginBottom: SP[2], marginTop: SP[1] },
+    card: { backgroundColor: t.bg.elevated, borderRadius: R.md, paddingHorizontal: SP[4], borderWidth: 1, borderColor: t.border, marginBottom: SP[6] },
+    settingsRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: SP[4] - 2, gap: SP[3] },
+    settingsRowText: { flex: 1, fontFamily: TY.sans.regular, fontSize: TY.size.body + 1, color: t.text.primary },
     rowDivider: { height: 1, backgroundColor: t.border, marginLeft: 46 },
     appRowDivider: { height: 1, backgroundColor: t.border, marginLeft: 52 },
-    logoutText: { flex: 1, fontSize: 15, fontWeight: '500', color: t.status.danger },
-    footerNote: { fontSize: 11, color: t.text.muted, lineHeight: 16, textAlign: 'center', paddingHorizontal: 8, marginBottom: 8 },
-    bottomPadding: { height: 24 },
+    logoutText: { flex: 1, fontFamily: TY.sans.medium, fontSize: TY.size.body + 1, color: t.status.danger },
+    footerNote: { fontFamily: TY.sans.regular, fontSize: TY.size.tick, color: t.text.muted, lineHeight: 16, textAlign: 'center', paddingHorizontal: SP[2], marginBottom: SP[2] },
+    bottomPadding: { height: SP[6] },
 
     // Modal
     modalWrapper: { flex: 1, backgroundColor: t.bg.primary },
-    modalContent: { padding: 24, paddingBottom: 48 },
-    modalHandle: { width: 40, height: 4, backgroundColor: t.border, borderRadius: 2, alignSelf: 'center', marginBottom: 24 },
-    modalHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-    modalTitle: { fontSize: 22, fontWeight: '700', color: t.text.primary },
-    modalCloseBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center' },
-    modalDesc: { fontSize: 14, color: t.text.secondary, lineHeight: 20, marginBottom: 20 },
-    infoBox: { flexDirection: 'row', gap: 8, backgroundColor: t.bg.elevated, borderRadius: 10, padding: 12, marginBottom: 20, borderWidth: 1, borderColor: t.bg.elevated },
-    infoBoxText: { flex: 1, fontSize: 13, color: t.text.secondary, lineHeight: 18 },
-    modalFieldLabel: { fontSize: 13, color: t.text.secondary, marginBottom: 8, fontWeight: '500' },
-    modalInput: { backgroundColor: t.bg.elevated, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, color: t.text.primary, borderWidth: 1, borderColor: t.border, marginBottom: 16 },
+    modalContent: { padding: SP[6], paddingBottom: SP[9] },
+    modalHandle: { width: 40, height: 4, backgroundColor: t.border, borderRadius: 2, alignSelf: 'center', marginBottom: SP[6] },
+    modalHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SP[5] },
+    modalTitle: { fontFamily: TY.sans.bold, fontSize: TY.size.h2, color: t.text.primary, letterSpacing: TY.tracking.tight },
+    modalCloseBtn: { width: 36, height: 36, borderRadius: R.pill, backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center' },
+    modalDesc: { fontFamily: TY.sans.regular, fontSize: TY.size.body, color: t.text.secondary, lineHeight: 20, marginBottom: SP[5] },
+    infoBox: { flexDirection: 'row', gap: SP[2], backgroundColor: t.bg.elevated, borderRadius: R.sm, padding: SP[3], marginBottom: SP[5], borderWidth: 1, borderColor: t.bg.elevated },
+    infoBoxText: { flex: 1, fontFamily: TY.sans.regular, fontSize: TY.size.small + 1, color: t.text.secondary, lineHeight: 18 },
+    modalFieldLabel: { fontFamily: TY.sans.medium, fontSize: TY.size.small + 1, color: t.text.secondary, marginBottom: SP[2] },
+    modalInput: { fontFamily: TY.sans.regular, backgroundColor: t.bg.elevated, borderRadius: R.sm, paddingHorizontal: SP[4], paddingVertical: SP[4] - 2, fontSize: TY.size.body + 2, color: t.text.primary, borderWidth: 1, borderColor: t.border, marginBottom: SP[4] },
     textArea: { minHeight: 100, textAlignVertical: 'top' },
-    usernameWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: t.bg.elevated, borderRadius: 12, borderWidth: 1, borderColor: t.border, paddingLeft: 16, marginBottom: 16 },
-    usernameAt: { fontSize: 16, color: t.text.secondary, marginRight: 2 },
+    usernameWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: t.bg.elevated, borderRadius: R.sm, borderWidth: 1, borderColor: t.border, paddingLeft: SP[4], marginBottom: SP[4] },
+    usernameAt: { fontFamily: TY.sans.regular, fontSize: TY.size.body + 2, color: t.text.secondary, marginRight: 2 },
     usernameInput: { flex: 1, marginBottom: 0, borderWidth: 0, paddingLeft: 0, backgroundColor: 'transparent' },
-    sportsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 },
-    sportTag: { backgroundColor: t.bg.elevated, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: t.border },
-    sportTagSelected: { backgroundColor: t.text.primary, borderColor: t.text.primary },
-    sportTagText: { fontSize: 14, color: t.text.secondary },
-    sportTagTextSelected: { color: t.bg.primary, fontWeight: '600' },
-    saveBtn: { backgroundColor: t.text.primary, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 8 },
-    saveBtnText: { color: t.bg.primary, fontSize: 16, fontWeight: '700' },
-    cancelBtn: { alignItems: 'center', paddingVertical: 12 },
-    cancelBtnText: { color: t.text.muted, fontSize: 15 },
+    sportsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SP[2], marginBottom: SP[6] },
+    sportTag: { backgroundColor: t.bg.elevated, borderRadius: R.pill, paddingHorizontal: SP[4] - 2, paddingVertical: SP[2], borderWidth: 1, borderColor: t.border },
+    sportTagSelected: { backgroundColor: t.accent, borderColor: t.accent },
+    sportTagText: { fontFamily: TY.sans.regular, fontSize: TY.size.body, color: t.text.secondary },
+    sportTagTextSelected: { fontFamily: TY.sans.semibold, color: t.accentInk },
+    saveBtn: { backgroundColor: t.accent, borderRadius: R.sm, paddingVertical: SP[4], alignItems: 'center', marginBottom: SP[2] },
+    saveBtnText: { fontFamily: TY.sans.bold, color: t.accentInk, fontSize: TY.size.body + 2, letterSpacing: TY.tracking.tight },
+    cancelBtn: { alignItems: 'center', paddingVertical: SP[3] },
+    cancelBtnText: { fontFamily: TY.sans.medium, color: t.text.muted, fontSize: TY.size.body + 1 },
     btnDisabled: { opacity: 0.5 },
   });
 }

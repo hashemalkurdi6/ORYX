@@ -20,7 +20,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { logWeight, WeightLogResult } from '@/services/api';
 import { useTheme } from '@/contexts/ThemeContext';
-import { ThemeColors } from '@/services/theme';
+import { ThemeColors, type as TY, radius as R, space as SP } from '@/services/theme';
 
 interface Props {
   visible: boolean;
@@ -169,7 +169,7 @@ export default function WeightLogSheet({
                   activeOpacity={0.8}
                 >
                   {saving ? (
-                    <ActivityIndicator color="#000" size="small" />
+                    <ActivityIndicator color={theme.accentInk} size="small" />
                   ) : (
                     <Text style={s.saveBtnText}>Save</Text>
                   )}
@@ -188,16 +188,16 @@ function createStyles(t: ThemeColors) {
     overlay: {
       flex: 1,
       justifyContent: 'flex-end',
-      backgroundColor: 'rgba(0,0,0,0.55)',
+      backgroundColor: t.glass.shade,
     },
     sheet: {
       backgroundColor: t.bg.elevated,
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
-      paddingHorizontal: 20,
-      paddingBottom: Platform.OS === 'ios' ? 36 : 24,
-      paddingTop: 12,
-      gap: 16,
+      borderTopLeftRadius: R.lg,
+      borderTopRightRadius: R.lg,
+      paddingHorizontal: SP[5],
+      paddingBottom: Platform.OS === 'ios' ? SP[8] - 4 : SP[6],
+      paddingTop: SP[3],
+      gap: SP[4],
     },
     handle: {
       width: 36,
@@ -205,7 +205,7 @@ function createStyles(t: ThemeColors) {
       borderRadius: 2,
       backgroundColor: t.border,
       alignSelf: 'center',
-      marginBottom: 4,
+      marginBottom: SP[1],
     },
     header: {
       flexDirection: 'row',
@@ -213,23 +213,24 @@ function createStyles(t: ThemeColors) {
       justifyContent: 'space-between',
     },
     title: {
-      fontSize: 18,
-      fontWeight: '700',
+      fontFamily: TY.sans.bold,
+      fontSize: TY.size.h3,
       color: t.text.primary,
+      letterSpacing: TY.tracking.tight,
     },
     closeBtn: {
-      padding: 4,
+      padding: SP[1],
     },
     inputRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 16,
+      gap: SP[4],
     },
     stepBtn: {
       width: 44,
       height: 44,
-      borderRadius: 22,
+      borderRadius: R.pill,
       backgroundColor: t.bg.primary,
       borderWidth: 1,
       borderColor: t.border,
@@ -239,40 +240,44 @@ function createStyles(t: ThemeColors) {
     weightInputWrap: {
       flexDirection: 'row',
       alignItems: 'baseline',
-      gap: 6,
+      gap: SP[2] - 2,
     },
     weightInput: {
+      fontFamily: TY.mono.bold,
       fontSize: 42,
-      fontWeight: '700',
+      fontVariant: ['tabular-nums'],
       color: t.text.primary,
       minWidth: 90,
       textAlign: 'center',
+      letterSpacing: TY.tracking.tight,
     },
     unitLabel: {
-      fontSize: 18,
+      fontFamily: TY.mono.medium,
+      fontSize: TY.size.h3,
       color: t.text.secondary,
-      fontWeight: '500',
     },
     noteInput: {
+      fontFamily: TY.sans.regular,
       backgroundColor: t.bg.primary,
       borderWidth: 1,
       borderColor: t.border,
-      borderRadius: 10,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      fontSize: 15,
+      borderRadius: R.sm,
+      paddingHorizontal: SP[4] - 2,
+      paddingVertical: SP[3] - 2,
+      fontSize: TY.size.body + 1,
       color: t.text.primary,
     },
     saveBtn: {
-      backgroundColor: '#ffffff',
-      borderRadius: 12,
-      paddingVertical: 14,
+      backgroundColor: t.accent,
+      borderRadius: R.sm,
+      paddingVertical: SP[4] - 2,
       alignItems: 'center',
     },
     saveBtnText: {
-      fontSize: 16,
-      fontWeight: '700',
-      color: '#000000',
+      fontFamily: TY.sans.bold,
+      fontSize: TY.size.body + 2,
+      color: t.accentInk,
+      letterSpacing: TY.tracking.tight,
     },
   });
 }

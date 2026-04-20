@@ -2,18 +2,13 @@ import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
 import { useTheme } from '@/contexts/ThemeContext';
+import { type as TY } from '@/services/theme';
 
 interface RecoveryIndicatorProps {
   score: number;
   color: 'green' | 'yellow' | 'red';
   loading: boolean;
 }
-
-const COLOR_MAP: Record<'green' | 'yellow' | 'red', string> = {
-  green: '#27ae60',
-  yellow: '#888888',
-  red: '#c0392b',
-};
 
 const SIZE = 160;
 const STROKE_WIDTH = 14;
@@ -28,7 +23,10 @@ export default function RecoveryIndicator({
   const { theme } = useTheme();
   const clampedScore = Math.min(100, Math.max(0, score));
   const strokeDashoffset = CIRCUMFERENCE * (1 - clampedScore / 100);
-  const accentColor = COLOR_MAP[color];
+  const accentColor =
+    color === 'green' ? theme.readiness.high :
+    color === 'yellow' ? theme.readiness.mid :
+    theme.readiness.low;
 
   if (loading) {
     return (
@@ -93,8 +91,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scoreText: {
+    fontFamily: TY.mono.bold,
     fontSize: 48,
-    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
     letterSpacing: -2,
   },
 });

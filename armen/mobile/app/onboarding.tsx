@@ -21,7 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
-import { ThemeColors } from '@/services/theme';
+import { ThemeColors, type as TY, radius as R, space as SP } from '@/services/theme';
 import { patchOnboarding, getMe } from '@/services/api';
 import { useAuthStore } from '@/services/authStore';
 
@@ -320,7 +320,7 @@ function Screen2Sports({ sportTags, setSportTags, onNext, s, theme }: any) {
               onPress={() => toggle(label)}
               activeOpacity={0.8}
             >
-              <Ionicons name={icon as any} size={22} color={selected ? '#fff' : theme.text.secondary} />
+              <Ionicons name={icon as any} size={22} color={selected ? theme.accent : theme.text.secondary} />
               <Text style={[s.tileLabel, selected && s.tileLabelSelected]}>{label}</Text>
             </TouchableOpacity>
           );
@@ -351,9 +351,9 @@ function Screen3Goal({ primaryGoal, setPrimaryGoal, onNext, s, theme }: any) {
               onPress={() => setPrimaryGoal(label)}
               activeOpacity={0.8}
             >
-              <Ionicons name={icon as any} size={20} color={selected ? '#fff' : theme.text.secondary} style={{ marginRight: 12 }} />
+              <Ionicons name={icon as any} size={20} color={selected ? theme.accent : theme.text.secondary} style={{ marginRight: 12 }} />
               <Text style={[s.listOptionText, selected && s.listOptionTextSelected]}>{label}</Text>
-              {selected && <Ionicons name="checkmark-circle" size={20} color="#fff" style={{ marginLeft: 'auto' }} />}
+              {selected && <Ionicons name="checkmark-circle" size={20} color={theme.accent} style={{ marginLeft: 'auto' }} />}
             </TouchableOpacity>
           );
         })}
@@ -387,7 +387,7 @@ function Screen4Level({ fitnessLevel, setFitnessLevel, onNext, s, theme }: any) 
                 <Text style={[s.listOptionText, selected && s.listOptionTextSelected]}>{label}</Text>
                 <Text style={[s.listOptionSub, selected && { color: 'rgba(255,255,255,0.65)' }]}>{sub}</Text>
               </View>
-              {selected && <Ionicons name="checkmark-circle" size={20} color="#fff" />}
+              {selected && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
             </TouchableOpacity>
           );
         })}
@@ -421,7 +421,7 @@ function Screen5Frequency({ weeklyDays, setWeeklyDays, onNext, s, theme }: any) 
                 <Text style={[s.listOptionText, selected && s.listOptionTextSelected]}>{label}</Text>
                 <Text style={[s.listOptionSub, selected && { color: 'rgba(255,255,255,0.65)' }]}>{sub}</Text>
               </View>
-              {selected && <Ionicons name="checkmark-circle" size={20} color="#fff" />}
+              {selected && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
             </TouchableOpacity>
           );
         })}
@@ -556,7 +556,7 @@ function Screen7Calories({
             {tdeeData.goalAdj !== 0 && (
               <View style={s.breakdownRow}>
                 <Text style={s.breakdownLabel}>{primaryGoal} adjustment</Text>
-                <Text style={[s.breakdownValue, { color: tdeeData.goalAdj > 0 ? '#27ae60' : '#e74c3c' }]}>
+                <Text style={[s.breakdownValue, { color: tdeeData.goalAdj > 0 ? theme.status.success : theme.status.danger }]}>
                   {tdeeData.goalAdj > 0 ? '+' : ''}{tdeeData.goalAdj} kcal
                 </Text>
               </View>
@@ -617,9 +617,9 @@ function Screen8Connections({ s, theme, onNext }: any) {
             onPress={() => Alert.alert('Connect later', `Connect ${label} from your Profile after onboarding.`)}
             activeOpacity={0.8}
           >
-            <Ionicons name={icon as any} size={22} color={connected ? '#fff' : theme.text.secondary} />
+            <Ionicons name={icon as any} size={22} color={connected ? theme.accent : theme.text.secondary} />
             <Text style={[s.tileLabel, connected && s.tileLabelSelected]}>{label}</Text>
-            {connected && <Ionicons name="checkmark-circle" size={14} color="#27ae60" style={{ position: 'absolute', top: 8, right: 8 }} />}
+            {connected && <Ionicons name="checkmark-circle" size={14} color={theme.status.success} style={{ position: 'absolute', top: 8, right: 8 }} />}
           </TouchableOpacity>
         ))}
       </View>
@@ -652,7 +652,7 @@ function Screen9Time({ trainingTime, setTrainingTime, onNext, s, theme }: any) {
                 <Text style={[s.listOptionText, selected && s.listOptionTextSelected]}>{label}</Text>
                 <Text style={[s.listOptionSub, selected && { color: 'rgba(255,255,255,0.65)' }]}>{sub}</Text>
               </View>
-              {selected && <Ionicons name="checkmark-circle" size={20} color="#fff" />}
+              {selected && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
             </TouchableOpacity>
           );
         })}
@@ -705,7 +705,7 @@ function SummaryRow({ icon, label, value, theme }: { icon: string; label: string
     <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 }}>
       <Ionicons name={icon as any} size={18} color={theme.accent} />
       <Text style={{ fontSize: 13, color: theme.text.muted, width: 110 }}>{label}</Text>
-      <Text style={{ fontSize: 14, fontWeight: '600', color: theme.text.primary, flex: 1 }}>{value}</Text>
+      <Text style={{ fontSize: 14, fontFamily: TY.sans.semibold, color: theme.text.primary, flex: 1 }}>{value}</Text>
     </View>
   );
 }
@@ -726,21 +726,21 @@ function createStyles(t: ThemeColors) {
       height: '100%', backgroundColor: t.accent, borderRadius: 2,
     },
     skipBtn: { width: 40, alignItems: 'flex-end' },
-    skipText: { fontSize: 13, color: t.text.muted, fontWeight: '500' },
+    skipText: { fontSize: 13, color: t.text.muted, fontFamily: TY.sans.medium },
 
     screenContainer: { flex: 1 },
     screen: { flex: 1 },
     screenContent: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 48, flexGrow: 1 },
 
-    stepLabel: { fontSize: 12, color: t.text.muted, fontWeight: '600', letterSpacing: 1, marginBottom: 16 },
-    screenTitle: { fontSize: 26, fontWeight: '800', color: t.text.primary, marginBottom: 8, lineHeight: 34 },
+    stepLabel: { fontSize: 12, color: t.text.muted, fontFamily: TY.sans.semibold, letterSpacing: 1, marginBottom: 16 },
+    screenTitle: { fontSize: 26, fontFamily: TY.sans.bold, color: t.text.primary, marginBottom: 8, lineHeight: 34 },
     screenSubtitle: { fontSize: 14, color: t.text.muted, lineHeight: 20, marginBottom: 28 },
 
     bigInput: {
       backgroundColor: t.bg.elevated,
-      borderWidth: 1, borderColor: t.border, borderRadius: 16,
+      borderWidth: 1, borderColor: t.border, borderRadius: R.md,
       paddingHorizontal: 20, paddingVertical: 18,
-      fontSize: 22, fontWeight: '700', color: t.text.primary,
+      fontSize: 22, fontFamily: TY.sans.bold, color: t.text.primary,
       marginBottom: 32, textAlign: 'center',
     },
 
@@ -751,80 +751,80 @@ function createStyles(t: ThemeColors) {
     tile: {
       width: (SCREEN_WIDTH - 48 - 12) / 2 - 6,
       backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border,
-      borderRadius: 16, padding: 16,
+      borderRadius: R.md, padding: 16,
       alignItems: 'center', gap: 8,
     },
-    tileSelected: { borderColor: '#fff', backgroundColor: '#1a1a1a' },
-    tileLabel: { fontSize: 13, fontWeight: '600', color: t.text.secondary, textAlign: 'center' },
-    tileLabelSelected: { color: '#fff' },
+    tileSelected: { borderColor: t.accent, backgroundColor: t.bg.tint },
+    tileLabel: { fontSize: 13, fontFamily: TY.sans.semibold, color: t.text.secondary, textAlign: 'center' },
+    tileLabelSelected: { color: t.accent },
 
     // List options
     listOptions: { gap: 10, marginBottom: 28 },
     listOption: {
       flexDirection: 'row', alignItems: 'center',
       backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border,
-      borderRadius: 14, padding: 16,
+      borderRadius: R.sm, padding: 16,
     },
-    listOptionSelected: { borderColor: '#fff', backgroundColor: '#1c1c1c' },
-    listOptionText: { fontSize: 15, fontWeight: '600', color: t.text.primary },
-    listOptionTextSelected: { color: '#fff' },
+    listOptionSelected: { borderColor: t.accent, backgroundColor: t.bg.tint },
+    listOptionText: { fontSize: 15, fontFamily: TY.sans.semibold, color: t.text.primary },
+    listOptionTextSelected: { color: t.accent },
     listOptionSub: { fontSize: 12, color: t.text.muted, marginTop: 2 },
 
     // CTA button
     cta: {
-      backgroundColor: t.text.primary, borderRadius: 14,
-      paddingVertical: 16, alignItems: 'center',
+      backgroundColor: t.accent, borderRadius: R.sm,
+      paddingVertical: SP[4], alignItems: 'center',
     },
     ctaDim: { opacity: 0.35 },
-    ctaText: { fontSize: 16, fontWeight: '700', color: t.bg.primary },
+    ctaText: { fontSize: TY.size.body + 2, fontFamily: TY.sans.bold, color: t.accentInk, letterSpacing: TY.tracking.tight },
 
     // Body stats
-    fieldLabel: { fontSize: 13, color: t.text.secondary, fontWeight: '600', marginBottom: 8, marginTop: 16 },
+    fieldLabel: { fontSize: 13, color: t.text.secondary, fontFamily: TY.sans.semibold, marginBottom: 8, marginTop: 16 },
     fieldInput: {
       backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border,
-      borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14,
+      borderRadius: R.sm, paddingHorizontal: 16, paddingVertical: 14,
       fontSize: 16, color: t.text.primary,
     },
     unitRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     unitToggle: { flexDirection: 'row', gap: 6 },
     unitBtn: {
-      paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8,
+      paddingHorizontal: 12, paddingVertical: 5, borderRadius: R.xs,
       backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border,
     },
     unitBtnActive: { backgroundColor: t.text.primary, borderColor: t.text.primary },
-    unitBtnText: { fontSize: 12, fontWeight: '600', color: t.text.muted },
+    unitBtnText: { fontSize: 12, fontFamily: TY.sans.semibold, color: t.text.muted },
     unitBtnTextActive: { color: t.bg.primary },
     sexRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
     sexBtn: {
-      flex: 1, paddingVertical: 12, borderRadius: 10,
+      flex: 1, paddingVertical: 12, borderRadius: R.sm,
       backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border, alignItems: 'center',
     },
     sexBtnActive: { backgroundColor: t.text.primary, borderColor: t.text.primary },
-    sexBtnText: { fontSize: 13, fontWeight: '600', color: t.text.secondary },
+    sexBtnText: { fontSize: 13, fontFamily: TY.sans.semibold, color: t.text.secondary },
     sexBtnTextActive: { color: t.bg.primary },
 
     // Calorie screen
     calorieHero: { alignItems: 'center', marginBottom: 24 },
-    calorieHeroNumber: { fontSize: 64, fontWeight: '900', color: t.text.primary, lineHeight: 72 },
+    calorieHeroNumber: { fontSize: 64, fontFamily: TY.sans.bold, color: t.text.primary, lineHeight: 72 },
     calorieHeroUnit: { fontSize: 16, color: t.text.muted, marginTop: 4 },
     breakdownCard: {
-      backgroundColor: t.bg.elevated, borderRadius: 14, padding: 16,
+      backgroundColor: t.bg.elevated, borderRadius: R.sm, padding: 16,
       borderWidth: 1, borderColor: t.border, marginBottom: 20,
     },
     breakdownRow: {
       flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8,
     },
     breakdownLabel: { fontSize: 13, color: t.text.muted },
-    breakdownValue: { fontSize: 14, fontWeight: '700', color: t.text.primary },
+    breakdownValue: { fontSize: 14, fontFamily: TY.sans.bold, color: t.text.primary },
     customToggleBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 },
     customToggleText: { fontSize: 13, color: t.text.muted },
 
     // Done screen
     doneIconWrap: { marginTop: 24, marginBottom: 20, alignItems: 'center' },
-    doneTitle: { fontSize: 26, fontWeight: '800', color: t.text.primary, textAlign: 'center', marginBottom: 12 },
+    doneTitle: { fontSize: 26, fontFamily: TY.sans.bold, color: t.text.primary, textAlign: 'center', marginBottom: 12 },
     doneSubtitle: { fontSize: 15, color: t.text.muted, textAlign: 'center', lineHeight: 22, marginBottom: 28 },
     summaryCard: {
-      backgroundColor: t.bg.elevated, borderRadius: 16, padding: 8,
+      backgroundColor: t.bg.elevated, borderRadius: R.md, padding: 8,
       borderWidth: 1, borderColor: t.border, width: '100%',
       paddingHorizontal: 16,
     },

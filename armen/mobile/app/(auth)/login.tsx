@@ -16,7 +16,7 @@ import { Link, router } from 'expo-router';
 import { login, getMe } from '@/services/api';
 import { useAuthStore } from '@/services/authStore';
 import { useTheme } from '@/contexts/ThemeContext';
-import { ThemeColors } from '@/services/theme';
+import { ThemeColors, type as TY, radius as R, space as SP } from '@/services/theme';
 
 export default function LoginScreen() {
   const { theme } = useTheme();
@@ -135,7 +135,7 @@ export default function LoginScreen() {
             activeOpacity={1}
           >
             {loading ? (
-              <ActivityIndicator color={theme.bg.primary} size="small" />
+              <ActivityIndicator color={theme.accentInk} size="small" />
             ) : (
               <Text style={s.buttonText}>Log In</Text>
             )}
@@ -158,48 +158,50 @@ export default function LoginScreen() {
 function createStyles(t: ThemeColors) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: t.bg.primary },
-    scroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 26, paddingVertical: 60 },
-    wordmarkSection: { alignItems: 'center', marginBottom: 52 },
-    wordmark: { fontSize: 32, fontWeight: '900', color: t.text.primary, letterSpacing: 6 },
-    tagline: { fontSize: 14, color: t.text.muted, marginTop: 8, letterSpacing: 0.5 },
+    scroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: SP[6] + 2, paddingVertical: SP[10] - 4 },
+    wordmarkSection: { alignItems: 'center', marginBottom: SP[9] + 4 },
+    wordmark: { fontFamily: TY.sans.bold, fontSize: TY.size.h1 + 4, color: t.text.primary, letterSpacing: 6 },
+    tagline: { fontFamily: TY.sans.regular, fontSize: TY.size.body, color: t.text.muted, marginTop: SP[2], letterSpacing: 0.5 },
     errorBox: {
-      backgroundColor: 'rgba(192,57,43,0.12)',
+      backgroundColor: t.status.danger + '1F',
       borderLeftWidth: 3,
       borderLeftColor: t.status.danger,
-      borderRadius: 10,
-      padding: 14,
-      marginBottom: 20,
+      borderRadius: R.sm,
+      padding: SP[4] - 2,
+      marginBottom: SP[5],
     },
-    errorText: { color: t.status.danger, fontSize: 14, lineHeight: 20 },
-    inputGroup: { marginBottom: 16 },
-    label: { fontSize: 13, color: t.text.secondary, marginBottom: 8, fontWeight: '500', letterSpacing: 0.3 },
-    passwordLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-    forgotText: { fontSize: 13, color: t.text.muted, textDecorationLine: 'underline' },
+    errorText: { fontFamily: TY.sans.regular, color: t.status.danger, fontSize: TY.size.body, lineHeight: 20 },
+    inputGroup: { marginBottom: SP[4] },
+    label: { fontFamily: TY.sans.medium, fontSize: TY.size.small + 1, color: t.text.secondary, marginBottom: SP[2], letterSpacing: 0.3 },
+    passwordLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SP[2] },
+    forgotText: { fontFamily: TY.sans.regular, fontSize: TY.size.small + 1, color: t.text.muted, textDecorationLine: 'underline' },
     input: {
+      fontFamily: TY.sans.regular,
       backgroundColor: t.bg.elevated,
-      borderRadius: 12,
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-      fontSize: 16,
+      borderRadius: R.sm,
+      paddingHorizontal: SP[4],
+      paddingVertical: SP[4] - 2,
+      fontSize: TY.size.body + 2,
       color: t.text.primary,
       borderWidth: 1,
       borderColor: t.border,
     },
     inputFocused: { borderColor: t.accent },
     button: {
-      backgroundColor: t.text.primary,
-      borderRadius: 12,
-      paddingVertical: 16,
+      backgroundColor: t.accent,
+      borderRadius: R.sm,
+      paddingVertical: SP[4],
       alignItems: 'center',
     },
     buttonDisabled: { opacity: 0.5 },
     buttonText: {
-      color: t.bg.primary,
-      fontSize: 16,
-      fontWeight: '700',
+      fontFamily: TY.sans.bold,
+      color: t.accentInk,
+      fontSize: TY.size.body + 2,
+      letterSpacing: TY.tracking.tight,
     },
-    footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 28 },
-    footerText: { color: t.text.muted, fontSize: 14 },
-    linkText: { color: t.text.primary, fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
+    footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: SP[7] - 4 },
+    footerText: { fontFamily: TY.sans.regular, color: t.text.muted, fontSize: TY.size.body },
+    linkText: { fontFamily: TY.sans.semibold, color: t.text.primary, fontSize: TY.size.body, textDecorationLine: 'underline' },
   });
 }

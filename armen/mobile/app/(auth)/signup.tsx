@@ -36,7 +36,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
-import { ThemeColors } from '@/services/theme';
+import { ThemeColors, type as TY, radius as R, space as SP } from '@/services/theme';
 import { signupComplete, checkUsername, getMe } from '@/services/api';
 import { useAuthStore } from '@/services/authStore';
 
@@ -384,7 +384,7 @@ function S1Welcome({ onCreateAccount, s, theme }: any) {
         onPress={() => router.push('/(auth)/login')}
         activeOpacity={0.75}
       >
-        <Text style={s.loginLinkText}>Already have an account? <Text style={{ color: theme.text.primary, fontWeight: '700' }}>Log In</Text></Text>
+        <Text style={s.loginLinkText}>Already have an account? <Text style={{ color: theme.text.primary, fontFamily: TY.sans.bold }}>Log In</Text></Text>
       </TouchableOpacity>
     </View>
   );
@@ -398,8 +398,8 @@ function S2Account({
   error, onContinue, s, theme,
 }: any) {
   const statusIcon = usernameStatus === 'checking' ? null
-    : usernameStatus === 'available' ? <Ionicons name="checkmark-circle" size={18} color="#27ae60" />
-    : usernameStatus === 'taken' ? <Ionicons name="close-circle" size={18} color="#e74c3c" />
+    : usernameStatus === 'available' ? <Ionicons name="checkmark-circle" size={18} color={theme.status.success} />
+    : usernameStatus === 'taken' ? <Ionicons name="close-circle" size={18} color={theme.status.danger} />
     : null;
 
   return (
@@ -504,7 +504,7 @@ function S4Sports({ sportTags, setSportTags, onNext, s, theme }: any) {
           const sel = sportTags.includes(label);
           return (
             <TouchableOpacity key={label} style={[s.tile, sel && s.tileOn]} onPress={() => toggle(label)} activeOpacity={0.8}>
-              <Ionicons name={icon as any} size={22} color={sel ? '#fff' : theme.text.secondary} />
+              <Ionicons name={icon as any} size={22} color={sel ? theme.accent : theme.text.secondary} />
               <Text style={[s.tileLabel, sel && s.tileLabelOn]}>{label}</Text>
             </TouchableOpacity>
           );
@@ -537,9 +537,9 @@ function S5Goal({ primaryGoal, setPrimaryGoal, fatLossRate, setFatLossRate, onNe
               onPress={() => { setPrimaryGoal(label); if (label !== 'Lose Fat') setFatLossRate(''); }}
               activeOpacity={0.8}
             >
-              <Ionicons name={icon as any} size={20} color={sel ? '#fff' : theme.text.secondary} style={{ marginRight: 12 }} />
+              <Ionicons name={icon as any} size={20} color={sel ? theme.accent : theme.text.secondary} style={{ marginRight: 12 }} />
               <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
-              {sel && <Ionicons name="checkmark-circle" size={20} color="#fff" style={{ marginLeft: 'auto' }} />}
+              {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} style={{ marginLeft: 'auto' }} />}
             </TouchableOpacity>
           );
         })}
@@ -559,7 +559,7 @@ function S5Goal({ primaryGoal, setPrimaryGoal, fatLossRate, setFatLossRate, onNe
                       {sub}  ·  {adj} kcal/day
                     </Text>
                   </View>
-                  {sel && <Ionicons name="checkmark-circle" size={20} color="#fff" />}
+                  {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
                 </TouchableOpacity>
               );
             })}
@@ -591,7 +591,7 @@ function S6Level({ fitnessLevel, setFitnessLevel, onNext, s, theme }: any) {
                 <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
                 <Text style={[s.rowSub, sel && { color: 'rgba(255,255,255,0.6)' }]}>{sub}</Text>
               </View>
-              {sel && <Ionicons name="checkmark-circle" size={20} color="#fff" />}
+              {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
             </TouchableOpacity>
           );
         })}
@@ -620,7 +620,7 @@ function S7Frequency({ weeklyDays, setWeeklyDays, onNext, s, theme }: any) {
                 <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
                 <Text style={[s.rowSub, sel && { color: 'rgba(255,255,255,0.6)' }]}>{sub}</Text>
               </View>
-              {sel && <Ionicons name="checkmark-circle" size={20} color="#fff" />}
+              {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
             </TouchableOpacity>
           );
         })}
@@ -749,7 +749,7 @@ function S9Calories({ tdeeData, useCustom, setUseCustom, customStr, setCustomStr
               <BRow
                 label={`${goalLabel} adjustment`}
                 value={`${tdeeData.goalAdj > 0 ? '+' : ''}${tdeeData.goalAdj} kcal`}
-                color={tdeeData.goalAdj > 0 ? '#27ae60' : '#e74c3c'}
+                color={tdeeData.goalAdj > 0 ? theme.status.success : theme.status.danger}
                 theme={theme}
               />
             )}
@@ -778,7 +778,7 @@ function BRow({ label, value, color, theme }: { label: string; value: string; co
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
       <Text style={{ fontSize: 13, color: theme.text.muted }}>{label}</Text>
-      <Text style={{ fontSize: 14, fontWeight: '700', color: color ?? theme.text.primary }}>{value}</Text>
+      <Text style={{ fontSize: 14, fontFamily: TY.sans.bold, color: color ?? theme.text.primary }}>{value}</Text>
     </View>
   );
 }
@@ -805,9 +805,9 @@ function S10Connections({ s, theme, onNext }: any) {
             onPress={() => Alert.alert('Connect later', `Connect ${label} from your Profile after setup.`)}
             activeOpacity={0.8}
           >
-            <Ionicons name={icon as any} size={22} color={connected ? '#fff' : theme.text.secondary} />
+            <Ionicons name={icon as any} size={22} color={connected ? theme.accent : theme.text.secondary} />
             <Text style={[s.tileLabel, connected && s.tileLabelOn]}>{label}</Text>
-            {connected && <Ionicons name="checkmark-circle" size={14} color="#27ae60" style={{ position: 'absolute', top: 8, right: 8 }} />}
+            {connected && <Ionicons name="checkmark-circle" size={14} color={theme.status.success} style={{ position: 'absolute', top: 8, right: 8 }} />}
           </TouchableOpacity>
         ))}
       </View>
@@ -835,7 +835,7 @@ function S11Time({ trainingTime, setTrainingTime, onNext, s, theme }: any) {
                 <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
                 <Text style={[s.rowSub, sel && { color: 'rgba(255,255,255,0.6)' }]}>{sub}</Text>
               </View>
-              {sel && <Ionicons name="checkmark-circle" size={20} color="#fff" />}
+              {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
             </TouchableOpacity>
           );
         })}
@@ -883,7 +883,7 @@ function S12Done({ displayName, sportTags, primaryGoal, finalCalories, saving, e
         activeOpacity={0.85}
       >
         {saving
-          ? <ActivityIndicator color="#000" size="small" />
+          ? <ActivityIndicator color={theme.accentInk} size="small" />
           : <Text style={s.ctaText}>Enter ORYX</Text>
         }
       </TouchableOpacity>
@@ -896,7 +896,7 @@ function SRow({ icon, label, value, theme }: { icon: string; label: string; valu
     <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 }}>
       <Ionicons name={icon as any} size={18} color={theme.accent} />
       <Text style={{ fontSize: 13, color: theme.text.muted, width: 110 }}>{label}</Text>
-      <Text style={{ fontSize: 14, fontWeight: '600', color: theme.text.primary, flex: 1 }}>{value}</Text>
+      <Text style={{ fontSize: 14, fontFamily: TY.sans.semibold, color: theme.text.primary, flex: 1 }}>{value}</Text>
     </View>
   );
 }
@@ -915,47 +915,47 @@ function styles(t: ThemeColors) {
     progressTrack: { flex: 1, height: 4, backgroundColor: t.border, borderRadius: 2, overflow: 'hidden' },
     progressFill: { height: '100%', backgroundColor: t.accent, borderRadius: 2 },
     skipBtn: { width: 40, alignItems: 'flex-end' },
-    skipText: { fontSize: 13, color: t.text.muted, fontWeight: '500' },
+    skipText: { fontSize: 13, color: t.text.muted, fontFamily: TY.sans.medium },
 
     screenWrap: { flex: 1 },
     screen: { flex: 1 },
     content: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 48, flexGrow: 1 },
 
     // Welcome
-    wordmark: { fontSize: 38, fontWeight: '900', color: t.text.primary, letterSpacing: 6 },
+    wordmark: { fontSize: 38, fontFamily: TY.sans.bold, color: t.text.primary, letterSpacing: 6 },
     tagline: { fontSize: 15, color: t.text.muted, marginTop: 10, letterSpacing: 0.5 },
     loginLinkBtn: { marginTop: 20 },
     loginLinkText: { fontSize: 14, color: t.text.muted, textAlign: 'center' },
 
     // Typography
-    stepLabel: { fontSize: 12, color: t.text.muted, fontWeight: '600', letterSpacing: 1, marginBottom: 16 },
-    title: { fontSize: 26, fontWeight: '800', color: t.text.primary, marginBottom: 8, lineHeight: 34 },
+    stepLabel: { fontSize: 12, color: t.text.muted, fontFamily: TY.sans.semibold, letterSpacing: 1, marginBottom: 16 },
+    title: { fontSize: 26, fontFamily: TY.sans.bold, color: t.text.primary, marginBottom: 8, lineHeight: 34 },
     subtitle: { fontSize: 14, color: t.text.muted, lineHeight: 20, marginBottom: 24 },
 
     // Form
-    label: { fontSize: 13, color: t.text.secondary, fontWeight: '600', marginBottom: 8, marginTop: 14 },
-    labelOpt: { fontWeight: '400', color: t.text.muted },
+    label: { fontSize: 13, color: t.text.secondary, fontFamily: TY.sans.semibold, marginBottom: 8, marginTop: 14 },
+    labelOpt: { fontFamily: TY.sans.regular, color: t.text.muted },
     input: {
       backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border,
-      borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14,
+      borderRadius: R.sm, paddingHorizontal: 16, paddingVertical: 14,
       fontSize: 16, color: t.text.primary,
     },
     usernameRow: {
       flexDirection: 'row', alignItems: 'center',
       backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border,
-      borderRadius: 12, paddingHorizontal: 16,
+      borderRadius: R.sm, paddingHorizontal: 16,
     },
     usernameAt: { fontSize: 16, color: t.text.secondary, marginRight: 4 },
     usernameInput: { flex: 1, paddingVertical: 14, fontSize: 16, color: t.text.primary },
     bigInput: {
-      backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border, borderRadius: 16,
+      backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border, borderRadius: R.md,
       paddingHorizontal: 20, paddingVertical: 18,
-      fontSize: 22, fontWeight: '700', color: t.text.primary,
+      fontSize: 22, fontFamily: TY.sans.bold, color: t.text.primary,
       marginBottom: 28, textAlign: 'center',
     },
     errorBox: {
       backgroundColor: 'rgba(192,57,43,0.12)', borderLeftWidth: 3, borderLeftColor: t.status.danger,
-      borderRadius: 10, padding: 14, marginBottom: 16,
+      borderRadius: R.sm, padding: 14, marginBottom: 16,
     },
     errorText: { color: t.status.danger, fontSize: 14, lineHeight: 20 },
 
@@ -964,28 +964,28 @@ function styles(t: ThemeColors) {
     tile: {
       width: (SW - 48 - 12) / 2 - 6,
       backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border,
-      borderRadius: 16, padding: 16, alignItems: 'center', gap: 8,
+      borderRadius: R.md, padding: 16, alignItems: 'center', gap: 8,
     },
-    tileOn: { borderColor: '#fff', backgroundColor: '#1a1a1a' },
-    tileLabel: { fontSize: 13, fontWeight: '600', color: t.text.secondary, textAlign: 'center' },
-    tileLabelOn: { color: '#fff' },
+    tileOn: { borderColor: t.accent, backgroundColor: t.bg.tint },
+    tileLabel: { fontSize: 13, fontFamily: TY.sans.semibold, color: t.text.secondary, textAlign: 'center' },
+    tileLabelOn: { color: t.accent },
 
     // List options
     list: { gap: 10, marginBottom: 24 },
     row: {
       flexDirection: 'row', alignItems: 'center',
       backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border,
-      borderRadius: 14, padding: 16,
+      borderRadius: R.sm, padding: 16,
     },
-    rowOn: { borderColor: '#fff', backgroundColor: '#1c1c1c' },
-    rowText: { fontSize: 15, fontWeight: '600', color: t.text.primary },
-    rowTextOn: { color: '#fff' },
+    rowOn: { borderColor: t.accent, backgroundColor: t.bg.tint },
+    rowText: { fontSize: 15, fontFamily: TY.sans.semibold, color: t.text.primary },
+    rowTextOn: { color: t.accent },
     rowSub: { fontSize: 12, color: t.text.muted, marginTop: 2 },
 
     // CTA
-    cta: { backgroundColor: t.text.primary, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
+    cta: { backgroundColor: t.accent, borderRadius: R.sm, paddingVertical: SP[4], alignItems: 'center' },
     ctaDim: { opacity: 0.35 },
-    ctaText: { fontSize: 16, fontWeight: '700', color: t.bg.primary },
+    ctaText: { fontSize: TY.size.body + 2, fontFamily: TY.sans.bold, color: t.accentInk, letterSpacing: TY.tracking.tight },
 
     // Birthday inputs
     bdRow: { flexDirection: 'row', gap: 10, marginBottom: 4 },
@@ -996,27 +996,27 @@ function styles(t: ThemeColors) {
     unitRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     unitToggle: { flexDirection: 'row', gap: 6 },
     unitBtn: {
-      paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8,
+      paddingHorizontal: 12, paddingVertical: 5, borderRadius: R.xs,
       backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border,
     },
     unitBtnOn: { backgroundColor: t.text.primary, borderColor: t.text.primary },
-    unitBtnTxt: { fontSize: 12, fontWeight: '600', color: t.text.muted },
+    unitBtnTxt: { fontSize: 12, fontFamily: TY.sans.semibold, color: t.text.muted },
     unitBtnTxtOn: { color: t.bg.primary },
     sexRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
     sexBtn: {
-      flex: 1, paddingVertical: 12, borderRadius: 10,
+      flex: 1, paddingVertical: 12, borderRadius: R.sm,
       backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border, alignItems: 'center',
     },
     sexBtnOn: { backgroundColor: t.text.primary, borderColor: t.text.primary },
-    sexBtnTxt: { fontSize: 13, fontWeight: '600', color: t.text.secondary },
+    sexBtnTxt: { fontSize: 13, fontFamily: TY.sans.semibold, color: t.text.secondary },
     sexBtnTxtOn: { color: t.bg.primary },
 
     // Calorie screen
     calHero: { alignItems: 'center', marginBottom: 20 },
-    calNum: { fontSize: 64, fontWeight: '900', color: t.text.primary, lineHeight: 72 },
+    calNum: { fontSize: 64, fontFamily: TY.sans.bold, color: t.text.primary, lineHeight: 72 },
     calUnit: { fontSize: 16, color: t.text.muted, marginTop: 4 },
     breakCard: {
-      backgroundColor: t.bg.elevated, borderRadius: 14, padding: 16,
+      backgroundColor: t.bg.elevated, borderRadius: R.sm, padding: 16,
       borderWidth: 1, borderColor: t.border, marginBottom: 16,
     },
     customToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
@@ -1024,10 +1024,10 @@ function styles(t: ThemeColors) {
 
     // Done screen
     doneIcon: { marginTop: 16, marginBottom: 16, alignItems: 'center' },
-    doneTitle: { fontSize: 26, fontWeight: '800', color: t.text.primary, textAlign: 'center', marginBottom: 12 },
+    doneTitle: { fontSize: 26, fontFamily: TY.sans.bold, color: t.text.primary, textAlign: 'center', marginBottom: 12 },
     doneSub: { fontSize: 15, color: t.text.muted, textAlign: 'center', lineHeight: 22, marginBottom: 24 },
     summaryCard: {
-      backgroundColor: t.bg.elevated, borderRadius: 16, borderWidth: 1, borderColor: t.border,
+      backgroundColor: t.bg.elevated, borderRadius: R.md, borderWidth: 1, borderColor: t.border,
       width: '100%', paddingHorizontal: 16,
     },
     summaryDiv: { height: 1, backgroundColor: t.border },

@@ -2,10 +2,10 @@
  * DeloadCard — surface-level recommendation card shown on the dashboard.
  * Opens a detail modal explaining each signal that contributed to the score.
  *
- * Color convention (intentionally outside the strict monochrome palette):
- *   consider     → amber  #d97706
- *   recommended  → orange #e67e22
- *   urgent       → red    #c0392b  (theme.status.danger)
+ * Color convention (maps severity to the status scale):
+ *   consider     → t.status.warn
+ *   recommended  → t.status.warn
+ *   urgent       → t.status.danger
  */
 
 import { useState } from 'react';
@@ -21,16 +21,16 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { DeloadRecommendation, SignalScore } from '@/services/api';
 import { useTheme } from '@/contexts/ThemeContext';
-import { ThemeColors } from '@/services/theme';
+import { ThemeColors, type as TY, radius as R, space as SP } from '@/services/theme';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 type Level = 'consider' | 'recommended' | 'urgent';
 
-function accentForLevel(level: Level): string {
-  if (level === 'urgent') return '#c0392b';
-  if (level === 'recommended') return '#e67e22';
-  return '#d97706';
+function accentForLevel(level: Level, t: ThemeColors): string {
+  if (level === 'urgent') return t.status.danger;
+  if (level === 'recommended') return t.status.warn;
+  return t.status.warn;
 }
 
 function titleForLevel(level: Level): string {
@@ -39,10 +39,10 @@ function titleForLevel(level: Level): string {
   return 'Consider a Deload';
 }
 
-function signalBarColor(score: number): string {
-  if (score >= 65) return '#c0392b';
-  if (score >= 40) return '#e67e22';
-  return '#27ae60';
+function signalBarColor(score: number, t: ThemeColors): string {
+  if (score >= 65) return t.status.danger;
+  if (score >= 40) return t.status.warn;
+  return t.status.success;
 }
 
 function confidenceLabel(confidence: 'low' | 'medium' | 'high'): string {
@@ -60,7 +60,7 @@ function SignalRow({
   signal: SignalScore;
   t: ThemeColors;
 }) {
-  const barColor = signal.data_available ? signalBarColor(signal.score) : t.border;
+  const barColor = signal.data_available ? signalBarColor(signal.score, t) : t.border;
   const barWidth = signal.data_available ? `${Math.round(signal.score)}%` : '0%';
 
   return (
@@ -107,7 +107,7 @@ function DeloadDetailModal({
   const { theme: t } = useTheme();
   const ds = detailStyles(t);
   const level = rec.recommendation as Level;
-  const accent = accentForLevel(level);
+  const accent = accentForLevel(level, t);
 
   return (
     <Modal
@@ -193,7 +193,7 @@ export default function DeloadCard({ recommendation, loading, onDismiss }: Props
   }
 
   const level = recommendation.recommendation as Level;
-  const accent = accentForLevel(level);
+  const accent = accentForLevel(level, t);
   const title = titleForLevel(level);
 
   return (
@@ -252,13 +252,13 @@ function cardStyles(t: ThemeColors) {
   return StyleSheet.create({
     card: {
       backgroundColor: t.bg.elevated,
-      borderRadius: 16,
-      padding: 16,
+      borderRadius: R.md,
+      padding: SP[4],
       borderWidth: 1,
       borderColor: t.border,
       borderLeftWidth: 3,
-      marginBottom: 12,
-      gap: 8,
+      marginBottom: SP[3],
+      gap: SP[2],
     },
     headerRow: {
       flexDirection: 'row',
@@ -268,22 +268,24 @@ function cardStyles(t: ThemeColors) {
     iconAndTitle: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
+      gap: SP[2] - 2,
     },
     label: {
-      fontSize: 10,
-      fontWeight: '600',
-      letterSpacing: 1,
+      fontFamily: TY.mono.semibold,
+      fontSize: TY.size.micro,
+      letterSpacing: TY.tracking.label,
       textTransform: 'uppercase',
     },
     title: {
-      fontSize: 17,
-      fontWeight: '700',
+      fontFamily: TY.sans.bold,
+      fontSize: TY.size.h3 - 1,
       color: t.text.primary,
       lineHeight: 22,
+      letterSpacing: TY.tracking.tight,
     },
     reason: {
-      fontSize: 14,
+      fontFamily: TY.sans.regular,
+      fontSize: TY.size.body,
       color: t.text.secondary,
       lineHeight: 20,
     },
@@ -292,22 +294,24 @@ function cardStyles(t: ThemeColors) {
       alignItems: 'center',
     },
     metaText: {
-      fontSize: 12,
+      fontFamily: TY.sans.regular,
+      fontSize: TY.size.small,
       color: t.text.muted,
     },
     detailButton: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 6,
-      paddingVertical: 10,
-      borderRadius: 10,
+      gap: SP[2] - 2,
+      paddingVertical: SP[3] - 2,
+      borderRadius: R.sm,
       borderWidth: 1,
-      marginTop: 4,
+      marginTop: SP[1],
     },
     detailButtonText: {
-      fontSize: 14,
-      fontWeight: '600',
+      fontFamily: TY.sans.semibold,
+      fontSize: TY.size.body,
+      letterSpacing: TY.tracking.tight,
     },
   });
 }
@@ -319,8 +323,8 @@ function detailStyles(t: ThemeColors) {
       backgroundColor: t.bg.primary,
     },
     content: {
-      padding: 24,
-      paddingBottom: 60,
+      padding: SP[6],
+      paddingBottom: SP[10],
     },
     handle: {
       width: 40,
@@ -328,67 +332,71 @@ function detailStyles(t: ThemeColors) {
       backgroundColor: t.border,
       borderRadius: 2,
       alignSelf: 'center',
-      marginBottom: 24,
+      marginBottom: SP[6],
     },
     titleRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       justifyContent: 'space-between',
       borderLeftWidth: 3,
-      paddingLeft: 14,
-      marginBottom: 20,
+      paddingLeft: SP[4] - 2,
+      marginBottom: SP[5],
     },
     titleTextBlock: {
       flex: 1,
-      gap: 4,
+      gap: SP[1],
     },
     modalTitle: {
-      fontSize: 22,
-      fontWeight: '700',
+      fontFamily: TY.sans.bold,
+      fontSize: TY.size.h2,
       color: t.text.primary,
+      letterSpacing: TY.tracking.tight,
     },
     confidenceChip: {
-      fontSize: 13,
+      fontFamily: TY.sans.regular,
+      fontSize: TY.size.small + 1,
     },
     scoreRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: 10,
+      marginBottom: SP[3] - 2,
     },
     scoreLabel: {
-      fontSize: 10,
-      fontWeight: '600',
+      fontFamily: TY.mono.semibold,
+      fontSize: TY.size.micro,
       color: t.text.muted,
       textTransform: 'uppercase',
-      letterSpacing: 1.5,
+      letterSpacing: TY.tracking.label,
     },
     scoreValue: {
-      fontSize: 28,
-      fontWeight: '800',
+      fontFamily: TY.mono.bold,
+      fontSize: TY.size.h1,
+      letterSpacing: TY.tracking.tight,
     },
     scoreMax: {
-      fontSize: 16,
-      fontWeight: '400',
-      color: '#555555',
+      fontFamily: TY.mono.regular,
+      fontSize: TY.size.body + 2,
+      color: t.text.muted,
     },
     primaryReason: {
-      fontSize: 15,
+      fontFamily: TY.sans.regular,
+      fontSize: TY.size.body + 1,
       color: t.text.secondary,
       lineHeight: 22,
-      marginBottom: 28,
+      marginBottom: SP[7] - 4,
     },
     sectionTitle: {
-      fontSize: 10,
-      fontWeight: '600',
+      fontFamily: TY.mono.semibold,
+      fontSize: TY.size.micro,
       color: t.text.muted,
       textTransform: 'uppercase',
-      letterSpacing: 1.5,
-      marginBottom: 16,
+      letterSpacing: TY.tracking.label,
+      marginBottom: SP[4],
     },
     signalRow: {
-      marginBottom: 20,
-      gap: 6,
+      marginBottom: SP[5],
+      gap: SP[2] - 2,
     },
     signalHeader: {
       flexDirection: 'row',
@@ -396,16 +404,17 @@ function detailStyles(t: ThemeColors) {
       justifyContent: 'space-between',
     },
     signalLabel: {
-      fontSize: 14,
-      fontWeight: '600',
+      fontFamily: TY.sans.semibold,
+      fontSize: TY.size.body,
       color: t.text.primary,
     },
     signalScore: {
-      fontSize: 14,
-      fontWeight: '700',
+      fontFamily: TY.mono.bold,
+      fontSize: TY.size.body,
     },
     signalNoData: {
-      fontSize: 12,
+      fontFamily: TY.sans.regular,
+      fontSize: TY.size.small,
       color: t.text.muted,
     },
     barTrack: {
@@ -419,45 +428,49 @@ function detailStyles(t: ThemeColors) {
       borderRadius: 2,
     },
     signalExplanation: {
-      fontSize: 13,
+      fontFamily: TY.sans.regular,
+      fontSize: TY.size.small + 1,
       color: t.text.secondary,
       lineHeight: 19,
     },
     durationCard: {
       flexDirection: 'row',
-      gap: 12,
+      gap: SP[3],
       backgroundColor: t.bg.elevated,
-      borderRadius: 12,
-      padding: 14,
+      borderRadius: R.sm,
+      padding: SP[4] - 2,
       borderWidth: 1,
       borderColor: t.border,
-      marginTop: 4,
-      marginBottom: 28,
+      marginTop: SP[1],
+      marginBottom: SP[7] - 4,
       alignItems: 'flex-start',
     },
     durationText: {
       flex: 1,
-      fontSize: 14,
+      fontFamily: TY.sans.regular,
+      fontSize: TY.size.body,
       color: t.text.secondary,
       lineHeight: 20,
     },
     primaryBtn: {
       borderWidth: 1,
-      borderRadius: 12,
-      paddingVertical: 14,
+      borderRadius: R.sm,
+      paddingVertical: SP[4] - 2,
       alignItems: 'center',
-      marginBottom: 12,
+      marginBottom: SP[3],
     },
     primaryBtnText: {
-      fontSize: 15,
-      fontWeight: '600',
+      fontFamily: TY.sans.semibold,
+      fontSize: TY.size.body + 1,
+      letterSpacing: TY.tracking.tight,
     },
     ghostBtn: {
       alignItems: 'center',
-      paddingVertical: 12,
+      paddingVertical: SP[3],
     },
     ghostBtnText: {
-      fontSize: 15,
+      fontFamily: TY.sans.medium,
+      fontSize: TY.size.body + 1,
       color: t.text.muted,
     },
   });

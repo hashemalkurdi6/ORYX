@@ -38,6 +38,7 @@ import {
   PostComment,
 } from '@/services/api';
 import apiClient from '@/services/api';
+import { theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -75,12 +76,12 @@ function Avatar({
         width: size,
         height: size,
         borderRadius: size / 2,
-        backgroundColor: '#2a2a2a',
+        backgroundColor: T.border,
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
-      <Text style={{ fontSize: size * 0.35, fontWeight: '700', color: '#e0e0e0' }}>
+      <Text style={{ fontSize: size * 0.35, fontFamily: TY.sans.bold, color: T.text.body }}>
         {initials || '?'}
       </Text>
     </View>
@@ -96,33 +97,33 @@ function OryxDataCard({ data }: { data: Post['oryx_data_card_json'] }) {
 
   if (ptype === 'workout') {
     return (
-      <View style={{ backgroundColor: '#1a1a1a', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#2a2a2a', gap: 8 }}>
-        <Text style={{ fontSize: 9, color: '#555555', letterSpacing: 2, textTransform: 'uppercase' }}>WORKOUT</Text>
+      <View style={{ backgroundColor: T.bg.elevated, borderRadius: R.md, padding: 16, borderWidth: 1, borderColor: T.border, gap: 8 }}>
+        <Text style={{ fontSize: 9, color: T.text.muted, letterSpacing: 2, textTransform: 'uppercase' }}>WORKOUT</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Ionicons name="fitness" size={18} color="#e0e0e0" />
-          <Text style={{ fontSize: 15, fontWeight: '700', color: '#f0f0f0', flex: 1 }} numberOfLines={1}>
+          <Ionicons name="fitness" size={18} color={T.text.body} />
+          <Text style={{ fontSize: 15, fontFamily: TY.sans.bold, color: T.text.primary, flex: 1 }} numberOfLines={1}>
             {data.session_name || 'Workout'}
           </Text>
         </View>
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
           {data.duration_minutes != null && (
-            <View style={{ backgroundColor: '#2a2a2a', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
-              <Text style={{ fontSize: 12, color: '#f0f0f0' }}>{data.duration_minutes} min</Text>
+            <View style={{ backgroundColor: T.border, borderRadius: R.xs, paddingHorizontal: 8, paddingVertical: 4 }}>
+              <Text style={{ fontSize: 12, color: T.text.primary }}>{data.duration_minutes} min</Text>
             </View>
           )}
           {data.training_load != null && (
-            <View style={{ backgroundColor: '#2a2a2a', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
-              <Text style={{ fontSize: 12, color: '#f0f0f0' }}>Load {data.training_load}</Text>
+            <View style={{ backgroundColor: T.border, borderRadius: R.xs, paddingHorizontal: 8, paddingVertical: 4 }}>
+              <Text style={{ fontSize: 12, color: T.text.primary }}>Load {data.training_load}</Text>
             </View>
           )}
           {data.rpe != null && (
-            <View style={{ backgroundColor: '#2a2a2a', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
-              <Text style={{ fontSize: 12, color: '#f0f0f0' }}>RPE {data.rpe}/10</Text>
+            <View style={{ backgroundColor: T.border, borderRadius: R.xs, paddingHorizontal: 8, paddingVertical: 4 }}>
+              <Text style={{ fontSize: 12, color: T.text.primary }}>RPE {data.rpe}/10</Text>
             </View>
           )}
         </View>
         {data.autopsy_snippet && (
-          <Text style={{ fontSize: 12, color: '#888888', lineHeight: 18, fontStyle: 'italic' }} numberOfLines={2}>{data.autopsy_snippet}</Text>
+          <Text style={{ fontSize: 12, color: T.text.secondary, lineHeight: 18, fontStyle: 'italic' }} numberOfLines={2}>{data.autopsy_snippet}</Text>
         )}
       </View>
     );
@@ -132,27 +133,27 @@ function OryxDataCard({ data }: { data: Post['oryx_data_card_json'] }) {
     const text: string = data.diagnosis_text || '';
     const isLong = text.length > 160;
     return (
-      <View style={{ backgroundColor: '#1a1a1a', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#2a2a2a', borderLeftWidth: 3, borderLeftColor: '#27ae60', gap: 8 }}>
-        <Text style={{ fontSize: 9, color: '#555555', letterSpacing: 2, textTransform: 'uppercase' }}>ORYX INSIGHT</Text>
-        <Text style={{ fontSize: 13, color: '#f0f0f0', lineHeight: 20 }} numberOfLines={expanded ? undefined : 3}>{text}</Text>
+      <View style={{ backgroundColor: T.bg.elevated, borderRadius: R.md, padding: 16, borderWidth: 1, borderColor: T.border, borderLeftWidth: 3, borderLeftColor: T.accent, gap: 8 }}>
+        <Text style={{ fontSize: 9, color: T.text.muted, letterSpacing: 2, textTransform: 'uppercase' }}>ORYX INSIGHT</Text>
+        <Text style={{ fontSize: 13, color: T.text.primary, lineHeight: 20 }} numberOfLines={expanded ? undefined : 3}>{text}</Text>
         {isLong && (
           <TouchableOpacity onPress={() => setExpanded(!expanded)}>
-            <Text style={{ fontSize: 12, color: '#888888' }}>{expanded ? 'Show less' : 'Read more'}</Text>
+            <Text style={{ fontSize: 12, color: T.text.secondary }}>{expanded ? 'Show less' : 'Read more'}</Text>
           </TouchableOpacity>
         )}
         {data.factors && Array.isArray(data.factors) && data.factors.length > 0 && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
             {data.factors.map((f: string, i: number) => (
-              <View key={i} style={{ backgroundColor: '#2a2a2a', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                <Text style={{ fontSize: 10, color: '#888888' }}>{f}</Text>
+              <View key={i} style={{ backgroundColor: T.border, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                <Text style={{ fontSize: 10, color: T.text.secondary }}>{f}</Text>
               </View>
             ))}
           </View>
         )}
         {data.recommendation && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-            <Ionicons name="flash" size={12} color="#888888" />
-            <Text style={{ fontSize: 12, color: '#888888', flex: 1 }}>{data.recommendation}</Text>
+            <Ionicons name="flash" size={12} color={T.text.secondary} />
+            <Text style={{ fontSize: 12, color: T.text.secondary, flex: 1 }}>{data.recommendation}</Text>
           </View>
         )}
       </View>
@@ -165,18 +166,18 @@ function OryxDataCard({ data }: { data: Post['oryx_data_card_json'] }) {
       { label: 'Total Load', value: data.total_load ?? '-' },
     ];
     return (
-      <View style={{ backgroundColor: '#1a1a1a', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#2a2a2a', gap: 8 }}>
-        <Text style={{ fontSize: 9, color: '#555555', letterSpacing: 2, textTransform: 'uppercase' }}>WEEK RECAP</Text>
+      <View style={{ backgroundColor: T.bg.elevated, borderRadius: R.md, padding: 16, borderWidth: 1, borderColor: T.border, gap: 8 }}>
+        <Text style={{ fontSize: 9, color: T.text.muted, letterSpacing: 2, textTransform: 'uppercase' }}>WEEK RECAP</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {stats.map((s, i) => (
-            <View key={i} style={{ flex: 1, backgroundColor: '#222222', borderRadius: 10, padding: 10 }}>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: '#f0f0f0' }}>{String(s.value)}</Text>
-              <Text style={{ fontSize: 10, color: '#555555', marginTop: 2 }}>{s.label}</Text>
+            <View key={i} style={{ flex: 1, backgroundColor: T.bg.tint, borderRadius: R.sm, padding: SP[3] - 2 }}>
+              <Text style={{ fontSize: 16, fontFamily: TY.sans.bold, color: T.text.primary }}>{String(s.value)}</Text>
+              <Text style={{ fontSize: 10, color: T.text.muted, marginTop: 2 }}>{s.label}</Text>
             </View>
           ))}
         </View>
         {data.summary ? (
-          <Text style={{ fontSize: 13, fontStyle: 'italic', color: '#f0f0f0', lineHeight: 18 }}>{data.summary}</Text>
+          <Text style={{ fontSize: 13, fontStyle: 'italic', color: T.text.primary, lineHeight: 18 }}>{data.summary}</Text>
         ) : null}
       </View>
     );
@@ -184,13 +185,13 @@ function OryxDataCard({ data }: { data: Post['oryx_data_card_json'] }) {
 
   if (ptype === 'milestone') {
     return (
-      <View style={{ backgroundColor: '#1a1a1a', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#2a2a2a', alignItems: 'center', gap: 8 }}>
-        <Ionicons name="trophy" size={48} color="#e0e0e0" />
-        <Text style={{ fontSize: 18, fontWeight: '700', color: '#f0f0f0', textAlign: 'center' }}>
+      <View style={{ backgroundColor: T.bg.elevated, borderRadius: R.md, padding: 16, borderWidth: 1, borderColor: T.border, alignItems: 'center', gap: 8 }}>
+        <Ionicons name="trophy" size={48} color={T.text.body} />
+        <Text style={{ fontSize: 18, fontFamily: TY.sans.bold, color: T.text.primary, textAlign: 'center' }}>
           {data.badge_name || 'Milestone Reached'}
         </Text>
         {data.description && (
-          <Text style={{ fontSize: 13, color: '#555555', textAlign: 'center', lineHeight: 18 }}>{data.description}</Text>
+          <Text style={{ fontSize: 13, color: T.text.muted, textAlign: 'center', lineHeight: 18 }}>{data.description}</Text>
         )}
       </View>
     );
@@ -198,9 +199,9 @@ function OryxDataCard({ data }: { data: Post['oryx_data_card_json'] }) {
 
   // generic
   return (
-    <View style={{ backgroundColor: '#1a1a1a', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#2a2a2a', gap: 4 }}>
-      {data.title ? <Text style={{ fontSize: 15, fontWeight: '700', color: '#f0f0f0' }}>{data.title}</Text> : null}
-      {data.body ? <Text style={{ fontSize: 13, color: '#888888', lineHeight: 18 }}>{data.body}</Text> : null}
+    <View style={{ backgroundColor: T.bg.elevated, borderRadius: R.md, padding: 16, borderWidth: 1, borderColor: T.border, gap: 4 }}>
+      {data.title ? <Text style={{ fontSize: 15, fontFamily: TY.sans.bold, color: T.text.primary }}>{data.title}</Text> : null}
+      {data.body ? <Text style={{ fontSize: 13, color: T.text.secondary, lineHeight: 18 }}>{data.body}</Text> : null}
     </View>
   );
 }
@@ -660,9 +661,9 @@ export default function PostDetailModal({
         <Avatar initials={comment.initials} avatarUrl={comment.avatar_url} size={isReply ? 26 : 32} />
       </TouchableOpacity>
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={{ fontSize: 13, color: '#e0e0e0', lineHeight: 19 }}>
+        <Text style={{ fontSize: 13, color: T.text.body, lineHeight: 19 }}>
           <Text
-            style={{ fontWeight: '700', color: '#f0f0f0' }}
+            style={{ fontFamily: TY.sans.bold, color: T.text.primary }}
             onPress={() => onProfilePress(comment.user_id)}
           >
             {comment.display_name}
@@ -671,9 +672,9 @@ export default function PostDetailModal({
           {comment.comment_text}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 3 }}>
-          <Text style={{ fontSize: 11, color: '#555555' }}>{comment.time_ago}</Text>
+          <Text style={{ fontSize: 11, color: T.text.muted }}>{comment.time_ago}</Text>
           {comment.like_count > 0 && (
-            <Text style={{ fontSize: 11, color: '#555555' }}>{comment.like_count} {comment.like_count === 1 ? 'like' : 'likes'}</Text>
+            <Text style={{ fontSize: 11, color: T.text.muted }}>{comment.like_count} {comment.like_count === 1 ? 'like' : 'likes'}</Text>
           )}
           <TouchableOpacity
             onPress={() => {
@@ -683,7 +684,7 @@ export default function PostDetailModal({
               commentInputRef.current?.focus();
             }}
           >
-            <Text style={{ fontSize: 12, color: '#555555', fontWeight: '600' }}>Reply</Text>
+            <Text style={{ fontSize: 12, color: T.text.muted, fontFamily: TY.sans.semibold }}>Reply</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -695,7 +696,7 @@ export default function PostDetailModal({
         <Ionicons
           name={comment.is_liked_by_me ? 'heart' : 'heart-outline'}
           size={14}
-          color={comment.is_liked_by_me ? '#e74c3c' : '#555555'}
+          color={comment.is_liked_by_me ? T.readiness.low : T.text.muted}
         />
       </TouchableOpacity>
     </TouchableOpacity>
@@ -715,7 +716,7 @@ export default function PostDetailModal({
             onPress={() => setExpandedReplies((prev) => new Set([...prev, comment.id]))}
             style={{ marginLeft: 42, marginTop: 6 }}
           >
-            <Text style={{ fontSize: 12, color: '#888888' }}>
+            <Text style={{ fontSize: 12, color: T.text.secondary }}>
               View {replies.length - 2} more {replies.length - 2 === 1 ? 'reply' : 'replies'}
             </Text>
           </TouchableOpacity>
@@ -731,7 +732,7 @@ export default function PostDetailModal({
             }}
             style={{ marginLeft: 42, marginTop: 6 }}
           >
-            <Text style={{ fontSize: 12, color: '#888888' }}>Hide replies</Text>
+            <Text style={{ fontSize: 12, color: T.text.secondary }}>Hide replies</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -747,7 +748,7 @@ export default function PostDetailModal({
       presentationStyle="fullScreen"
       onRequestClose={onClose}
     >
-      <View style={{ flex: 1, backgroundColor: '#0a0a0a' }}>
+      <View style={{ flex: 1, backgroundColor: T.bg.primary }}>
 
         {/* ── Header ── */}
         <View
@@ -759,17 +760,17 @@ export default function PostDetailModal({
             paddingHorizontal: 16,
             paddingBottom: 12,
             borderBottomWidth: 1,
-            borderBottomColor: '#2a2a2a',
+            borderBottomColor: T.border,
           }}
         >
           <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="arrow-back" size={24} color="#f0f0f0" />
+            <Ionicons name="arrow-back" size={24} color={T.text.primary} />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setMenuVisible(true)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="ellipsis-horizontal" size={22} color="#888888" />
+            <Ionicons name="ellipsis-horizontal" size={22} color={T.text.secondary} />
           </TouchableOpacity>
         </View>
 
@@ -797,19 +798,19 @@ export default function PostDetailModal({
                 <Avatar initials={post.author.initials} avatarUrl={post.author.avatar_url} size={40} />
               </TouchableOpacity>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 15, fontWeight: '700', color: '#f0f0f0' }} numberOfLines={1}>
+                <Text style={{ fontSize: 15, fontFamily: TY.sans.bold, color: T.text.primary }} numberOfLines={1}>
                   {post.author.display_name}
                 </Text>
-                <Text style={{ fontSize: 13, color: '#555555' }}>@{post.author.username}</Text>
+                <Text style={{ fontSize: 13, color: T.text.muted }}>@{post.author.username}</Text>
               </View>
               <View style={{ alignItems: 'flex-end', gap: 2 }}>
                 {(post as any).location_text && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                    <Ionicons name="location-outline" size={11} color="#555555" />
-                    <Text style={{ fontSize: 11, color: '#555555' }}>{(post as any).location_text}</Text>
+                    <Ionicons name="location-outline" size={11} color={T.text.muted} />
+                    <Text style={{ fontSize: 11, color: T.text.muted }}>{(post as any).location_text}</Text>
                   </View>
                 )}
-                <Text style={{ fontSize: 11, color: '#555555' }}>{post.time_ago}</Text>
+                <Text style={{ fontSize: 11, color: T.text.muted }}>{post.time_ago}</Text>
               </View>
             </View>
 
@@ -841,7 +842,7 @@ export default function PostDetailModal({
                       opacity: fireOpacity,
                     }}
                   >
-                    <Ionicons name="heart" size={72} color="#e74c3c" />
+                    <Ionicons name="heart" size={72} color={T.readiness.low} />
                   </Animated.View>
                 </Animated.View>
               </View>
@@ -856,17 +857,17 @@ export default function PostDetailModal({
               {/* Caption */}
               {post.caption && (
                 <Text
-                  style={{ fontSize: 14, color: '#e0e0e0', lineHeight: 21 }}
+                  style={{ fontSize: 14, color: T.text.body, lineHeight: 21 }}
                   numberOfLines={captionExpanded ? undefined : 4}
                   onPress={() => setCaptionExpanded(!captionExpanded)}
                 >
-                  <Text style={{ fontWeight: '700', color: '#f0f0f0' }}>{post.author.display_name}  </Text>
+                  <Text style={{ fontFamily: TY.sans.bold, color: T.text.primary }}>{post.author.display_name}  </Text>
                   {post.caption}
                 </Text>
               )}
               {post.caption && post.caption.length > 200 && (
                 <TouchableOpacity onPress={() => setCaptionExpanded(!captionExpanded)}>
-                  <Text style={{ fontSize: 13, color: '#555555' }}>
+                  <Text style={{ fontSize: 13, color: T.text.muted }}>
                     {captionExpanded ? 'Show less' : 'more'}
                   </Text>
                 </TouchableOpacity>
@@ -878,8 +879,8 @@ export default function PostDetailModal({
                   flexDirection: 'row',
                   alignItems: 'center',
                   paddingVertical: 10,
-                  borderTopWidth: 1, borderTopColor: '#2a2a2a',
-                  borderBottomWidth: 1, borderBottomColor: '#2a2a2a',
+                  borderTopWidth: 1, borderTopColor: T.border,
+                  borderBottomWidth: 1, borderBottomColor: T.border,
                   gap: 16,
                 }}
               >
@@ -887,7 +888,7 @@ export default function PostDetailModal({
                   <Ionicons
                     name={post.is_liked_by_current_user ? 'heart' : 'heart-outline'}
                     size={22}
-                    color={post.is_liked_by_current_user ? '#e74c3c' : 'rgba(255,255,255,0.6)'}
+                    color={post.is_liked_by_current_user ? T.readiness.low : 'rgba(255,255,255,0.6)'}
                   />
                   <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>{post.like_count ?? 0}</Text>
                 </TouchableOpacity>
@@ -901,7 +902,7 @@ export default function PostDetailModal({
                     <Ionicons
                       name={post.is_saved ? 'bookmark' : 'bookmark-outline'}
                       size={20}
-                      color={post.is_saved ? '#f0f0f0' : '#888888'}
+                      color={post.is_saved ? T.text.primary : T.text.secondary}
                     />
                   </TouchableOpacity>
                 )}
@@ -910,26 +911,26 @@ export default function PostDetailModal({
               {/* Comments section */}
               <View style={{ gap: 12 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#f0f0f0' }}>Comments</Text>
+                  <Text style={{ fontSize: 14, fontFamily: TY.sans.bold, color: T.text.primary }}>Comments</Text>
                   {comments.length > 0 && (
-                    <Text style={{ fontSize: 13, color: '#555555' }}>{comments.length}</Text>
+                    <Text style={{ fontSize: 13, color: T.text.muted }}>{comments.length}</Text>
                   )}
                 </View>
 
                 {!showAllComments && comments.length > 10 && (
                   <TouchableOpacity onPress={() => setShowAllComments(true)}>
-                    <Text style={{ fontSize: 13, color: '#888888' }}>
+                    <Text style={{ fontSize: 13, color: T.text.secondary }}>
                       View all {comments.length} comments
                     </Text>
                   </TouchableOpacity>
                 )}
 
                 {commentLoading ? (
-                  <Text style={{ color: '#555555', textAlign: 'center', paddingVertical: 16, fontSize: 13 }}>
+                  <Text style={{ color: T.text.muted, textAlign: 'center', paddingVertical: 16, fontSize: 13 }}>
                     Loading comments...
                   </Text>
                 ) : comments.length === 0 ? (
-                  <Text style={{ color: '#555555', textAlign: 'center', paddingVertical: 16, fontSize: 13 }}>
+                  <Text style={{ color: T.text.muted, textAlign: 'center', paddingVertical: 16, fontSize: 13 }}>
                     No comments yet. Be the first!
                   </Text>
                 ) : (
@@ -944,9 +945,9 @@ export default function PostDetailModal({
           {/* ── Comment input bar ── */}
           <View
             style={{
-              backgroundColor: '#0a0a0a',
+              backgroundColor: T.bg.primary,
               borderTopWidth: 1,
-              borderTopColor: '#2a2a2a',
+              borderTopColor: T.border,
               paddingTop: 8,
               paddingHorizontal: 12,
               paddingBottom: insets.bottom + 8,
@@ -963,14 +964,14 @@ export default function PostDetailModal({
                   paddingHorizontal: 4,
                 }}
               >
-                <Text style={{ fontSize: 12, color: '#888888' }}>
-                  Replying to <Text style={{ fontWeight: '700', color: '#f0f0f0' }}>{replyingTo.display_name}</Text>
+                <Text style={{ fontSize: 12, color: T.text.secondary }}>
+                  Replying to <Text style={{ fontFamily: TY.sans.bold, color: T.text.primary }}>{replyingTo.display_name}</Text>
                 </Text>
                 <TouchableOpacity
                   onPress={() => setReplyingTo(null)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="close" size={16} color="#888888" />
+                  <Ionicons name="close" size={16} color={T.text.secondary} />
                 </TouchableOpacity>
               </View>
             )}
@@ -986,7 +987,7 @@ export default function PostDetailModal({
                   paddingHorizontal: 4,
                 }}
               >
-                <Text style={{ fontSize: 12, color: '#888888' }}>Editing comment</Text>
+                <Text style={{ fontSize: 12, color: T.text.secondary }}>Editing comment</Text>
                 <TouchableOpacity
                   onPress={() => {
                     setEditingComment(null);
@@ -994,7 +995,7 @@ export default function PostDetailModal({
                   }}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="close" size={16} color="#888888" />
+                  <Ionicons name="close" size={16} color={T.text.secondary} />
                 </TouchableOpacity>
               </View>
             )}
@@ -1009,18 +1010,18 @@ export default function PostDetailModal({
                 ref={commentInputRef}
                 style={{
                   flex: 1,
-                  backgroundColor: '#1a1a1a',
-                  borderRadius: 20,
+                  backgroundColor: T.bg.elevated,
+                  borderRadius: R.lg,
                   paddingHorizontal: 14,
                   paddingVertical: 8,
-                  color: '#f0f0f0',
+                  color: T.text.primary,
                   fontSize: 14,
                   borderWidth: 1,
-                  borderColor: '#2a2a2a',
+                  borderColor: T.border,
                   maxHeight: 100,
                 }}
                 placeholder={replyingTo ? `Reply to ${replyingTo.display_name}...` : 'Add a comment...'}
-                placeholderTextColor="#555555"
+                placeholderTextColor={T.text.muted}
                 value={commentInput}
                 onChangeText={(t) => {
                   setCommentInput(t);
@@ -1035,12 +1036,12 @@ export default function PostDetailModal({
                   width: 36,
                   height: 36,
                   borderRadius: 18,
-                  backgroundColor: commentInput.trim() ? '#e0e0e0' : '#2a2a2a',
+                  backgroundColor: commentInput.trim() ? T.text.body : T.border,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <Ionicons name="send" size={16} color={commentInput.trim() ? '#0a0a0a' : '#555555'} />
+                <Ionicons name="send" size={16} color={commentInput.trim() ? T.bg.primary : T.text.muted} />
               </TouchableOpacity>
             </View>
           </View>
@@ -1061,14 +1062,14 @@ export default function PostDetailModal({
             <View
               style={{
                 backgroundColor: 'rgba(40,40,40,0.96)',
-                borderRadius: 24,
+                borderRadius: R.pill,
                 paddingHorizontal: 18,
                 paddingVertical: 10,
                 borderWidth: 1,
-                borderColor: '#3a3a3a',
+                borderColor: T.glass.rim,
               }}
             >
-              <Text style={{ fontSize: 14, color: '#f0f0f0', textAlign: 'center' }}>{toast}</Text>
+              <Text style={{ fontSize: 14, color: T.text.primary, textAlign: 'center' }}>{toast}</Text>
             </View>
           </View>
         )}
@@ -1087,7 +1088,7 @@ export default function PostDetailModal({
           >
             <View
               style={{
-                backgroundColor: '#161616',
+                backgroundColor: T.glass.chrome,
                 borderTopLeftRadius: 20,
                 borderTopRightRadius: 20,
                 padding: 16,
@@ -1162,13 +1163,13 @@ export default function PostDetailModal({
                 style={{
                   padding: 14,
                   alignItems: 'center',
-                  borderRadius: 12,
+                  borderRadius: R.sm,
                   borderWidth: 1,
-                  borderColor: '#2a2a2a',
+                  borderColor: T.border,
                   marginTop: 4,
                 }}
               >
-                <Text style={{ fontSize: 15, color: '#888888' }}>Cancel</Text>
+                <Text style={{ fontSize: 15, color: T.text.secondary }}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -1187,24 +1188,24 @@ export default function PostDetailModal({
           >
             <View
               style={{
-                backgroundColor: '#1a1a1a',
-                borderRadius: 16,
+                backgroundColor: T.bg.elevated,
+                borderRadius: R.md,
                 padding: 20,
                 gap: 16,
                 borderWidth: 1,
-                borderColor: '#2a2a2a',
+                borderColor: T.border,
               }}
             >
-              <Text style={{ fontSize: 16, fontWeight: '700', color: '#f0f0f0' }}>Edit Caption</Text>
+              <Text style={{ fontSize: 16, fontFamily: TY.sans.bold, color: T.text.primary }}>Edit Caption</Text>
               <TextInput
                 style={{
-                  backgroundColor: '#0a0a0a',
-                  borderRadius: 12,
+                  backgroundColor: T.bg.primary,
+                  borderRadius: R.sm,
                   padding: 12,
-                  color: '#f0f0f0',
+                  color: T.text.primary,
                   fontSize: 14,
                   borderWidth: 1,
-                  borderColor: '#2a2a2a',
+                  borderColor: T.border,
                   minHeight: 100,
                   textAlignVertical: 'top',
                 }}
@@ -1213,10 +1214,10 @@ export default function PostDetailModal({
                 multiline
                 maxLength={2200}
                 placeholder="Write a caption..."
-                placeholderTextColor="#555555"
+                placeholderTextColor={T.text.muted}
                 autoFocus
               />
-              <Text style={{ fontSize: 11, color: '#555555', textAlign: 'right' }}>
+              <Text style={{ fontSize: 11, color: T.text.muted, textAlign: 'right' }}>
                 {editCaptionText.length}/2200
               </Text>
               <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -1226,12 +1227,12 @@ export default function PostDetailModal({
                     flex: 1,
                     padding: 12,
                     alignItems: 'center',
-                    borderRadius: 12,
+                    borderRadius: R.sm,
                     borderWidth: 1,
-                    borderColor: '#2a2a2a',
+                    borderColor: T.border,
                   }}
                 >
-                  <Text style={{ fontSize: 14, color: '#888888' }}>Cancel</Text>
+                  <Text style={{ fontSize: 14, color: T.text.secondary }}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleSaveCaption}
@@ -1240,12 +1241,12 @@ export default function PostDetailModal({
                     flex: 1,
                     padding: 12,
                     alignItems: 'center',
-                    borderRadius: 12,
-                    backgroundColor: '#e0e0e0',
+                    borderRadius: R.sm,
+                    backgroundColor: T.text.body,
                     opacity: editCaptionSaving ? 0.6 : 1,
                   }}
                 >
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#0a0a0a' }}>
+                  <Text style={{ fontSize: 14, fontFamily: TY.sans.semibold, color: T.bg.primary }}>
                     {editCaptionSaving ? 'Saving...' : 'Save'}
                   </Text>
                 </TouchableOpacity>
@@ -1268,7 +1269,7 @@ export default function PostDetailModal({
           >
             <View
               style={{
-                backgroundColor: '#161616',
+                backgroundColor: T.glass.chrome,
                 borderTopLeftRadius: 20,
                 borderTopRightRadius: 20,
                 padding: 20,
@@ -1276,7 +1277,7 @@ export default function PostDetailModal({
                 paddingBottom: insets.bottom + 24,
               }}
             >
-              <Text style={{ fontSize: 16, fontWeight: '700', color: '#f0f0f0', marginBottom: 12 }}>
+              <Text style={{ fontSize: 16, fontFamily: TY.sans.bold, color: T.text.primary, marginBottom: 12 }}>
                 Post Insights
               </Text>
               {insights ? (
@@ -1289,20 +1290,20 @@ export default function PostDetailModal({
                   <InsightRow icon="🔖" label="Saves" value={insights.total_saves ?? 0} />
                 </>
               ) : (
-                <Text style={{ color: '#555555', textAlign: 'center', paddingVertical: 16 }}>Loading...</Text>
+                <Text style={{ color: T.text.muted, textAlign: 'center', paddingVertical: 16 }}>Loading...</Text>
               )}
               <TouchableOpacity
                 onPress={() => setInsightsVisible(false)}
                 style={{
                   padding: 14,
                   alignItems: 'center',
-                  borderRadius: 12,
+                  borderRadius: R.sm,
                   borderWidth: 1,
-                  borderColor: '#2a2a2a',
+                  borderColor: T.border,
                   marginTop: 12,
                 }}
               >
-                <Text style={{ fontSize: 15, color: '#888888' }}>Done</Text>
+                <Text style={{ fontSize: 15, color: T.text.secondary }}>Done</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -1334,12 +1335,12 @@ function MenuItem({
         alignItems: 'center',
         gap: 12,
         padding: 14,
-        backgroundColor: '#2a2a2a',
-        borderRadius: 12,
+        backgroundColor: T.border,
+        borderRadius: R.sm,
       }}
     >
-      <Ionicons name={icon as any} size={18} color={destructive ? '#c0392b' : '#f0f0f0'} />
-      <Text style={{ fontSize: 15, color: destructive ? '#c0392b' : '#f0f0f0' }}>{label}</Text>
+      <Ionicons name={icon as any} size={18} color={destructive ? T.status.danger : T.text.primary} />
+      <Text style={{ fontSize: 15, color: destructive ? T.status.danger : T.text.primary }}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -1354,12 +1355,12 @@ function InsightRow({ icon, label, value }: { icon: string; label: string; value
         alignItems: 'center',
         paddingVertical: 10,
         borderBottomWidth: 1,
-        borderBottomColor: '#2a2a2a',
+        borderBottomColor: T.border,
       }}
     >
       <Text style={{ fontSize: 18, marginRight: 10 }}>{icon}</Text>
-      <Text style={{ flex: 1, fontSize: 14, color: '#e0e0e0' }}>{label}</Text>
-      <Text style={{ fontSize: 15, fontWeight: '700', color: '#f0f0f0' }}>{value.toLocaleString()}</Text>
+      <Text style={{ flex: 1, fontSize: 14, color: T.text.body }}>{label}</Text>
+      <Text style={{ fontSize: 15, fontFamily: TY.sans.bold, color: T.text.primary }}>{value.toLocaleString()}</Text>
     </View>
   );
 }

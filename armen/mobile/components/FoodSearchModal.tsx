@@ -28,7 +28,8 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
-import { ThemeColors } from '@/services/theme';
+import { ThemeColors, type as TY, radius as R, space as SP } from '@/services/theme';
+import AmbientBackdrop from '@/components/AmbientBackdrop';
 import {
   createCustomFood,
   FoodItem,
@@ -149,16 +150,16 @@ function FoodRow({
     >
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <View style={{ flex: 1, paddingRight: 12 }}>
-          <Text style={{ fontSize: 14, fontWeight: '600', color: t.text.primary }} numberOfLines={1}>{item.name}</Text>
+          <Text style={{ fontSize: 14, fontFamily: TY.sans.semibold, color: t.text.primary }} numberOfLines={1}>{item.name}</Text>
           {item.brand ? <Text style={{ fontSize: 12, color: t.text.muted, marginTop: 1 }} numberOfLines={1}>{item.brand}</Text> : null}
           <Text style={{ fontSize: 11, color: t.text.muted, marginTop: 3 }}>
             {serving}{Math.round(item.calories_100g)} kcal/100g
           </Text>
         </View>
         <View style={{ alignItems: 'flex-end', gap: 2 }}>
-          <Text style={{ fontSize: 11, color: '#27ae60' }}>P {Math.round(item.protein_100g)}g</Text>
+          <Text style={{ fontSize: 11, color: t.readiness.high }}>P {Math.round(item.protein_100g)}g</Text>
           <Text style={{ fontSize: 11, color: t.text.muted }}>C {Math.round(item.carbs_100g)}g</Text>
-          <Text style={{ fontSize: 11, color: '#FF6B35' }}>F {Math.round(item.fat_100g)}g</Text>
+          <Text style={{ fontSize: 11, color: t.readiness.low }}>F {Math.round(item.fat_100g)}g</Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -197,7 +198,7 @@ function QuickFoodRow({
         )}
       </View>
       {badge && (
-        <View style={{ backgroundColor: t.bg.elevated, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1, borderColor: t.border }}>
+        <View style={{ backgroundColor: t.bg.elevated, borderRadius: R.xs, paddingHorizontal: SP[2] - 1, paddingVertical: 2, borderWidth: 1, borderColor: t.border }}>
           <Text style={{ fontSize: 10, color: t.text.muted }}>{badge}</Text>
         </View>
       )}
@@ -489,6 +490,7 @@ export default function FoodSearchModal({ visible, onClose, onLogged }: Props) {
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <AmbientBackdrop />
 
         {/* ── Barcode scanner overlay ── */}
         {scannerOpen && (
@@ -501,7 +503,7 @@ export default function FoodSearchModal({ visible, onClose, onLogged }: Props) {
             <View style={s.scannerFrame} />
             <Text style={s.scannerHint}>Point at barcode to scan</Text>
             <TouchableOpacity style={s.scannerClose} onPress={() => setScannerOpen(false)}>
-              <Ionicons name="close-circle" size={36} color="#ffffff" />
+              <Ionicons name="close-circle" size={36} color={t.text.primary} />
             </TouchableOpacity>
           </View>
         )}
@@ -550,15 +552,15 @@ export default function FoodSearchModal({ visible, onClose, onLogged }: Props) {
                 <View style={{ flexDirection: 'row', gap: 8, paddingTop: 8 }}>
                   <TouchableOpacity
                     onPress={runTestSearch}
-                    style={{ flex: 1, backgroundColor: '#1a3a1a', borderRadius: 8, paddingVertical: 6, alignItems: 'center' }}
+                    style={{ flex: 1, backgroundColor: t.accentDim, borderRadius: R.xs, paddingVertical: SP[2] - 2, alignItems: 'center' }}
                   >
-                    <Text style={{ fontSize: 11, color: '#27ae60', fontWeight: '600' }}>🔍 Test: banana</Text>
+                    <Text style={{ fontSize: 11, color: t.readiness.high, fontFamily: TY.sans.semibold }}>🔍 Test: banana</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={runTestBarcode}
-                    style={{ flex: 1, backgroundColor: '#1a1a3a', borderRadius: 8, paddingVertical: 6, alignItems: 'center' }}
+                    style={{ flex: 1, backgroundColor: t.glass.pill, borderRadius: R.xs, paddingVertical: SP[2] - 2, alignItems: 'center' }}
                   >
-                    <Text style={{ fontSize: 11, color: '#6b8cff', fontWeight: '600' }}>📱 Test: Coca-Cola</Text>
+                    <Text style={{ fontSize: 11, color: t.signal.load, fontFamily: TY.sans.semibold }}>📱 Test: Coca-Cola</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -580,7 +582,7 @@ export default function FoodSearchModal({ visible, onClose, onLogged }: Props) {
                       <Ionicons name="search-outline" size={32} color={t.text.muted} />
                       <Text style={s.emptyText}>No results for "{query}"</Text>
                       <TouchableOpacity onPress={() => setView('custom')} style={s.createFoodBtn}>
-                        <Ionicons name="add" size={16} color="#27ae60" />
+                        <Ionicons name="add" size={16} color={t.readiness.high} />
                         <Text style={s.createFoodBtnText}>Create Custom Food</Text>
                       </TouchableOpacity>
                     </View>
@@ -642,7 +644,7 @@ export default function FoodSearchModal({ visible, onClose, onLogged }: Props) {
 
                   {/* Create custom food button */}
                   <TouchableOpacity style={s.createFoodRow} onPress={() => setView('custom')}>
-                    <Ionicons name="add-circle-outline" size={20} color="#27ae60" />
+                    <Ionicons name="add-circle-outline" size={20} color={t.readiness.high} />
                     <Text style={s.createFoodRowText}>Create Custom Food</Text>
                   </TouchableOpacity>
                 </>
@@ -680,10 +682,10 @@ export default function FoodSearchModal({ visible, onClose, onLogged }: Props) {
               {/* Macro row */}
               <View style={s.macroRow}>
                 {[
-                  { label: 'Protein', value: liveMacros?.protein ?? 0, color: '#27ae60' },
+                  { label: 'Protein', value: liveMacros?.protein ?? 0, color: t.readiness.high },
                   { label: 'Carbs',   value: liveMacros?.carbs   ?? 0, color: t.text.muted },
-                  { label: 'Fat',     value: liveMacros?.fat     ?? 0, color: '#FF6B35' },
-                  { label: 'Fibre',   value: liveMacros?.fibre   ?? 0, color: '#888888' },
+                  { label: 'Fat',     value: liveMacros?.fat     ?? 0, color: t.readiness.low },
+                  { label: 'Fibre',   value: liveMacros?.fibre   ?? 0, color: t.text.secondary },
                 ].map((m) => (
                   <View key={m.label} style={s.macroItem}>
                     <Text style={[s.macroVal, { color: m.color }]}>{m.value}g</Text>
@@ -773,7 +775,7 @@ export default function FoodSearchModal({ visible, onClose, onLogged }: Props) {
                 activeOpacity={0.85}
               >
                 {logging
-                  ? <ActivityIndicator size="small" color="#0a0a0a" />
+                  ? <ActivityIndicator size="small" color={t.accentInk} />
                   : <Text style={s.confirmBtnText}>Log Meal</Text>}
               </TouchableOpacity>
             </View>
@@ -875,7 +877,7 @@ export default function FoodSearchModal({ visible, onClose, onLogged }: Props) {
                 activeOpacity={0.85}
               >
                 {savingCustom
-                  ? <ActivityIndicator size="small" color="#0a0a0a" />
+                  ? <ActivityIndicator size="small" color={t.accentInk} />
                   : <Text style={s.confirmBtnText}>Save & Log</Text>}
               </TouchableOpacity>
             </View>
@@ -892,17 +894,18 @@ function styles(t: ThemeColors) {
   return StyleSheet.create({
     root: {
       flex: 1,
+      // transparent so AmbientBackdrop paints the bg
       backgroundColor: t.bg.primary,
     },
     header: {
       paddingHorizontal: 20,
-      paddingBottom: 12,
+      paddingBottom: 14,
       borderBottomWidth: 1,
-      borderColor: t.border,
+      borderColor: t.glass.border,
     },
     handle: {
       width: 40, height: 4,
-      backgroundColor: t.border,
+      backgroundColor: t.glass.border,
       borderRadius: 2,
       alignSelf: 'center',
       marginVertical: 12,
@@ -911,12 +914,11 @@ function styles(t: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: 14,
+      marginBottom: 12,
     },
     title: {
-      fontSize: 18,
-      fontWeight: '700',
-      color: t.text.primary,
+      fontSize: 18, color: t.text.primary,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.3,
     },
 
     // Search bar
@@ -929,26 +931,25 @@ function styles(t: ThemeColors) {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: t.bg.elevated,
-      borderRadius: 12,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
+      backgroundColor: t.glass.card,
+      borderRadius: R.md,
+      paddingHorizontal: 14,
+      paddingVertical: 11,
       borderWidth: 1,
-      borderColor: t.border,
+      borderColor: t.glass.border,
       gap: 8,
     },
     searchInput: {
-      flex: 1,
-      fontSize: 15,
-      color: t.text.primary,
+      flex: 1, fontSize: 15, color: t.text.primary,
+      fontFamily: TY.sans.regular,
+      padding: 0,
     },
     barcodeBtn: {
-      width: 46,
-      height: 46,
-      borderRadius: 12,
-      backgroundColor: t.bg.elevated,
+      width: 46, height: 46,
+      borderRadius: R.md,
+      backgroundColor: t.glass.card,
       borderWidth: 1,
-      borderColor: t.border,
+      borderColor: t.glass.border,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -956,7 +957,7 @@ function styles(t: ThemeColors) {
     // Barcode scanner
     scannerOverlay: {
       ...StyleSheet.absoluteFillObject,
-      backgroundColor: '#000',
+      backgroundColor: t.bg.primary,
       zIndex: 100,
       alignItems: 'center',
       justifyContent: 'center',
@@ -964,14 +965,14 @@ function styles(t: ThemeColors) {
     scannerFrame: {
       width: 260,
       height: 160,
-      borderRadius: 12,
+      borderRadius: R.sm,
       borderWidth: 3,
-      borderColor: '#27ae60',
+      borderColor: t.readiness.high,
     },
     scannerHint: {
       marginTop: 20,
       fontSize: 14,
-      color: '#ffffff',
+      color: t.text.primary,
     },
     scannerClose: {
       position: 'absolute',
@@ -981,14 +982,13 @@ function styles(t: ThemeColors) {
 
     // Sections
     sectionLabel: {
-      fontSize: 10,
-      fontWeight: '600',
-      color: t.text.muted,
-      letterSpacing: 1.5,
+      fontSize: 11, color: t.text.secondary,
+      fontFamily: TY.mono.medium,
+      letterSpacing: 1.8,
       textTransform: 'uppercase',
-      paddingHorizontal: 16,
+      paddingHorizontal: 20,
       paddingTop: 20,
-      paddingBottom: 8,
+      paddingBottom: 10,
     },
     emptyState: {
       alignItems: 'center',
@@ -996,47 +996,43 @@ function styles(t: ThemeColors) {
       gap: 12,
     },
     emptyText: {
-      fontSize: 14,
-      color: t.text.muted,
+      fontSize: 14, color: t.text.muted,
+      fontFamily: TY.sans.regular,
     },
     createFoodBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
-      paddingVertical: 8,
+      paddingVertical: 9,
       paddingHorizontal: 16,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: '#27ae60',
+      borderRadius: R.pill,
+      backgroundColor: t.accent,
     },
     createFoodBtnText: {
-      fontSize: 14,
-      color: '#27ae60',
-      fontWeight: '600',
+      fontSize: 13, color: t.accentInk,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.1,
     },
     createFoodRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
-      paddingHorizontal: 16,
+      paddingHorizontal: 20,
       paddingVertical: 16,
       marginTop: 8,
     },
     createFoodRowText: {
-      fontSize: 14,
-      color: '#27ae60',
-      fontWeight: '600',
+      fontSize: 14, color: t.accent,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.1,
     },
 
     // Serving selector
     servingFoodName: {
-      fontSize: 16,
-      fontWeight: '700',
-      color: t.text.primary,
+      fontSize: 17, color: t.text.primary,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.3,
     },
     servingBrand: {
-      fontSize: 12,
-      color: t.text.muted,
+      fontSize: 12, color: t.text.muted,
+      fontFamily: TY.sans.regular,
       marginTop: 1,
     },
     calorieHero: {
@@ -1047,44 +1043,43 @@ function styles(t: ThemeColors) {
       paddingVertical: 20,
     },
     calorieNum: {
-      fontSize: 52,
-      fontWeight: '800',
-      color: t.text.primary,
+      fontSize: 52, color: t.text.primary,
+      fontFamily: TY.sans.semibold, letterSpacing: -1.5,
       fontVariant: ['tabular-nums'],
     },
     calorieUnit: {
-      fontSize: 18,
-      color: t.text.muted,
-      marginBottom: 10,
+      fontSize: 14, color: t.text.muted,
+      fontFamily: TY.mono.regular, letterSpacing: 0.5,
+      marginBottom: 12,
     },
     macroRow: {
       flexDirection: 'row',
       justifyContent: 'space-around',
-      backgroundColor: t.bg.elevated,
-      borderRadius: 14,
+      backgroundColor: t.glass.card,
+      borderRadius: R.lg,
       paddingVertical: 14,
       borderWidth: 1,
-      borderColor: t.border,
+      borderColor: t.glass.border,
       marginBottom: 20,
     },
     macroItem: {
       alignItems: 'center',
-      gap: 2,
+      gap: 3,
     },
     macroVal: {
-      fontSize: 16,
-      fontWeight: '700',
+      fontSize: 17,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.3,
     },
     macroLbl: {
-      fontSize: 11,
-      color: t.text.muted,
+      fontSize: 10, color: t.text.secondary,
+      fontFamily: TY.mono.medium,
+      letterSpacing: 1.2, textTransform: 'uppercase',
     },
     fieldLabel: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: t.text.muted,
+      fontSize: 11, color: t.text.secondary,
+      fontFamily: TY.mono.medium,
+      letterSpacing: 1.4,
       textTransform: 'uppercase',
-      letterSpacing: 0.8,
       marginBottom: 8,
       marginTop: 4,
     },
@@ -1095,28 +1090,26 @@ function styles(t: ThemeColors) {
       marginBottom: 8,
     },
     numInput: {
-      backgroundColor: t.bg.elevated,
-      borderRadius: 10,
+      backgroundColor: t.glass.card,
+      borderRadius: R.md,
       borderWidth: 1,
-      borderColor: t.border,
+      borderColor: t.glass.border,
       paddingHorizontal: 14,
       paddingVertical: 12,
-      fontSize: 18,
-      fontWeight: '700',
-      color: t.text.primary,
+      fontSize: 18, color: t.text.primary,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.3,
       minWidth: 80,
     },
     inputUnit: {
-      fontSize: 14,
-      color: t.text.muted,
+      fontSize: 14, color: t.text.muted,
+      fontFamily: TY.mono.regular, letterSpacing: 0.3,
     },
     stepBtn: {
-      width: 44,
-      height: 44,
-      borderRadius: 10,
-      backgroundColor: t.bg.elevated,
+      width: 44, height: 44,
+      borderRadius: R.md,
+      backgroundColor: t.glass.card,
       borderWidth: 1,
-      borderColor: t.border,
+      borderColor: t.glass.border,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -1129,22 +1122,22 @@ function styles(t: ThemeColors) {
     presetBtn: {
       paddingHorizontal: 14,
       paddingVertical: 8,
-      borderRadius: 8,
+      borderRadius: R.pill,
       borderWidth: 1,
-      borderColor: t.border,
-      backgroundColor: t.bg.elevated,
+      borderColor: t.glass.border,
+      backgroundColor: t.glass.pill,
     },
     presetBtnActive: {
-      borderColor: '#27ae60',
-      backgroundColor: 'rgba(39,174,96,0.08)',
+      borderColor: t.accent,
+      backgroundColor: t.accentDim,
     },
     presetBtnText: {
-      fontSize: 13,
-      color: t.text.secondary,
+      fontSize: 13, color: t.text.body,
+      fontFamily: TY.sans.medium, letterSpacing: -0.1,
     },
     presetBtnTextActive: {
-      color: '#27ae60',
-      fontWeight: '600',
+      color: t.accent,
+      fontFamily: TY.sans.semibold,
     },
     mealTypeGrid: {
       flexDirection: 'row',
@@ -1155,47 +1148,46 @@ function styles(t: ThemeColors) {
     mealTypeChip: {
       paddingHorizontal: 14,
       paddingVertical: 8,
-      borderRadius: 20,
+      borderRadius: R.pill,
       borderWidth: 1,
-      borderColor: t.border,
-      backgroundColor: t.bg.elevated,
+      borderColor: t.glass.border,
+      backgroundColor: t.glass.pill,
     },
     mealTypeChipActive: {
-      borderColor: '#27ae60',
-      backgroundColor: 'rgba(39,174,96,0.08)',
+      borderColor: t.accent,
+      backgroundColor: t.accentDim,
     },
     mealTypeText: {
-      fontSize: 13,
-      color: t.text.secondary,
+      fontSize: 13, color: t.text.body,
+      fontFamily: TY.sans.medium, letterSpacing: -0.1,
     },
     mealTypeTextActive: {
-      color: '#27ae60',
-      fontWeight: '600',
+      color: t.accent,
+      fontFamily: TY.sans.semibold,
     },
     confirmBtn: {
-      backgroundColor: '#27ae60',
-      borderRadius: 14,
-      paddingVertical: 16,
+      backgroundColor: t.accent,
+      borderRadius: R.md,
+      paddingVertical: 15,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: 8,
+      marginTop: 12,
     },
     confirmBtnText: {
-      fontSize: 16,
-      fontWeight: '700',
-      color: '#0a0a0a',
+      fontSize: 15, color: t.accentInk,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.2,
     },
 
-    // Custom food form
+    // Custom food form — manual logging
     textField: {
-      backgroundColor: t.bg.elevated,
-      borderRadius: 10,
+      backgroundColor: t.glass.card,
+      borderRadius: R.md,
       borderWidth: 1,
-      borderColor: t.border,
+      borderColor: t.glass.border,
       paddingHorizontal: 14,
       paddingVertical: 12,
-      fontSize: 15,
-      color: t.text.primary,
+      fontSize: 15, color: t.text.primary,
+      fontFamily: TY.sans.regular,
     },
     macroGrid: {
       flexDirection: 'row',
@@ -1204,27 +1196,30 @@ function styles(t: ThemeColors) {
     },
     macroInputBox: {
       width: (SW - 40 - 20) / 3,
-      backgroundColor: t.bg.elevated,
-      borderRadius: 10,
+      backgroundColor: t.glass.card,
+      borderRadius: R.md,
       borderWidth: 1,
-      borderColor: t.border,
-      padding: 10,
+      borderColor: t.glass.border,
+      paddingHorizontal: 10,
+      paddingVertical: 12,
       alignItems: 'center',
+      gap: 2,
     },
     macroBoxInput: {
-      fontSize: 18,
-      fontWeight: '700',
-      color: t.text.primary,
+      fontSize: 20, color: t.text.primary,
+      fontFamily: TY.sans.semibold, letterSpacing: -0.3,
       textAlign: 'center',
       width: '100%',
+      padding: 0,
     },
     macroBoxUnit: {
-      fontSize: 10,
-      color: t.text.muted,
+      fontSize: 10, color: t.text.muted,
+      fontFamily: TY.mono.regular, letterSpacing: 0.5,
     },
     macroBoxLabel: {
-      fontSize: 11,
-      color: t.text.muted,
+      fontSize: 10, color: t.text.secondary,
+      fontFamily: TY.mono.medium,
+      letterSpacing: 1.2, textTransform: 'uppercase',
       marginTop: 2,
     },
   });

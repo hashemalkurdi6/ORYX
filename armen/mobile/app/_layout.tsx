@@ -16,6 +16,7 @@ import {
   JetBrainsMono_700Bold,
 } from '@expo-google-fonts/jetbrains-mono';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
+import { theme as T, type as TY } from '@/services/theme';
 
 function AppStack() {
   const { theme } = useTheme();
@@ -26,7 +27,7 @@ function AppStack() {
         screenOptions={{
           headerStyle: { backgroundColor: theme.bg.primary },
           headerTintColor: theme.text.primary,
-          headerTitleStyle: { fontWeight: '700' },
+          headerTitleStyle: { fontFamily: TY.sans.bold },
           contentStyle: { backgroundColor: theme.bg.primary },
           headerShown: false,
         }}
@@ -52,8 +53,8 @@ export default function RootLayout() {
 
   if (!fontsLoaded) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#08090B', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#C5F547" />
+      <View style={{ flex: 1, backgroundColor: T.bg.primary, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={T.accent} />
       </View>
     );
   }

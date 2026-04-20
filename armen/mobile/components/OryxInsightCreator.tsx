@@ -21,6 +21,7 @@ import {
   InsightData,
   CommunityClub,
 } from '@/services/api';
+import { theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
 
 // Try expo-location with graceful fallback
 let Location: any = null;
@@ -148,10 +149,10 @@ export default function OryxInsightCreator({
     show_fat: true,
   });
 
-  const [toast, setToast] = useState<ToastState>({ visible: false, message: '', color: '#27ae60' });
+  const [toast, setToast] = useState<ToastState>({ visible: false, message: '', color: T.status.success });
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showToast = useCallback((message: string, color = '#27ae60') => {
+  const showToast = useCallback((message: string, color = T.status.success) => {
     if (toastRef.current) clearTimeout(toastRef.current);
     setToast({ visible: true, message, color });
     toastRef.current = setTimeout(() => setToast(t => ({ ...t, visible: false })), 2000);
@@ -213,10 +214,10 @@ export default function OryxInsightCreator({
         also_shared_as_story: alsoStory,
         club_id: selectedClub?.id,
       });
-      showToast('Posted', '#27ae60');
+      showToast('Posted', T.status.success);
       setTimeout(() => onPostCreated(), 1500);
     } catch {
-      showToast('Failed to post. Try again.', '#c0392b');
+      showToast('Failed to post. Try again.', T.status.danger);
       setPosting(false);
     }
   }, [insightData, insightType, selectedSession, customTitle, caption, locationText, privacyToggles, bgStyle, alsoStory, selectedClub, onPostCreated, showToast]);
@@ -275,13 +276,13 @@ export default function OryxInsightCreator({
         text: 'Use Current Location',
         onPress: async () => {
           if (!Location) {
-            showToast('Location not available', '#c0392b');
+            showToast('Location not available', T.status.danger);
             return;
           }
           try {
             const { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') {
-              showToast('Location permission denied', '#c0392b');
+              showToast('Location permission denied', T.status.danger);
               return;
             }
             const loc = await Location.getCurrentPositionAsync({});
@@ -292,7 +293,7 @@ export default function OryxInsightCreator({
             const cityCountry = [geo?.city, geo?.country].filter(Boolean).join(', ');
             setLocationText(cityCountry || 'Unknown location');
           } catch {
-            showToast('Could not get location', '#c0392b');
+            showToast('Could not get location', T.status.danger);
           }
         },
       },
@@ -312,7 +313,7 @@ export default function OryxInsightCreator({
     if (insightLoading) {
       return (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator color="#555555" size="large" />
+          <ActivityIndicator color={T.text.muted} size="large" />
         </View>
       );
     }
@@ -371,9 +372,9 @@ export default function OryxInsightCreator({
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
         <Text
           style={{
-            color: '#ffffff',
+            color: T.text.primary,
             fontSize: 18,
-            fontWeight: '700',
+            fontFamily: TY.sans.bold,
             paddingTop: 16,
             paddingHorizontal: 20,
             marginBottom: 16,
@@ -400,10 +401,10 @@ export default function OryxInsightCreator({
               flexDirection: 'row',
               alignItems: 'center',
               gap: 12,
-              backgroundColor: '#1a1a1a',
+              backgroundColor: T.bg.elevated,
               borderWidth: 1,
-              borderColor: '#2a2a2a',
-              borderRadius: 12,
+              borderColor: T.border,
+              borderRadius: R.sm,
               padding: 16,
               marginHorizontal: 16,
               marginBottom: 8,
@@ -414,21 +415,21 @@ export default function OryxInsightCreator({
               style={{
                 width: 40,
                 height: 40,
-                borderRadius: 20,
-                backgroundColor: '#2a2a2a',
+                borderRadius: R.lg,
+                backgroundColor: T.border,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <Ionicons name={tile.icon as any} size={20} color="#f0f0f0" />
+              <Ionicons name={tile.icon as any} size={20} color={T.text.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 15, fontWeight: '600', color: '#ffffff' }}>{tile.label}</Text>
-              <Text style={{ fontSize: 12, color: '#888888', marginTop: 2 }}>
+              <Text style={{ fontSize: 15, fontFamily: TY.sans.semibold, color: T.text.primary }}>{tile.label}</Text>
+              <Text style={{ fontSize: 12, color: T.text.secondary, marginTop: 2 }}>
                 {tile.disabled && tile.disabledSubtitle ? tile.disabledSubtitle : tile.subtitle}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#555555" />
+            <Ionicons name="chevron-forward" size={18} color={T.text.muted} />
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -445,8 +446,8 @@ export default function OryxInsightCreator({
         <Text
           style={{
             fontSize: 16,
-            fontWeight: '700',
-            color: '#ffffff',
+            fontFamily: TY.sans.bold,
+            color: T.text.primary,
             paddingHorizontal: 20,
             paddingTop: 16,
             paddingBottom: 12,
@@ -467,45 +468,45 @@ export default function OryxInsightCreator({
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 12,
-                  backgroundColor: isSelected ? '#1f1f1f' : '#1a1a1a',
-                  borderRadius: 12,
+                  backgroundColor: isSelected ? T.glass.cardHi : T.bg.elevated,
+                  borderRadius: R.sm,
                   padding: 14,
                   marginHorizontal: 16,
                   marginBottom: 8,
                   borderWidth: isSelected ? 1 : 1,
-                  borderColor: isSelected ? '#ffffff' : '#2a2a2a',
+                  borderColor: isSelected ? T.accent : T.border,
                 }}
               >
                 <View
                   style={{
                     width: 40,
                     height: 40,
-                    borderRadius: 20,
-                    backgroundColor: '#2a2a2a',
+                    borderRadius: R.lg,
+                    backgroundColor: T.border,
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
                 >
-                  <Ionicons name={icon as any} size={20} color="#f0f0f0" />
+                  <Ionicons name={icon as any} size={20} color={T.text.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#ffffff' }}>
+                  <Text style={{ fontSize: 14, fontFamily: TY.sans.semibold, color: T.text.primary }}>
                     {session.activity_type}
                   </Text>
-                  <Text style={{ fontSize: 12, color: '#888888', marginTop: 2 }}>
+                  <Text style={{ fontSize: 12, color: T.text.secondary, marginTop: 2 }}>
                     {fmtDate(session.logged_at)} · {formatDuration(session.duration_minutes)}
                   </Text>
                 </View>
                 <View
                   style={{
-                    backgroundColor: '#2a2a2a',
+                    backgroundColor: T.border,
                     borderRadius: 6,
                     paddingHorizontal: 7,
                     paddingVertical: 2,
                     marginRight: 8,
                   }}
                 >
-                  <Text style={{ fontSize: 10, color: '#888888' }}>{session.source}</Text>
+                  <Text style={{ fontSize: 10, color: T.text.secondary }}>{session.source}</Text>
                 </View>
                 <View
                   style={{
@@ -513,8 +514,8 @@ export default function OryxInsightCreator({
                     height: 18,
                     borderRadius: 9,
                     borderWidth: 2,
-                    borderColor: isSelected ? '#ffffff' : '#555555',
-                    backgroundColor: isSelected ? '#ffffff' : 'transparent',
+                    borderColor: isSelected ? T.accent : T.text.muted,
+                    backgroundColor: isSelected ? T.accent : 'transparent',
                   }}
                 />
               </TouchableOpacity>
@@ -529,15 +530,15 @@ export default function OryxInsightCreator({
             }}
             disabled={!selectedSession}
             style={{
-              backgroundColor: '#ffffff',
-              borderRadius: 16,
+              backgroundColor: T.accent,
+              borderRadius: R.md,
               height: 52,
               alignItems: 'center',
               justifyContent: 'center',
               opacity: selectedSession ? 1 : 0.4,
             }}
           >
-            <Text style={{ fontSize: 16, fontWeight: '700', color: '#000000' }}>Continue</Text>
+            <Text style={{ fontSize: 16, fontFamily: TY.sans.bold, color: T.accentInk }}>Continue</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -554,17 +555,17 @@ export default function OryxInsightCreator({
         <View
           style={{
             backgroundColor: bgColor,
-            borderRadius: 16,
+            borderRadius: R.md,
             padding: 24,
             minHeight: 120,
             alignItems: 'center',
             justifyContent: 'center',
             borderWidth: 1,
-            borderColor: '#2a2a2a',
+            borderColor: T.border,
           }}
         >
           <Text
-            style={{ fontSize: 18, color: '#ffffff', textAlign: 'center', lineHeight: 26 }}
+            style={{ fontSize: 18, color: T.text.primary, textAlign: 'center', lineHeight: 26 }}
           >
             {textContent || 'Write something...'}
           </Text>
@@ -575,42 +576,42 @@ export default function OryxInsightCreator({
     if (insightType === 'workout' && selectedSession) {
       return (
         <View style={{ gap: 8 }}>
-          <Text style={{ fontSize: 9, color: '#888888', letterSpacing: 2, textTransform: 'uppercase' }}>
+          <Text style={{ fontSize: 9, color: T.text.secondary, letterSpacing: 2, textTransform: 'uppercase' }}>
             {customTitle || 'WORKOUT'}
           </Text>
           {locationText ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Ionicons name="location-outline" size={11} color="#888888" />
-              <Text style={{ fontSize: 11, color: '#888888' }}>{locationText}</Text>
+              <Ionicons name="location-outline" size={11} color={T.text.secondary} />
+              <Text style={{ fontSize: 11, color: T.text.secondary }}>{locationText}</Text>
             </View>
           ) : null}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
             <Ionicons
               name={(CATEGORY_ICONS[selectedSession.sport_category ?? 'other'] ?? 'fitness-outline') as any}
               size={18}
-              color="#f0f0f0"
+              color={T.text.primary}
             />
-            <Text style={{ fontSize: 16, fontWeight: '700', color: '#f0f0f0' }}>
+            <Text style={{ fontSize: 16, fontFamily: TY.sans.bold, color: T.text.primary }}>
               {selectedSession.activity_type}
             </Text>
           </View>
           <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
-            <View style={{ backgroundColor: '#2a2a2a', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-              <Text style={{ fontSize: 12, color: '#f0f0f0' }}>{formatDuration(selectedSession.duration_minutes)}</Text>
+            <View style={{ backgroundColor: T.border, borderRadius: R.xs, paddingHorizontal: 8, paddingVertical: 3 }}>
+              <Text style={{ fontSize: 12, color: T.text.primary }}>{formatDuration(selectedSession.duration_minutes)}</Text>
             </View>
             {privacyToggles.show_training_load && selectedSession.training_load != null && (
-              <View style={{ backgroundColor: '#2a2a2a', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-                <Text style={{ fontSize: 12, color: '#f0f0f0' }}>Load {selectedSession.training_load}</Text>
+              <View style={{ backgroundColor: T.border, borderRadius: R.xs, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Text style={{ fontSize: 12, color: T.text.primary }}>Load {selectedSession.training_load}</Text>
               </View>
             )}
             {privacyToggles.show_rpe && selectedSession.rpe != null && (
-              <View style={{ backgroundColor: '#2a2a2a', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-                <Text style={{ fontSize: 12, color: '#f0f0f0' }}>RPE {selectedSession.rpe}/10</Text>
+              <View style={{ backgroundColor: T.border, borderRadius: R.xs, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Text style={{ fontSize: 12, color: T.text.primary }}>RPE {selectedSession.rpe}/10</Text>
               </View>
             )}
           </View>
           {privacyToggles.show_autopsy && selectedSession.autopsy_text && (
-            <Text style={{ fontSize: 13, color: '#888888', fontStyle: 'italic', lineHeight: 18 }} numberOfLines={3}>
+            <Text style={{ fontSize: 13, color: T.text.secondary, fontStyle: 'italic', lineHeight: 18 }} numberOfLines={3}>
               {selectedSession.autopsy_text}
             </Text>
           )}
@@ -623,13 +624,13 @@ export default function OryxInsightCreator({
       const diag = insightData.today_diagnosis;
       return (
         <View style={{ gap: 8 }}>
-          <Text style={{ fontSize: 9, color: '#888888', letterSpacing: 2, textTransform: 'uppercase' }}>
+          <Text style={{ fontSize: 9, color: T.text.secondary, letterSpacing: 2, textTransform: 'uppercase' }}>
             {customTitle || 'ORYX INSIGHT'}
           </Text>
           {locationText ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Ionicons name="location-outline" size={11} color="#888888" />
-              <Text style={{ fontSize: 11, color: '#888888' }}>{locationText}</Text>
+              <Ionicons name="location-outline" size={11} color={T.text.secondary} />
+              <Text style={{ fontSize: 11, color: T.text.secondary }}>{locationText}</Text>
             </View>
           ) : null}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 }}>
@@ -646,27 +647,27 @@ export default function OryxInsightCreator({
                   justifyContent: 'center',
                 }}
               >
-                <Text style={{ fontSize: 16, fontWeight: '700', color: rd.color }}>{rd.score}</Text>
+                <Text style={{ fontSize: 16, fontFamily: TY.sans.bold, color: rd.color }}>{rd.score}</Text>
               </View>
             )}
-            <Text style={{ fontSize: 14, fontWeight: '600', color: '#f0f0f0' }}>{rd.label}</Text>
+            <Text style={{ fontSize: 14, fontFamily: TY.sans.semibold, color: T.text.primary }}>{rd.label}</Text>
           </View>
           {privacyToggles.show_diagnosis && diag.diagnosis_text && (
-            <Text style={{ fontSize: 13, color: '#f0f0f0', lineHeight: 18 }} numberOfLines={3}>
+            <Text style={{ fontSize: 13, color: T.text.primary, lineHeight: 18 }} numberOfLines={3}>
               {diag.diagnosis_text}
             </Text>
           )}
           {privacyToggles.show_factors && diag.contributing_factors.length > 0 && (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
               {diag.contributing_factors.slice(0, 3).map((f, i) => (
-                <View key={i} style={{ backgroundColor: '#2a2a2a', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
-                  <Text style={{ fontSize: 10, color: '#888888' }}>{f}</Text>
+                <View key={i} style={{ backgroundColor: T.border, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                  <Text style={{ fontSize: 10, color: T.text.secondary }}>{f}</Text>
                 </View>
               ))}
             </View>
           )}
           {privacyToggles.show_recommendation && diag.recommendation && (
-            <Text style={{ fontSize: 12, color: '#888888', fontStyle: 'italic' }}>
+            <Text style={{ fontSize: 12, color: T.text.secondary, fontStyle: 'italic' }}>
               {diag.recommendation}
             </Text>
           )}
@@ -684,20 +685,20 @@ export default function OryxInsightCreator({
       ].filter(s => s.show);
       return (
         <View style={{ gap: 8 }}>
-          <Text style={{ fontSize: 9, color: '#888888', letterSpacing: 2, textTransform: 'uppercase' }}>
+          <Text style={{ fontSize: 9, color: T.text.secondary, letterSpacing: 2, textTransform: 'uppercase' }}>
             {customTitle || 'WEEK RECAP'}
           </Text>
           {locationText ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Ionicons name="location-outline" size={11} color="#888888" />
-              <Text style={{ fontSize: 11, color: '#888888' }}>{locationText}</Text>
+              <Ionicons name="location-outline" size={11} color={T.text.secondary} />
+              <Text style={{ fontSize: 11, color: T.text.secondary }}>{locationText}</Text>
             </View>
           ) : null}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
             {statsItems.map((s, i) => (
-              <View key={i} style={{ backgroundColor: '#222222', borderRadius: 10, padding: 10, flex: 1, minWidth: 70 }}>
-                <Text style={{ fontSize: 16, fontWeight: '700', color: '#f0f0f0' }}>{s.value}</Text>
-                <Text style={{ fontSize: 10, color: '#555555', marginTop: 2 }}>{s.label}</Text>
+              <View key={i} style={{ backgroundColor: T.bg.tint, borderRadius: R.sm, padding: SP[3] - 2, flex: 1, minWidth: 70 }}>
+                <Text style={{ fontSize: 16, fontFamily: TY.sans.bold, color: T.text.primary }}>{s.value}</Text>
+                <Text style={{ fontSize: 10, color: T.text.muted, marginTop: 2 }}>{s.label}</Text>
               </View>
             ))}
           </View>
@@ -710,39 +711,39 @@ export default function OryxInsightCreator({
       const calProgress = nt.calories_target ? Math.min(1, (nt.calories_consumed ?? 0) / nt.calories_target) : 0;
       return (
         <View style={{ gap: 8 }}>
-          <Text style={{ fontSize: 9, color: '#888888', letterSpacing: 2, textTransform: 'uppercase' }}>
+          <Text style={{ fontSize: 9, color: T.text.secondary, letterSpacing: 2, textTransform: 'uppercase' }}>
             {customTitle || 'NUTRITION'}
           </Text>
           {locationText ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Ionicons name="location-outline" size={11} color="#888888" />
-              <Text style={{ fontSize: 11, color: '#888888' }}>{locationText}</Text>
+              <Ionicons name="location-outline" size={11} color={T.text.secondary} />
+              <Text style={{ fontSize: 11, color: T.text.secondary }}>{locationText}</Text>
             </View>
           ) : null}
           {privacyToggles.show_calories && nt.calories_consumed != null && (
             <View style={{ marginTop: 4 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text style={{ fontSize: 13, color: '#f0f0f0' }}>Calories</Text>
-                <Text style={{ fontSize: 13, color: '#888888' }}>
+                <Text style={{ fontSize: 13, color: T.text.primary }}>Calories</Text>
+                <Text style={{ fontSize: 13, color: T.text.secondary }}>
                   {nt.calories_consumed} / {nt.calories_target ?? '—'}
                 </Text>
               </View>
-              <View style={{ height: 6, backgroundColor: '#2a2a2a', borderRadius: 3, overflow: 'hidden' }}>
-                <View style={{ width: `${calProgress * 100}%`, height: 6, backgroundColor: '#f0f0f0', borderRadius: 3 }} />
+              <View style={{ height: 6, backgroundColor: T.border, borderRadius: 3, overflow: 'hidden' }}>
+                <View style={{ width: `${calProgress * 100}%`, height: 6, backgroundColor: T.text.primary, borderRadius: 3 }} />
               </View>
             </View>
           )}
           {[
-            { key: 'show_protein', label: 'Protein', value: nt.protein_consumed_g, unit: 'g', color: '#e74c3c' },
-            { key: 'show_carbs', label: 'Carbs', value: nt.carbs_consumed_g, unit: 'g', color: '#f39c12' },
-            { key: 'show_fat', label: 'Fat', value: nt.fat_consumed_g, unit: 'g', color: '#3498db' },
+            { key: 'show_protein', label: 'Protein', value: nt.protein_consumed_g, unit: 'g', color: T.readiness.low },
+            { key: 'show_carbs', label: 'Carbs', value: nt.carbs_consumed_g, unit: 'g', color: T.status.warn },
+            { key: 'show_fat', label: 'Fat', value: nt.fat_consumed_g, unit: 'g', color: T.signal.load },
           ].filter(m => privacyToggles[m.key] && m.value != null).map((macro, i) => (
             <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: macro.color }} />
-                <Text style={{ fontSize: 13, color: '#888888' }}>{macro.label}</Text>
+                <Text style={{ fontSize: 13, color: T.text.secondary }}>{macro.label}</Text>
               </View>
-              <Text style={{ fontSize: 13, color: '#f0f0f0', fontWeight: '600' }}>{macro.value}{macro.unit}</Text>
+              <Text style={{ fontSize: 13, color: T.text.primary, fontFamily: TY.sans.semibold }}>{macro.value}{macro.unit}</Text>
             </View>
           ))}
         </View>
@@ -751,8 +752,8 @@ export default function OryxInsightCreator({
 
     return (
       <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 20 }}>
-        <Ionicons name="stats-chart-outline" size={32} color="#555555" />
-        <Text style={{ color: '#555555', marginTop: 8, fontSize: 13 }}>Select a session to preview</Text>
+        <Ionicons name="stats-chart-outline" size={32} color={T.text.muted} />
+        <Text style={{ color: T.text.muted, marginTop: 8, fontSize: 13 }}>Select a session to preview</Text>
       </View>
     );
   };
@@ -791,7 +792,7 @@ export default function OryxInsightCreator({
 
     return (
       <View style={{ marginBottom: 16 }}>
-        <Text style={{ fontSize: 10, color: '#555555', letterSpacing: 1, textTransform: 'uppercase', marginHorizontal: 16, marginBottom: 8, fontWeight: '700' }}>
+        <Text style={{ fontSize: 10, color: T.text.muted, letterSpacing: 1, textTransform: 'uppercase', marginHorizontal: 16, marginBottom: 8, fontFamily: TY.sans.bold }}>
           PRIVACY
         </Text>
         <View style={{ marginHorizontal: 16, gap: 4 }}>
@@ -803,16 +804,16 @@ export default function OryxInsightCreator({
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 padding: 12,
-                backgroundColor: '#1a1a1a',
-                borderRadius: 8,
+                backgroundColor: T.bg.elevated,
+                borderRadius: R.xs,
               }}
             >
-              <Text style={{ fontSize: 14, color: '#f0f0f0' }}>{t.label}</Text>
+              <Text style={{ fontSize: 14, color: T.text.primary }}>{t.label}</Text>
               <Switch
                 value={privacyToggles[t.key] ?? true}
                 onValueChange={() => togglePrivacy(t.key)}
-                trackColor={{ false: '#2a2a2a', true: '#555555' }}
-                thumbColor={privacyToggles[t.key] ? '#f0f0f0' : '#888888'}
+                trackColor={{ false: T.border, true: T.text.muted }}
+                thumbColor={privacyToggles[t.key] ? T.text.primary : T.text.secondary}
               />
             </View>
           ))}
@@ -823,7 +824,7 @@ export default function OryxInsightCreator({
 
   const renderCompose = () => {
     const captionLen = caption.length;
-    const captionColor = captionLen >= 2200 ? '#c0392b' : captionLen >= 2000 ? '#e67e22' : '#888888';
+    const captionColor = captionLen >= 2200 ? T.status.danger : captionLen >= 2000 ? T.status.warn : T.text.secondary;
     const titleLen = customTitle.length;
     const selectedClubObj = selectedClub;
 
@@ -834,7 +835,7 @@ export default function OryxInsightCreator({
           {/* Text card: background style selector */}
           {insightType === 'text' && (
             <View style={{ paddingHorizontal: 16, paddingTop: 16, marginBottom: 12 }}>
-              <Text style={{ fontSize: 10, color: '#555555', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8, fontWeight: '700' }}>
+              <Text style={{ fontSize: 10, color: T.text.muted, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8, fontFamily: TY.sans.bold }}>
                 BACKGROUND
               </Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -848,7 +849,7 @@ export default function OryxInsightCreator({
                       borderRadius: 6,
                       backgroundColor: bg.color,
                       borderWidth: bgStyle === bg.key ? 2 : 1,
-                      borderColor: bgStyle === bg.key ? '#ffffff' : '#2a2a2a',
+                      borderColor: bgStyle === bg.key ? T.accent : T.border,
                     }}
                   />
                 ))}
@@ -859,13 +860,13 @@ export default function OryxInsightCreator({
           {/* Card Preview */}
           <View
             style={{
-              backgroundColor: '#1a1a1a',
-              borderRadius: 16,
+              backgroundColor: T.bg.elevated,
+              borderRadius: R.md,
               marginHorizontal: 16,
               padding: 16,
               marginBottom: 16,
               borderWidth: 1,
-              borderColor: '#2a2a2a',
+              borderColor: T.border,
               marginTop: insightType !== 'text' ? 16 : 0,
             }}
           >
@@ -877,24 +878,24 @@ export default function OryxInsightCreator({
             <View style={{ marginHorizontal: 16, marginBottom: 16 }}>
               <TextInput
                 style={{
-                  backgroundColor: '#1a1a1a',
-                  borderRadius: 12,
+                  backgroundColor: T.bg.elevated,
+                  borderRadius: R.sm,
                   borderWidth: 1,
-                  borderColor: '#2a2a2a',
+                  borderColor: T.border,
                   padding: 14,
-                  color: '#ffffff',
+                  color: T.text.primary,
                   fontSize: 16,
                   textAlign: 'center',
                   minHeight: 80,
                 }}
                 placeholder="Write something..."
-                placeholderTextColor="#555555"
+                placeholderTextColor={T.text.muted}
                 value={textContent}
                 onChangeText={setTextContent}
                 multiline
                 maxLength={200}
               />
-              <Text style={{ fontSize: 11, color: '#888888', textAlign: 'right', marginTop: 4 }}>
+              <Text style={{ fontSize: 11, color: T.text.secondary, textAlign: 'right', marginTop: 4 }}>
                 {textContent.length}/200
               </Text>
             </View>
@@ -903,28 +904,28 @@ export default function OryxInsightCreator({
           {/* Title (not for text cards) */}
           {insightType !== 'text' && (
             <View style={{ marginBottom: 16 }}>
-              <Text style={{ fontSize: 10, color: '#555555', letterSpacing: 1, textTransform: 'uppercase', marginHorizontal: 16, marginBottom: 8, fontWeight: '700' }}>
+              <Text style={{ fontSize: 10, color: T.text.muted, letterSpacing: 1, textTransform: 'uppercase', marginHorizontal: 16, marginBottom: 8, fontFamily: TY.sans.bold }}>
                 TITLE
               </Text>
               <View style={{ marginHorizontal: 16 }}>
                 <TextInput
                   style={{
-                    backgroundColor: '#1a1a1a',
-                    borderRadius: 12,
+                    backgroundColor: T.bg.elevated,
+                    borderRadius: R.sm,
                     borderWidth: 1,
-                    borderColor: '#2a2a2a',
+                    borderColor: T.border,
                     padding: 12,
-                    color: '#f0f0f0',
+                    color: T.text.primary,
                     fontSize: 14,
                   }}
                   placeholder="Morning grind"
-                  placeholderTextColor="#555555"
+                  placeholderTextColor={T.text.muted}
                   value={customTitle}
                   onChangeText={setCustomTitle}
                   maxLength={40}
                 />
                 {titleLen > 0 && (
-                  <Text style={{ fontSize: 11, color: '#888888', textAlign: 'right', marginTop: 4 }}>
+                  <Text style={{ fontSize: 11, color: T.text.secondary, textAlign: 'right', marginTop: 4 }}>
                     {titleLen}/40
                   </Text>
                 )}
@@ -934,24 +935,24 @@ export default function OryxInsightCreator({
 
           {/* Caption */}
           <View style={{ marginBottom: 16 }}>
-            <Text style={{ fontSize: 10, color: '#555555', letterSpacing: 1, textTransform: 'uppercase', marginHorizontal: 16, marginBottom: 8, fontWeight: '700' }}>
+            <Text style={{ fontSize: 10, color: T.text.muted, letterSpacing: 1, textTransform: 'uppercase', marginHorizontal: 16, marginBottom: 8, fontFamily: TY.sans.bold }}>
               CAPTION
             </Text>
             <View style={{ marginHorizontal: 16 }}>
               <TextInput
                 style={{
-                  backgroundColor: '#1a1a1a',
-                  borderRadius: 12,
+                  backgroundColor: T.bg.elevated,
+                  borderRadius: R.sm,
                   borderWidth: 1,
-                  borderColor: '#2a2a2a',
+                  borderColor: T.border,
                   padding: 12,
-                  color: '#f0f0f0',
+                  color: T.text.primary,
                   fontSize: 14,
                   height: 80,
                   textAlignVertical: 'top',
                 }}
                 placeholder="Add a caption..."
-                placeholderTextColor="#555555"
+                placeholderTextColor={T.text.muted}
                 value={caption}
                 onChangeText={setCaption}
                 multiline
@@ -965,7 +966,7 @@ export default function OryxInsightCreator({
 
           {/* Location */}
           <View style={{ marginBottom: 16 }}>
-            <Text style={{ fontSize: 10, color: '#555555', letterSpacing: 1, textTransform: 'uppercase', marginHorizontal: 16, marginBottom: 8, fontWeight: '700' }}>
+            <Text style={{ fontSize: 10, color: T.text.muted, letterSpacing: 1, textTransform: 'uppercase', marginHorizontal: 16, marginBottom: 8, fontFamily: TY.sans.bold }}>
               LOCATION
             </Text>
             {showLocationInput ? (
@@ -973,16 +974,16 @@ export default function OryxInsightCreator({
                 <TextInput
                   style={{
                     flex: 1,
-                    backgroundColor: '#1a1a1a',
-                    borderRadius: 12,
+                    backgroundColor: T.bg.elevated,
+                    borderRadius: R.sm,
                     borderWidth: 1,
-                    borderColor: '#2a2a2a',
+                    borderColor: T.border,
                     padding: 12,
-                    color: '#f0f0f0',
+                    color: T.text.primary,
                     fontSize: 14,
                   }}
                   placeholder="City, Country"
-                  placeholderTextColor="#555555"
+                  placeholderTextColor={T.text.muted}
                   value={locationInputValue}
                   onChangeText={setLocationInputValue}
                   autoFocus
@@ -994,14 +995,14 @@ export default function OryxInsightCreator({
                     setLocationInputValue('');
                   }}
                   style={{
-                    backgroundColor: '#ffffff',
-                    borderRadius: 12,
+                    backgroundColor: T.accent,
+                    borderRadius: R.sm,
                     paddingHorizontal: 14,
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
                 >
-                  <Text style={{ color: '#000000', fontWeight: '600' }}>Set</Text>
+                  <Text style={{ color: T.accentInk, fontFamily: TY.sans.semibold }}>Set</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -1012,20 +1013,20 @@ export default function OryxInsightCreator({
                   alignItems: 'center',
                   gap: 8,
                   marginHorizontal: 16,
-                  backgroundColor: '#1a1a1a',
-                  borderRadius: 12,
+                  backgroundColor: T.bg.elevated,
+                  borderRadius: R.sm,
                   borderWidth: 1,
-                  borderColor: '#2a2a2a',
+                  borderColor: T.border,
                   padding: 12,
                 }}
               >
-                <Ionicons name="location-outline" size={16} color={locationText ? '#f0f0f0' : '#555555'} />
-                <Text style={{ flex: 1, fontSize: 14, color: locationText ? '#f0f0f0' : '#555555' }}>
+                <Ionicons name="location-outline" size={16} color={locationText ? T.text.primary : T.text.muted} />
+                <Text style={{ flex: 1, fontSize: 14, color: locationText ? T.text.primary : T.text.muted }}>
                   {locationText || 'Add location'}
                 </Text>
                 {locationText && (
                   <TouchableOpacity onPress={() => setLocationText('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Ionicons name="close-circle" size={16} color="#555555" />
+                    <Ionicons name="close-circle" size={16} color={T.text.muted} />
                   </TouchableOpacity>
                 )}
               </TouchableOpacity>
@@ -1037,7 +1038,7 @@ export default function OryxInsightCreator({
 
           {/* Share Options */}
           <View style={{ marginBottom: 16 }}>
-            <Text style={{ fontSize: 10, color: '#555555', letterSpacing: 1, textTransform: 'uppercase', marginHorizontal: 16, marginBottom: 8, fontWeight: '700' }}>
+            <Text style={{ fontSize: 10, color: T.text.muted, letterSpacing: 1, textTransform: 'uppercase', marginHorizontal: 16, marginBottom: 8, fontFamily: TY.sans.bold }}>
               SHARE OPTIONS
             </Text>
             <View style={{ marginHorizontal: 16, gap: 4 }}>
@@ -1047,16 +1048,16 @@ export default function OryxInsightCreator({
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: 12,
-                  backgroundColor: '#1a1a1a',
-                  borderRadius: 8,
+                  backgroundColor: T.bg.elevated,
+                  borderRadius: R.xs,
                 }}
               >
-                <Text style={{ fontSize: 14, color: '#f0f0f0' }}>Also share as Story</Text>
+                <Text style={{ fontSize: 14, color: T.text.primary }}>Also share as Story</Text>
                 <Switch
                   value={alsoStory}
                   onValueChange={setAlsoStory}
-                  trackColor={{ false: '#2a2a2a', true: '#555555' }}
-                  thumbColor={alsoStory ? '#f0f0f0' : '#888888'}
+                  trackColor={{ false: T.border, true: T.text.muted }}
+                  thumbColor={alsoStory ? T.text.primary : T.text.secondary}
                 />
               </View>
 
@@ -1067,17 +1068,17 @@ export default function OryxInsightCreator({
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: 12,
-                  backgroundColor: '#1a1a1a',
-                  borderRadius: 8,
+                  backgroundColor: T.bg.elevated,
+                  borderRadius: R.xs,
                 }}
               >
                 <View>
-                  <Text style={{ fontSize: 14, color: '#f0f0f0' }}>Tag a Club</Text>
-                  <Text style={{ fontSize: 12, color: '#555555', marginTop: 1 }}>
+                  <Text style={{ fontSize: 14, color: T.text.primary }}>Tag a Club</Text>
+                  <Text style={{ fontSize: 12, color: T.text.muted, marginTop: 1 }}>
                     {selectedClub ? selectedClub.name : 'None selected'}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color="#555555" />
+                <Ionicons name="chevron-forward" size={18} color={T.text.muted} />
               </TouchableOpacity>
             </View>
           </View>
@@ -1094,17 +1095,17 @@ export default function OryxInsightCreator({
             paddingHorizontal: 16,
             paddingBottom: insets.bottom + 24,
             paddingTop: 12,
-            backgroundColor: '#0a0a0a',
+            backgroundColor: T.bg.primary,
             borderTopWidth: 1,
-            borderTopColor: '#2a2a2a',
+            borderTopColor: T.border,
           }}
         >
           <TouchableOpacity
             onPress={handleShare}
             disabled={posting}
             style={{
-              backgroundColor: '#ffffff',
-              borderRadius: 16,
+              backgroundColor: T.accent,
+              borderRadius: R.md,
               height: 52,
               alignItems: 'center',
               justifyContent: 'center',
@@ -1112,9 +1113,9 @@ export default function OryxInsightCreator({
             }}
           >
             {posting ? (
-              <ActivityIndicator color="#000000" />
+              <ActivityIndicator color={T.accentInk} />
             ) : (
-              <Text style={{ fontSize: 16, fontWeight: '700', color: '#000000' }}>Share</Text>
+              <Text style={{ fontSize: 16, fontFamily: TY.sans.bold, color: T.accentInk }}>Share</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -1124,7 +1125,7 @@ export default function OryxInsightCreator({
 
   return (
     <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: '#0a0a0a' }}>
+      <View style={{ flex: 1, backgroundColor: T.bg.primary }}>
         {/* Header */}
         <View
           style={{
@@ -1134,7 +1135,7 @@ export default function OryxInsightCreator({
             paddingHorizontal: 16,
             paddingBottom: 12,
             borderBottomWidth: 1,
-            borderBottomColor: '#2a2a2a',
+            borderBottomColor: T.border,
           }}
         >
           <TouchableOpacity
@@ -1155,13 +1156,13 @@ export default function OryxInsightCreator({
             }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="arrow-back" size={24} color="#f0f0f0" />
+            <Ionicons name="arrow-back" size={24} color={T.text.primary} />
           </TouchableOpacity>
-          <Text style={{ flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '700', color: '#f0f0f0' }}>
+          <Text style={{ flex: 1, textAlign: 'center', fontSize: 16, fontFamily: TY.sans.bold, color: T.text.primary }}>
             {step === 'type-select' ? 'ORYX Insight' : step === 'session-select' ? 'Select Session' : 'Compose'}
           </Text>
           <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="close" size={22} color="#888888" />
+            <Ionicons name="close" size={22} color={T.text.secondary} />
           </TouchableOpacity>
         </View>
 
@@ -1183,7 +1184,7 @@ export default function OryxInsightCreator({
               zIndex: 999,
             }}
           >
-            <Text style={{ color: '#ffffff', fontSize: 14, fontWeight: '600' }}>{toast.message}</Text>
+            <Text style={{ color: T.text.primary, fontSize: 14, fontFamily: TY.sans.semibold }}>{toast.message}</Text>
           </View>
         )}
 
@@ -1202,7 +1203,7 @@ export default function OryxInsightCreator({
             <TouchableOpacity activeOpacity={1} onPress={() => {}}>
               <View
                 style={{
-                  backgroundColor: '#1a1a1a',
+                  backgroundColor: T.bg.elevated,
                   borderTopLeftRadius: 20,
                   borderTopRightRadius: 20,
                   padding: 20,
@@ -1210,8 +1211,8 @@ export default function OryxInsightCreator({
                   paddingBottom: insets.bottom + 16,
                 }}
               >
-                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#2a2a2a', alignSelf: 'center', marginBottom: 16 }} />
-                <Text style={{ fontSize: 15, fontWeight: '700', color: '#f0f0f0', marginBottom: 12 }}>Select Club</Text>
+                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: T.border, alignSelf: 'center', marginBottom: 16 }} />
+                <Text style={{ fontSize: 15, fontFamily: TY.sans.bold, color: T.text.primary, marginBottom: 12 }}>Select Club</Text>
                 <TouchableOpacity
                   onPress={() => { setSelectedClub(null); setShowClubSheet(false); }}
                   style={{
@@ -1220,15 +1221,15 @@ export default function OryxInsightCreator({
                     justifyContent: 'space-between',
                     paddingVertical: 12,
                     paddingHorizontal: 8,
-                    borderRadius: 8,
-                    backgroundColor: !selectedClub ? '#2a2a2a' : 'transparent',
+                    borderRadius: R.xs,
+                    backgroundColor: !selectedClub ? T.border : 'transparent',
                   }}
                 >
-                  <Text style={{ color: '#f0f0f0', fontSize: 14 }}>None</Text>
-                  {!selectedClub && <Ionicons name="checkmark" size={18} color="#f0f0f0" />}
+                  <Text style={{ color: T.text.primary, fontSize: 14 }}>None</Text>
+                  {!selectedClub && <Ionicons name="checkmark" size={18} color={T.text.primary} />}
                 </TouchableOpacity>
                 {clubs.length === 0 ? (
-                  <Text style={{ color: '#555555', fontSize: 13, paddingVertical: 8, paddingHorizontal: 8 }}>No clubs joined</Text>
+                  <Text style={{ color: T.text.muted, fontSize: 13, paddingVertical: 8, paddingHorizontal: 8 }}>No clubs joined</Text>
                 ) : (
                   clubs.map(c => (
                     <TouchableOpacity
@@ -1240,12 +1241,12 @@ export default function OryxInsightCreator({
                         justifyContent: 'space-between',
                         paddingVertical: 12,
                         paddingHorizontal: 8,
-                        borderRadius: 8,
-                        backgroundColor: selectedClub?.id === c.id ? '#2a2a2a' : 'transparent',
+                        borderRadius: R.xs,
+                        backgroundColor: selectedClub?.id === c.id ? T.border : 'transparent',
                       }}
                     >
-                      <Text style={{ color: '#f0f0f0', fontSize: 14 }}>{c.name}</Text>
-                      {selectedClub?.id === c.id && <Ionicons name="checkmark" size={18} color="#f0f0f0" />}
+                      <Text style={{ color: T.text.primary, fontSize: 14 }}>{c.name}</Text>
+                      {selectedClub?.id === c.id && <Ionicons name="checkmark" size={18} color={T.text.primary} />}
                     </TouchableOpacity>
                   ))
                 )}

@@ -30,16 +30,19 @@ import {
   WarmUpRequest,
 } from '@/services/api';
 import { useTheme } from '@/contexts/ThemeContext';
-import { ThemeColors } from '@/services/theme';
+import { ThemeColors, type as TY, radius as R, space as SP } from '@/services/theme';
 
-// ── Phase colors (stays within monochrome for phases, accent for activation) ──
+// ── Phase colors (monochrome hierarchy for phases, accent for activation) ──
 
-const PHASE_COLORS: Record<string, string> = {
-  'General Cardio': '#555555',
-  'Mobility':       '#888888',
-  'Activation':     '#27ae60',
-  'Ramp-Up Sets':   '#e0e0e0',
-};
+function phaseColorFor(phase: string, t: ThemeColors): string {
+  switch (phase) {
+    case 'General Cardio': return t.text.muted;
+    case 'Mobility':       return t.text.secondary;
+    case 'Activation':     return t.accent;
+    case 'Ramp-Up Sets':   return t.text.body;
+    default:               return t.text.secondary;
+  }
+}
 
 const MUSCLE_OPTIONS = [
   'quads', 'hamstrings', 'glutes', 'calves',
@@ -134,7 +137,7 @@ function ExerciseRow({
         style={{
           width: 22,
           height: 22,
-          borderRadius: 11,
+          borderRadius: R.pill,
           borderWidth: 2,
           borderColor: checked ? phaseColor : t.border,
           backgroundColor: checked ? phaseColor : 'transparent',
@@ -143,24 +146,26 @@ function ExerciseRow({
           marginTop: 1,
         }}
       >
-        {checked && <Ionicons name="checkmark" size={13} color="#0a0a0a" />}
+        {checked && <Ionicons name="checkmark" size={13} color={t.accentInk} />}
       </View>
 
       {/* Text block */}
       <View style={{ flex: 1, gap: 2 }}>
         <Text
           style={{
-            fontSize: 15,
-            fontWeight: '500',
+            fontFamily: TY.sans.medium,
+            fontSize: TY.size.body + 1,
             color: t.text.primary,
             textDecorationLine: checked ? 'line-through' : 'none',
           }}
         >
           {exercise.name}
         </Text>
-        <Text style={{ fontSize: 13, color: t.text.secondary }}>{exercise.detail}</Text>
+        <Text style={{ fontFamily: TY.sans.regular, fontSize: TY.size.small + 1, color: t.text.secondary }}>
+          {exercise.detail}
+        </Text>
         {exercise.note ? (
-          <Text style={{ fontSize: 12, color: t.text.muted, fontStyle: 'italic', marginTop: 1 }}>
+          <Text style={{ fontFamily: TY.sans.regular, fontSize: TY.size.small, color: t.text.muted, fontStyle: 'italic', marginTop: 1 }}>
             {exercise.note}
           </Text>
         ) : null}
@@ -237,7 +242,7 @@ function SetupScreen({
         disabled={!selectedSession || selectedMuscles.length === 0}
         activeOpacity={0.85}
       >
-        <Ionicons name="flash" size={18} color="#0a0a0a" />
+        <Ionicons name="flash" size={18} color={t.accentInk} />
         <Text style={s.generateBtnText}>Build My Warm-Up</Text>
       </TouchableOpacity>
 
@@ -405,7 +410,7 @@ export default function WarmUpModal({
 
           {/* Phases */}
           {protocol.phases.map((phase) => {
-            const phaseColor = PHASE_COLORS[phase.phase] ?? t.text.secondary;
+            const phaseColor = phaseColorFor(phase.phase, t);
             return (
               <View key={phase.phase} style={[s.phaseCard, { borderLeftColor: phaseColor }]}>
                 <Text style={[s.phaseName, { color: phaseColor }]}>
@@ -456,17 +461,18 @@ function mainStyles(t: ThemeColors) {
       backgroundColor: t.bg.primary,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 12,
-      padding: 32,
+      gap: SP[3],
+      padding: SP[7],
     },
     loadingTitle: {
-      fontSize: 20,
-      fontWeight: '700',
+      fontFamily: TY.sans.bold,
+      fontSize: TY.size.h3 + 2,
       color: t.text.primary,
       textAlign: 'center',
     },
     loadingSubtitle: {
-      fontSize: 14,
+      fontFamily: TY.sans.regular,
+      fontSize: TY.size.body,
       color: t.text.secondary,
       textAlign: 'center',
     },
@@ -475,8 +481,8 @@ function mainStyles(t: ThemeColors) {
       backgroundColor: t.bg.primary,
     },
     resultContent: {
-      padding: 24,
-      paddingBottom: 60,
+      padding: SP[6],
+      paddingBottom: SP[10],
     },
     handle: {
       width: 40,
@@ -484,51 +490,55 @@ function mainStyles(t: ThemeColors) {
       backgroundColor: t.border,
       borderRadius: 2,
       alignSelf: 'center',
-      marginBottom: 24,
+      marginBottom: SP[6],
     },
     resultHeader: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      gap: 12,
-      marginBottom: 12,
+      gap: SP[3],
+      marginBottom: SP[3],
     },
     resultTitle: {
-      fontSize: 22,
-      fontWeight: '700',
+      fontFamily: TY.sans.bold,
+      fontSize: TY.size.h2,
       color: t.text.primary,
+      letterSpacing: TY.tracking.tight,
     },
     resultSession: {
-      fontSize: 13,
+      fontFamily: TY.sans.regular,
+      fontSize: TY.size.small + 1,
       color: t.text.secondary,
       marginTop: 3,
     },
     durationBadge: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 4,
+      gap: SP[1],
       backgroundColor: t.bg.elevated,
-      borderRadius: 8,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
+      borderRadius: R.xs,
+      paddingHorizontal: SP[3] - 2,
+      paddingVertical: SP[2] - 2,
       borderWidth: 1,
       borderColor: t.border,
     },
     durationText: {
-      fontSize: 13,
+      fontFamily: TY.mono.semibold,
+      fontSize: TY.size.small + 1,
       color: t.text.secondary,
-      fontWeight: '600',
+      letterSpacing: TY.tracking.tight,
     },
     summary: {
-      fontSize: 14,
+      fontFamily: TY.sans.regular,
+      fontSize: TY.size.body,
       color: t.text.secondary,
       lineHeight: 20,
-      marginBottom: 16,
+      marginBottom: SP[4],
     },
     progressRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 10,
-      marginBottom: 20,
+      gap: SP[3] - 2,
+      marginBottom: SP[5],
     },
     progressBarTrack: {
       flex: 1,
@@ -543,53 +553,57 @@ function mainStyles(t: ThemeColors) {
       borderRadius: 2,
     },
     progressText: {
-      fontSize: 12,
+      fontFamily: TY.mono.medium,
+      fontSize: TY.size.small,
       color: t.text.muted,
       minWidth: 52,
       textAlign: 'right',
     },
     phaseCard: {
       backgroundColor: t.bg.elevated,
-      borderRadius: 14,
-      padding: 16,
+      borderRadius: R.md,
+      padding: SP[4],
       borderWidth: 1,
       borderColor: t.border,
       borderLeftWidth: 3,
-      marginBottom: 12,
+      marginBottom: SP[3],
     },
     phaseName: {
-      fontSize: 10,
-      fontWeight: '700',
-      letterSpacing: 1.5,
+      fontFamily: TY.mono.bold,
+      fontSize: TY.size.micro,
+      letterSpacing: TY.tracking.label,
       textTransform: 'uppercase',
-      marginBottom: 4,
+      marginBottom: SP[1],
     },
     doneBtn: {
-      backgroundColor: t.text.primary,
-      borderRadius: 12,
-      paddingVertical: 16,
+      backgroundColor: t.accent,
+      borderRadius: R.sm,
+      paddingVertical: SP[4],
       alignItems: 'center',
-      marginTop: 8,
-      marginBottom: 12,
+      marginTop: SP[2],
+      marginBottom: SP[3],
     },
     doneBtnText: {
-      color: t.bg.primary,
-      fontSize: 16,
-      fontWeight: '700',
+      fontFamily: TY.sans.bold,
+      color: t.accentInk,
+      fontSize: TY.size.body + 2,
+      letterSpacing: TY.tracking.tight,
     },
     secondaryActions: {
       flexDirection: 'row',
       justifyContent: 'center',
-      gap: 32,
-      paddingVertical: 8,
+      gap: SP[7],
+      paddingVertical: SP[2],
     },
     regenerateText: {
-      fontSize: 14,
+      fontFamily: TY.sans.medium,
+      fontSize: TY.size.body,
       color: t.text.secondary,
       textDecorationLine: 'underline',
     },
     skipResultText: {
-      fontSize: 14,
+      fontFamily: TY.sans.medium,
+      fontSize: TY.size.body,
       color: t.text.muted,
     },
   });
@@ -602,8 +616,8 @@ function setupStyles(t: ThemeColors) {
       backgroundColor: t.bg.primary,
     },
     content: {
-      padding: 24,
-      paddingBottom: 60,
+      padding: SP[6],
+      paddingBottom: SP[10],
     },
     handle: {
       width: 40,
@@ -611,102 +625,108 @@ function setupStyles(t: ThemeColors) {
       backgroundColor: t.border,
       borderRadius: 2,
       alignSelf: 'center',
-      marginBottom: 24,
+      marginBottom: SP[6],
     },
     title: {
-      fontSize: 24,
-      fontWeight: '700',
+      fontFamily: TY.sans.bold,
+      fontSize: TY.size.h2 + 2,
       color: t.text.primary,
-      marginBottom: 8,
+      letterSpacing: TY.tracking.tight,
+      marginBottom: SP[2],
     },
     subtitle: {
-      fontSize: 14,
+      fontFamily: TY.sans.regular,
+      fontSize: TY.size.body,
       color: t.text.secondary,
       lineHeight: 20,
-      marginBottom: 28,
+      marginBottom: SP[7] - 4,
     },
     fieldLabel: {
-      fontSize: 10,
-      fontWeight: '600',
+      fontFamily: TY.mono.semibold,
+      fontSize: TY.size.micro,
       color: t.text.muted,
       textTransform: 'uppercase',
-      letterSpacing: 1.5,
-      marginBottom: 10,
+      letterSpacing: TY.tracking.label,
+      marginBottom: SP[3] - 2,
     },
     optionRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 10,
-      paddingVertical: 12,
-      paddingHorizontal: 14,
-      borderRadius: 12,
+      gap: SP[3] - 2,
+      paddingVertical: SP[3],
+      paddingHorizontal: SP[4] - 2,
+      borderRadius: R.sm,
       backgroundColor: t.bg.elevated,
       borderWidth: 1,
       borderColor: t.border,
-      marginBottom: 8,
+      marginBottom: SP[2],
     },
     optionRowSelected: {
       borderColor: t.accent,
       backgroundColor: t.bg.subtle,
     },
     optionText: {
-      fontSize: 15,
+      fontFamily: TY.sans.regular,
+      fontSize: TY.size.body + 1,
       color: t.text.secondary,
     },
     optionTextSelected: {
+      fontFamily: TY.sans.semibold,
       color: t.text.primary,
-      fontWeight: '600',
     },
     muscleGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 8,
-      marginBottom: 28,
+      gap: SP[2],
+      marginBottom: SP[7] - 4,
     },
     muscleTag: {
-      paddingHorizontal: 14,
-      paddingVertical: 9,
-      borderRadius: 20,
+      paddingHorizontal: SP[4] - 2,
+      paddingVertical: SP[2] + 1,
+      borderRadius: R.pill,
       backgroundColor: t.bg.elevated,
       borderWidth: 1,
       borderColor: t.border,
     },
     muscleTagSelected: {
-      backgroundColor: t.text.primary,
-      borderColor: t.text.primary,
+      backgroundColor: t.accent,
+      borderColor: t.accent,
     },
     muscleTagText: {
-      fontSize: 14,
+      fontFamily: TY.sans.regular,
+      fontSize: TY.size.body,
       color: t.text.secondary,
     },
     muscleTagTextSelected: {
-      color: t.bg.primary,
-      fontWeight: '600',
+      fontFamily: TY.sans.semibold,
+      color: t.accentInk,
     },
     generateBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 8,
-      backgroundColor: t.text.primary,
-      borderRadius: 12,
-      paddingVertical: 16,
-      marginBottom: 12,
+      gap: SP[2],
+      backgroundColor: t.accent,
+      borderRadius: R.sm,
+      paddingVertical: SP[4],
+      marginBottom: SP[3],
     },
     btnDisabled: {
       opacity: 0.4,
     },
     generateBtnText: {
-      color: t.bg.primary,
-      fontSize: 16,
-      fontWeight: '700',
+      fontFamily: TY.sans.bold,
+      color: t.accentInk,
+      fontSize: TY.size.body + 2,
+      letterSpacing: TY.tracking.tight,
     },
     skipBtn: {
       alignItems: 'center',
-      paddingVertical: 12,
+      paddingVertical: SP[3],
     },
     skipText: {
-      fontSize: 14,
+      fontFamily: TY.sans.medium,
+      fontSize: TY.size.body,
       color: t.text.muted,
     },
   });

@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { createStory, createPost, uploadMedia } from '@/services/api';
+import { theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -308,24 +309,24 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
             style={{ position: 'absolute', top: insets.top + 12, left: 16, zIndex: 20 }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="close" size={28} color="#ffffff" />
+            <Ionicons name="close" size={28} color={T.text.primary} />
           </TouchableOpacity>
 
           {hasCameraView ? (
             <>
               {!cameraPermission?.granted ? (
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-                  <Text style={{ color: '#ffffff', fontSize: 15, textAlign: 'center', paddingHorizontal: 32 }}>
+                  <Text style={{ color: T.text.primary, fontSize: 15, textAlign: 'center', paddingHorizontal: 32 }}>
                     Camera access needed to take story photos
                   </Text>
                   <TouchableOpacity
                     onPress={requestCameraPermission}
-                    style={{ backgroundColor: '#ffffff', borderRadius: 24, paddingHorizontal: 24, paddingVertical: 12 }}
+                    style={{ backgroundColor: T.accent, borderRadius: R.pill, paddingHorizontal: 24, paddingVertical: 12 }}
                   >
-                    <Text style={{ color: '#000000', fontWeight: '700', fontSize: 15 }}>Allow Camera</Text>
+                    <Text style={{ color: T.accentInk, fontFamily: TY.sans.bold, fontSize: 15 }}>Allow Camera</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={openGallery} style={{ marginTop: 8 }}>
-                    <Text style={{ color: '#888888', fontSize: 14 }}>Or choose from gallery</Text>
+                    <Text style={{ color: T.text.secondary, fontSize: 14 }}>Or choose from gallery</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
@@ -349,8 +350,8 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
           ) : (
             // Fallback: no live camera, just show options
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 20 }}>
-              <Ionicons name="camera" size={64} color="#555555" />
-              <Text style={{ color: '#888888', fontSize: 15 }}>Choose a photo</Text>
+              <Ionicons name="camera" size={64} color={T.text.muted} />
+              <Text style={{ color: T.text.secondary, fontSize: 15 }}>Choose a photo</Text>
             </View>
           )}
 
@@ -369,10 +370,10 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
             >
               <View style={{
                 backgroundColor: 'rgba(0,0,0,0.65)',
-                borderRadius: 20,
+                borderRadius: R.lg,
                 paddingHorizontal: 14, paddingVertical: 6,
               }}>
-                <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 14 }}>
+                <Text style={{ color: T.text.primary, fontFamily: TY.sans.bold, fontSize: 14 }}>
                   {ZOOM_LEVELS[activeZoomIdx]?.label ?? `${(zoom * 2 + 1).toFixed(1)}x`}
                 </Text>
               </View>
@@ -395,15 +396,15 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
                     onPress={() => handleZoomButton(idx)}
                     style={{
                       paddingHorizontal: 14, paddingVertical: 7,
-                      borderRadius: 20,
-                      backgroundColor: activeZoomIdx === idx ? '#ffffff' : 'rgba(0,0,0,0.55)',
+                      borderRadius: R.lg,
+                      backgroundColor: activeZoomIdx === idx ? T.accent : 'rgba(0,0,0,0.55)',
                       borderWidth: activeZoomIdx === idx ? 0 : 1,
                       borderColor: 'rgba(255,255,255,0.3)',
                     }}
                   >
                     <Text style={{
-                      fontSize: 13, fontWeight: '700',
-                      color: activeZoomIdx === idx ? '#000000' : 'rgba(255,255,255,0.7)',
+                      fontFamily: TY.mono.bold, fontSize: TY.size.small + 1,
+                      color: activeZoomIdx === idx ? T.accentInk : 'rgba(255,255,255,0.7)',
                     }}>
                       {level.label}
                     </Text>
@@ -417,7 +418,7 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
           <View style={[styles.cameraBottomRow, { paddingBottom: insets.bottom + 24 }]}>
             {/* Gallery */}
             <TouchableOpacity onPress={openGallery} style={styles.cameraIconBtn}>
-              <Ionicons name="images-outline" size={26} color="#ffffff" />
+              <Ionicons name="images-outline" size={26} color={T.text.primary} />
             </TouchableOpacity>
 
             {/* Capture / take */}
@@ -433,7 +434,7 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
                 onPress={() => setCameraFacing(f => f === 'back' ? 'front' : 'back')}
                 style={styles.cameraIconBtn}
               >
-                <Ionicons name="camera-reverse-outline" size={26} color="#ffffff" />
+                <Ionicons name="camera-reverse-outline" size={26} color={T.text.primary} />
               </TouchableOpacity>
             ) : (
               <View style={styles.cameraIconBtn} />
@@ -477,12 +478,12 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
               top: insets.top + 12,
               left: 16,
               zIndex: 30,
-              width: 40, height: 40, borderRadius: 20,
+              width: 40, height: 40, borderRadius: R.lg,
               backgroundColor: 'rgba(0,0,0,0.5)',
               alignItems: 'center', justifyContent: 'center',
             }}
           >
-            <Ionicons name="close" size={22} color="#ffffff" />
+            <Ionicons name="close" size={22} color={T.text.primary} />
           </TouchableOpacity>
 
           {/* Top center: Readiness pill */}
@@ -498,18 +499,18 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
                 onPress={() => setStatsAdded(v => !v)}
                 style={{
                   backgroundColor: 'rgba(0,0,0,0.55)',
-                  borderRadius: 20,
+                  borderRadius: R.lg,
                   paddingHorizontal: 14, paddingVertical: 6,
                   flexDirection: 'row', alignItems: 'center', gap: 6,
                 }}
               >
-                <Text style={{ color: currentStats.readiness_color || '#ffffff', fontWeight: '700', fontSize: 14 }}>
+                <Text style={{ color: currentStats.readiness_color || T.text.primary, fontFamily: TY.sans.bold, fontSize: TY.size.body }}>
                   {currentStats.readiness}
                 </Text>
-                <Text style={{ color: '#ffffff', fontSize: 13 }}>
+                <Text style={{ color: T.text.primary, fontSize: 13 }}>
                   {currentStats.readiness_label || 'Readiness'}
                 </Text>
-                {statsAdded && <Ionicons name="checkmark-circle" size={14} color="#27ae60" />}
+                {statsAdded && <Ionicons name="checkmark-circle" size={14} color={T.status.success} />}
               </TouchableOpacity>
             </View>
           )}
@@ -525,19 +526,19 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
                   onPress={() => setShowTextInput(true)}
                   style={styles.toolBtn}
                 >
-                  <Ionicons name="text-outline" size={22} color="#ffffff" />
+                  <Ionicons name="text-outline" size={22} color={T.text.primary} />
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => setShowStickerSheet(true)}
                   style={styles.toolBtn}
                 >
-                  <Ionicons name="happy-outline" size={22} color="#ffffff" />
+                  <Ionicons name="happy-outline" size={22} color={T.text.primary} />
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => setShowEffects(v => !v)}
-                  style={[styles.toolBtn, showEffects && { borderColor: '#ffffff', borderWidth: 2 }]}
+                  style={[styles.toolBtn, showEffects && { borderColor: T.text.primary, borderWidth: 2 }]}
                 >
-                  <Ionicons name="sparkles-outline" size={22} color="#ffffff" />
+                  <Ionicons name="sparkles-outline" size={22} color={T.text.primary} />
                 </TouchableOpacity>
               </>
             )}
@@ -545,7 +546,7 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
               onPress={() => setToolsCollapsed(v => !v)}
               style={styles.toolBtn}
             >
-              <Ionicons name={toolsCollapsed ? 'chevron-down-outline' : 'chevron-up-outline'} size={22} color="#ffffff" />
+              <Ionicons name={toolsCollapsed ? 'chevron-down-outline' : 'chevron-up-outline'} size={22} color={T.text.primary} />
             </TouchableOpacity>
           </View>
 
@@ -567,9 +568,9 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
             >
               <View style={styles.statsPill}>
                 {currentStats.readiness != null && (
-                  <Text style={[styles.statsReadiness, { color: currentStats.readiness_color || '#e0e0e0' }]}>
+                  <Text style={[styles.statsReadiness, { color: currentStats.readiness_color || T.text.body }]}>
                     {currentStats.readiness}
-                    <Text style={{ fontSize: 12, color: '#888888', fontWeight: '400' }}> {currentStats.readiness_label || ''}</Text>
+                    <Text style={{ fontSize: 12, color: T.text.secondary, fontFamily: TY.sans.regular }}> {currentStats.readiness_label || ''}</Text>
                   </Text>
                 )}
                 <View style={styles.statsRow}>
@@ -592,7 +593,7 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
           {/* Trash zone */}
           {showTrash && (
             <View style={styles.trashZone}>
-              <Ionicons name="trash-outline" size={24} color="#ffffff" />
+              <Ionicons name="trash-outline" size={24} color={T.text.primary} />
             </View>
           )}
 
@@ -613,15 +614,15 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
                       style={{ alignItems: 'center', gap: 4 }}
                     >
                       <View style={{
-                        width: 48, height: 48, borderRadius: 24,
+                        width: 48, height: 48, borderRadius: R.pill,
                         backgroundColor: filterOverlayColor[f] ?? 'rgba(255,255,255,0.15)',
                         borderWidth: activeFilter === f ? 2 : 1,
-                        borderColor: activeFilter === f ? '#ffffff' : 'rgba(255,255,255,0.3)',
+                        borderColor: activeFilter === f ? T.accent : 'rgba(255,255,255,0.3)',
                         alignItems: 'center', justifyContent: 'center',
                       }}>
-                        {f === 'none' && <Ionicons name="close" size={16} color="#ffffff" />}
+                        {f === 'none' && <Ionicons name="close" size={16} color={T.text.primary} />}
                       </View>
-                      <Text style={{ color: '#ffffff', fontSize: 10, textTransform: 'capitalize' }}>{f}</Text>
+                      <Text style={{ color: T.text.primary, fontSize: 10, textTransform: 'capitalize' }}>{f}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -643,9 +644,9 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
                 style={{
                   flex: 1,
                   backgroundColor: 'rgba(0,0,0,0.5)',
-                  borderRadius: 20, height: 40,
+                  borderRadius: R.lg, height: 40,
                   paddingHorizontal: 14,
-                  color: '#ffffff', fontSize: 14,
+                  color: T.text.primary, fontSize: 14,
                 }}
                 placeholder="Add a caption..."
                 placeholderTextColor="rgba(255,255,255,0.5)"
@@ -657,13 +658,13 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
                 disabled={uploading}
                 style={{
                   width: 52, height: 52, borderRadius: 26,
-                  backgroundColor: uploading ? 'rgba(255,255,255,0.5)' : '#ffffff',
+                  backgroundColor: uploading ? T.accentDim : T.accent,
                   alignItems: 'center', justifyContent: 'center',
                 }}
               >
                 {uploading
-                  ? <ActivityIndicator color="#000000" size="small" />
-                  : <Ionicons name="arrow-forward" size={24} color="#000000" />
+                  ? <ActivityIndicator color={T.accentInk} size="small" />
+                  : <Ionicons name="arrow-forward" size={24} color={T.accentInk} />
                 }
               </TouchableOpacity>
             </View>
@@ -677,18 +678,18 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
                 <View style={{
                   width: 44, height: 44, borderRadius: 22,
                   borderWidth: 2,
-                  borderColor: shareToStory ? '#ffffff' : 'rgba(255,255,255,0.4)',
+                  borderColor: shareToStory ? T.accent : 'rgba(255,255,255,0.4)',
                   backgroundColor: 'rgba(0,0,0,0.5)',
                   alignItems: 'center', justifyContent: 'center',
                 }}>
-                  <Ionicons name="person-circle-outline" size={24} color="#ffffff" />
+                  <Ionicons name="person-circle-outline" size={24} color={T.text.primary} />
                   {shareToStory && (
-                    <View style={{ position: 'absolute', bottom: -2, right: -2, backgroundColor: '#27ae60', borderRadius: 8, width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
-                      <Ionicons name="checkmark" size={10} color="#ffffff" />
+                    <View style={{ position: 'absolute', bottom: -2, right: -2, backgroundColor: T.status.success, borderRadius: R.xs, width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
+                      <Ionicons name="checkmark" size={10} color={T.text.primary} />
                     </View>
                   )}
                 </View>
-                <Text style={{ color: '#ffffff', fontSize: 11 }}>Your Story</Text>
+                <Text style={{ color: T.text.primary, fontSize: 11 }}>Your Story</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -712,7 +713,7 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
                 }}
                 style={styles.confirmTextBtn}
               >
-                <Text style={{ color: '#000000', fontWeight: '700', fontSize: 15 }}>OK</Text>
+                <Text style={{ color: T.accentInk, fontFamily: TY.sans.bold, fontSize: 15 }}>OK</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -737,9 +738,9 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
                         style={styles.sheetStatsPill}
                       >
                         {currentStats.readiness != null && (
-                          <Text style={[styles.statsReadiness, { color: currentStats.readiness_color || '#e0e0e0' }]}>
+                          <Text style={[styles.statsReadiness, { color: currentStats.readiness_color || T.text.body }]}>
                             {currentStats.readiness}
-                            <Text style={{ fontSize: 12, color: '#888888', fontWeight: '400' }}>  {currentStats.readiness_label || ''}</Text>
+                            <Text style={{ fontSize: 12, color: T.text.secondary, fontFamily: TY.sans.regular }}>  {currentStats.readiness_label || ''}</Text>
                           </Text>
                         )}
                         <View style={styles.statsRow}>
@@ -771,12 +772,12 @@ export default function StoryCreator({ visible, onClose, onStoryCreated, current
                             setShowStickerSheet(false);
                           }}
                           style={{
-                            backgroundColor: '#2a2a2a', borderRadius: 20,
+                            backgroundColor: T.border, borderRadius: R.lg,
                             paddingHorizontal: 14, paddingVertical: 8,
-                            borderWidth: 1, borderColor: '#3a3a3a',
+                            borderWidth: 1, borderColor: T.glass.rim,
                           }}
                         >
-                          <Text style={{ color: '#f0f0f0', fontSize: 13, fontWeight: '600' }}>{label}</Text>
+                          <Text style={{ color: T.text.primary, fontSize: 13, fontFamily: TY.sans.semibold }}>{label}</Text>
                         </TouchableOpacity>
                       ))}
                     </View>
@@ -808,7 +809,7 @@ const styles = StyleSheet.create({
   },
   captureBtn: {
     width: 72, height: 72, borderRadius: 36,
-    borderWidth: 4, borderColor: '#ffffff',
+    borderWidth: 4, borderColor: T.text.primary,
     backgroundColor: 'rgba(255,255,255,0.3)',
   },
   toolBtn: {
@@ -821,25 +822,25 @@ const styles = StyleSheet.create({
     position: 'absolute', zIndex: 15,
   },
   stickerText: {
-    fontSize: 22, fontWeight: '700', color: '#ffffff',
+    fontSize: 22, fontFamily: TY.sans.bold, color: T.text.primary,
     textShadowColor: 'rgba(0,0,0,0.7)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
     backgroundColor: 'rgba(0,0,0,0.4)',
-    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: R.xs, paddingHorizontal: 10, paddingVertical: 4,
   },
   statsPill: {
     backgroundColor: 'rgba(0,0,0,0.80)',
-    borderRadius: 12, padding: 12, minWidth: 140,
+    borderRadius: R.sm, padding: 12, minWidth: 140,
   },
   statsReadiness: {
-    fontSize: 22, fontWeight: '700', marginBottom: 4,
+    fontSize: 22, fontFamily: TY.sans.bold, marginBottom: 4,
   },
   statsRow: {
     gap: 4,
   },
   statText: {
-    fontSize: 12, color: '#e0e0e0',
+    fontSize: 12, color: T.text.body,
   },
   trashZone: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -856,13 +857,13 @@ const styles = StyleSheet.create({
   stickerTextInput: {
     width: '100%', minHeight: 60,
     backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12,
-    fontSize: 20, fontWeight: '700', color: '#ffffff',
+    borderRadius: R.sm, paddingHorizontal: 16, paddingVertical: 12,
+    fontSize: 20, fontFamily: TY.sans.bold, color: T.text.primary,
     textAlign: 'center',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
   },
   confirmTextBtn: {
-    backgroundColor: '#ffffff', borderRadius: 24,
+    backgroundColor: T.accent, borderRadius: R.pill,
     paddingHorizontal: 32, paddingVertical: 12,
   },
   sheetOverlay: {
@@ -871,16 +872,16 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   statsSheet: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: T.bg.elevated,
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     padding: 24, gap: 16,
   },
   sheetTitle: {
-    fontSize: 10, color: '#555555', letterSpacing: 2,
-    textTransform: 'uppercase', fontWeight: '700',
+    fontSize: 10, color: T.text.muted, letterSpacing: 2,
+    textTransform: 'uppercase', fontFamily: TY.sans.bold,
   },
   sheetStatsPill: {
-    backgroundColor: '#0a0a0a',
-    borderRadius: 12, padding: 12,
+    backgroundColor: T.bg.primary,
+    borderRadius: R.sm, padding: SP[3],
   },
 });

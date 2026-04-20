@@ -204,4 +204,71 @@ export function readinessColor(score: number): string {
   return theme.readiness.low;
 }
 
+// ── Status accent helper ───────────────────────────────────────────────────
+// Single accessor for status-tinted accents so components don't redefine
+// their own red/yellow/green maps. Prefer this (or `theme.status.<kind>`
+// directly) over hardcoded hex like `#c0392b` / `#27ae60` / `#e67e22`.
+export type StatusKind = 'success' | 'warn' | 'danger';
+export function accentForStatus(kind: StatusKind): string {
+  return theme.status[kind];
+}
+
+// ── Text-style helper ──────────────────────────────────────────────────────
+// Collapse the `{ fontFamily, fontSize, letterSpacing, ... }` boilerplate that
+// appears in almost every StyleSheet. Also the canonical way to ensure that
+// any `fontWeight` is paired with a matching Geist / JetBrains Mono family —
+// never rely on the system default.
+//
+// Usage:
+//   ...textStyle({ weight: 'bold', size: 'h2' })
+//   ...textStyle({ weight: 'medium', size: 'micro', mono: true, uppercase: true, tracking: 'label' })
+
+export type SansWeight = keyof typeof type.sans;        // regular | medium | semibold | bold
+export type TypeSize   = keyof typeof type.size;         // display | h1 | body | micro | ...
+export type TrackingKey = keyof typeof type.tracking;    // display | tight | normal | label | micro
+
+export interface TextStyleOpts {
+  weight?: SansWeight;
+  size?: TypeSize;
+  mono?: boolean;
+  color?: string;
+  tracking?: TrackingKey;
+  letterSpacing?: number;
+  uppercase?: boolean;
+  tabular?: boolean;
+  lineHeight?: number;
+}
+
+export function textStyle(opts: TextStyleOpts = {}) {
+  const {
+    weight = 'regular',
+    size = 'body',
+    mono = false,
+    color,
+    tracking,
+    letterSpacing,
+    uppercase,
+    tabular,
+    lineHeight,
+  } = opts;
+
+  const family = mono ? type.mono : type.sans;
+  const ls =
+    letterSpacing !== undefined
+      ? letterSpacing
+      : tracking !== undefined
+      ? type.tracking[tracking]
+      : undefined;
+
+  return {
+    fontFamily: family[weight],
+    fontSize: type.size[size],
+    ...(color !== undefined ? { color } : null),
+    ...(ls !== undefined ? { letterSpacing: ls } : null),
+    ...(uppercase ? { textTransform: 'uppercase' as const } : null),
+    ...(tabular ? { fontVariant: ['tabular-nums'] as ['tabular-nums'] } : null),
+    ...(lineHeight !== undefined ? { lineHeight } : null),
+  };
+}
+
 export type { ThemeColors as default };
