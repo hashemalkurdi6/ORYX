@@ -536,14 +536,47 @@ export async function signupWithProfile(
   return response.data;
 }
 
+export type LoginResponse =
+  | { access_token: string; token_type: string; pending_deletion?: false }
+  | { pending_deletion: true; deletion_date: string | null; user_id: string; pending_token: string; access_token?: undefined };
+
 export async function login(
   email: string,
   password: string
-): Promise<AuthResponse> {
-  const response = await apiClient.post<AuthResponse>('/auth/login', {
+): Promise<LoginResponse> {
+  const response = await apiClient.post<LoginResponse>('/auth/login', {
     email,
     password,
   });
+  return response.data;
+}
+
+export async function deleteMyAccount(): Promise<void> {
+  const response = await apiClient.delete('/users/me', {
+    validateStatus: (status) => status === 204,
+  });
+  if (response.status !== 204) {
+    throw new Error(`Unexpected status ${response.status}`);
+  }
+}
+
+export async function restoreAccount(
+  pendingToken: string,
+): Promise<{ access_token: string; token_type: string }> {
+  // Bypass the axios instance interceptor (which injects the persisted Bearer)
+  // and send this one-off request with ONLY the pending_token.
+  const baseURL = apiClient.defaults.baseURL ?? '';
+  const response = await axios.post<{ access_token: string; token_type: string }>(
+    `${baseURL}/auth/restore`,
+    null,
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${pendingToken}`,
+      },
+      timeout: 30000,
+    },
+  );
   return response.data;
 }
 

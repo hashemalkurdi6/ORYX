@@ -538,19 +538,7 @@ export default function SettingsScreen() {
             <View style={s.rowDivider} />
             <TouchableOpacity
               style={s.settingsRow}
-              onPress={() =>
-                Alert.alert(
-                  'Delete account',
-                  'This will permanently delete your account and all associated data. This cannot be undone.',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Delete', style: 'destructive',
-                      onPress: () => Alert.alert('Coming Soon', 'Account deletion will land before launch — for now, contact support to delete your account.'),
-                    },
-                  ],
-                )
-              }
+              onPress={() => router.push('/settings/delete-account')}
               activeOpacity={0.75}
             >
               <Ionicons name="trash-outline" size={18} color={theme.status.danger} />

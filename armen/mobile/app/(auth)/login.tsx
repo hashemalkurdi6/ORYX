@@ -45,8 +45,20 @@ export default function LoginScreen() {
     setError(null);
     setLoading(true);
     try {
-      const tokenResponse = await login(email.trim().toLowerCase(), password);
-      const token = tokenResponse.access_token;
+      const response = await login(email.trim().toLowerCase(), password);
+      if ('pending_deletion' in response && response.pending_deletion) {
+        router.replace({
+          pathname: '/settings/restore-account',
+          params: {
+            pending_token: response.pending_token,
+            deletion_date: response.deletion_date ?? '',
+            user_id: response.user_id,
+            email: email.trim().toLowerCase(),
+          },
+        });
+        return;
+      }
+      const token = response.access_token;
       useAuthStore.setState({ token });
       const user = await getMe();
       setAuth(token, user);
