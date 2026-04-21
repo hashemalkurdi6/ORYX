@@ -616,7 +616,7 @@ export default function CommunityScreen() {
   // Club detail state
   const [showClubDetail, setShowClubDetail] = useState(false);
   const [clubDetail, setClubDetail] = useState<ClubDetail | null>(null);
-  const [clubDetailTab, setClubDetailTab] = useState<'feed' | 'members' | 'leaderboard'>('members');
+  const [clubDetailTab, setClubDetailTab] = useState<'members' | 'leaderboard'>('members');
   const [clubDetailLeaderboard, setClubDetailLeaderboard] = useState<LeaderboardResponse | null>(null);
   const [clubDetailLoading, setClubDetailLoading] = useState(false);
   const [clubMemberFollowState, setClubMemberFollowState] = useState<Record<string, boolean>>({});
@@ -1438,7 +1438,7 @@ export default function CommunityScreen() {
 
           {/* Mini tabs */}
           <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.10)' }}>
-            {(['feed', 'members', 'leaderboard'] as const).map((tab) => (
+            {(['members', 'leaderboard'] as const).map((tab) => (
               <TouchableOpacity
                 key={tab}
                 onPress={() => {
@@ -1468,9 +1468,6 @@ export default function CommunityScreen() {
             </View>
           ) : (
             <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 20 }}>
-              {clubDetailTab === 'feed' && (
-                <Text style={{ color: '#555555', textAlign: 'center', marginTop: 40 }}>Club feed coming soon</Text>
-              )}
               {clubDetailTab === 'members' && (
                 <View style={{ gap: 10 }}>
                   {(clubDetail?.members || []).map((member) => {

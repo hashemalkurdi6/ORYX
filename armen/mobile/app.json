@@ -9,20 +9,27 @@
     "platforms": ["ios", "android"],
     "ios": {
       "bundleIdentifier": "com.oryx.app",
+      "buildNumber": "1",
       "supportsTablet": false,
       "infoPlist": {
-        "NSHealthShareUsageDescription": "ORYX reads your health data to analyze fitness performance",
-        "NSHealthUpdateUsageDescription": "ORYX uses HealthKit data for performance analysis",
-        "NSCameraUsageDescription": "ORYX uses the camera to scan food photos for nutrition tracking",
-        "NSPhotoLibraryUsageDescription": "ORYX accesses your photo library to analyze food photos for nutrition tracking",
-        "NSLocationWhenInUseUsageDescription": "ORYX uses your location to track outdoor activities like running, cycling, and hiking.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "ORYX uses your location to track outdoor activities like running, cycling, and hiking."
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSHealthShareUsageDescription": "ORYX reads your heart rate, HRV, sleep, and steps from Apple Health to calculate your daily readiness score and training recommendations.",
+        "NSHealthUpdateUsageDescription": "ORYX writes workout sessions you log to Apple Health so your training is recorded across your devices.",
+        "NSCameraUsageDescription": "ORYX uses your camera to capture workout photos and profile pictures.",
+        "NSPhotoLibraryUsageDescription": "ORYX accesses your photo library so you can upload workout and profile photos.",
+        "NSLocationWhenInUseUsageDescription": "ORYX uses your location to tag workouts with where you trained."
+      },
+      "entitlements": {
+        "com.apple.developer.healthkit": true,
+        "com.apple.developer.healthkit.access": []
       }
     },
     "android": {
       "package": "com.oryx.app",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#0a0a0a"
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#08090B"
       },
       "permissions": [
         "ACCESS_FINE_LOCATION",
@@ -30,25 +37,31 @@
         "CAMERA"
       ]
     },
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#08090B"
+    },
     "plugins": [
       "expo-router",
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "ORYX uses your location to track outdoor activities like running, cycling, and hiking."
+          "locationWhenInUsePermission": "ORYX uses your location to tag workouts with where you trained."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "ORYX accesses your photo library to analyze food photos.",
-          "cameraPermission": "ORYX uses the camera to scan food photos for nutrition tracking."
+          "photosPermission": "ORYX accesses your photo library so you can upload workout and profile photos.",
+          "cameraPermission": "ORYX uses your camera to capture workout photos and profile pictures."
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "ORYX uses the camera to scan food barcodes and log nutrition."
+          "cameraPermission": "ORYX uses your camera to capture workout photos and profile pictures."
         }
       ]
     ],

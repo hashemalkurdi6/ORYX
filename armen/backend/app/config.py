@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     # Account deletion
     ACCOUNT_DELETION_GRACE_DAYS: int = 30
     PENDING_TOKEN_EXPIRE_MINUTES: int = 10
+    # Email (Resend)
+    RESEND_API_KEY: str = ""
+    RESEND_FROM_EMAIL: str = "ORYX <noreply@oryx.app>"
+    PASSWORD_RESET_URL_BASE: str = "https://oryx.app/reset"
+    ENV: str = "dev"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

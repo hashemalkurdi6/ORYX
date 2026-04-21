@@ -7,7 +7,7 @@
 // State is local-only; the UI is the contract for Phase E backend work.
 
 import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Switch, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -160,29 +160,6 @@ export default function PrivacyScreen() {
             />
           </Section>
 
-          <Section label="BLOCKED USERS" theme={T}>
-            <TouchableOpacity
-              style={{
-                flexDirection: 'row', alignItems: 'center',
-                paddingHorizontal: SP[4], paddingVertical: SP[4],
-              }}
-              onPress={() => Alert.alert('Coming Soon', 'Blocked users management lands with backend privacy work.')}
-              activeOpacity={0.75}
-            >
-              <Text style={{ flex: 1, fontFamily: TY.sans.medium, fontSize: TY.size.body + 1, color: T.text.primary }}>
-                Manage blocked accounts
-              </Text>
-              <Ionicons name="chevron-forward" size={16} color={T.text.muted} />
-            </TouchableOpacity>
-          </Section>
-
-          <Text style={{
-            fontFamily: TY.sans.regular, fontSize: TY.size.small, color: T.text.muted,
-            marginTop: SP[5], lineHeight: 16, paddingHorizontal: SP[2],
-          }}>
-            Privacy settings save on this device for now. Server-side privacy enforcement and
-            cross-device sync land with the preferences API in the next release.
-          </Text>
         </ScrollView>
       </SafeAreaView>
     </View>

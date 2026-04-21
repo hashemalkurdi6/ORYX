@@ -473,10 +473,10 @@ export interface InsightData {
 // EXPO_PUBLIC_API_URL is baked in at bundle time. If missing, fall back to a dev IP
 // in __DEV__, but throw a clear error in production builds so we don't ship a broken
 // binary that silently points at a stale LAN IP.
-const API_URL = process.env.EXPO_PUBLIC_API_URL || (__DEV__ ? 'http://10.130.103.33:8000' : '');
+const API_URL = process.env.EXPO_PUBLIC_API_URL || '';
 if (!API_URL) {
   throw new Error(
-    'EXPO_PUBLIC_API_URL is not set. Set it in armen/mobile/.env before building.'
+    'EXPO_PUBLIC_API_URL is not set. Set it in armen/mobile/.env (or via EAS secrets) before building.'
   );
 }
 
@@ -568,6 +568,31 @@ export async function deleteMyAccount(): Promise<void> {
   if (response.status !== 204) {
     throw new Error(`Unexpected status ${response.status}`);
   }
+}
+
+export async function forgotPassword(
+  email: string,
+): Promise<{ message: string; debug_reset_token?: string }> {
+  const baseURL = apiClient.defaults.baseURL ?? '';
+  const response = await axios.post<{ message: string; debug_reset_token?: string }>(
+    `${baseURL}/auth/forgot-password`,
+    { email },
+    { headers: { 'Content-Type': 'application/json' }, timeout: 30000 },
+  );
+  return response.data;
+}
+
+export async function resetPassword(
+  token: string,
+  newPassword: string,
+): Promise<{ access_token: string; token_type: string }> {
+  const baseURL = apiClient.defaults.baseURL ?? '';
+  const response = await axios.post<{ access_token: string; token_type: string }>(
+    `${baseURL}/auth/reset-password`,
+    { token, new_password: newPassword },
+    { headers: { 'Content-Type': 'application/json' }, timeout: 30000 },
+  );
+  return response.data;
 }
 
 export async function restoreAccount(

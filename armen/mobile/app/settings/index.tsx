@@ -518,21 +518,11 @@ export default function SettingsScreen() {
             <View style={s.rowDivider} />
             <TouchableOpacity
               style={s.settingsRow}
-              onPress={() => Alert.alert('Coming Soon', 'Password reset will be available in a future update.')}
+              onPress={() => router.push('/(auth)/forgot-password')}
               activeOpacity={0.75}
             >
               <Ionicons name="lock-closed-outline" size={18} color={theme.text.secondary} />
               <Text style={s.settingsRowText}>Change Password</Text>
-              <Ionicons name="chevron-forward" size={16} color={theme.text.secondary} />
-            </TouchableOpacity>
-            <View style={s.rowDivider} />
-            <TouchableOpacity
-              style={s.settingsRow}
-              onPress={() => Alert.alert('Coming Soon', 'Email change will be available in a future update.')}
-              activeOpacity={0.75}
-            >
-              <Ionicons name="mail-outline" size={18} color={theme.text.secondary} />
-              <Text style={s.settingsRowText}>Change Email</Text>
               <Ionicons name="chevron-forward" size={16} color={theme.text.secondary} />
             </TouchableOpacity>
             <View style={s.rowDivider} />
@@ -701,10 +691,6 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </View>
 
-          <Text style={s.footerNote}>
-            For Strava, WHOOP, and Oura connections, ensure FRONTEND_URL in your backend .env
-            matches your Expo session URL (e.g. exp://192.168.1.160:8081).
-          </Text>
 
           <View style={s.bottomPadding} />
         </SafeAreaView>

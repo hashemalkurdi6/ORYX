@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import logging
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -8,8 +9,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
+from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from app.config import settings
 from app.database import get_db
@@ -208,6 +212,72 @@ async def login(payload: UserLogin, request: Request, db: AsyncSession = Depends
         )
     token = create_access_token(user.id)
     return {"access_token": token, "token_type": "bearer"}
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+def _create_password_reset_token(user_id: UUID) -> str:
+    expire = datetime.utcnow() + timedelta(minutes=30)
+    payload = {"sub": str(user_id), "exp": expire, "iat": datetime.utcnow(), "scope": "password_reset"}
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+@router.post("/forgot-password", status_code=202)
+async def forgot_password(payload: ForgotPasswordRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    """Start a password reset. Always returns 202 to avoid leaking which emails exist."""
+    from app.services.rate_limit import check_rate_limit, client_ip
+    from app.services.email_service import send_password_reset_email
+    await check_rate_limit(db, f"forgot-password:{client_ip(request)}", limit=5, window_seconds=600)
+
+    is_prod = settings.ENV.lower() in ("prod", "production")
+    generic_response = {"message": "If that email is registered, a reset link has been sent."}
+
+    result = await db.execute(select(User).where(User.email == payload.email.lower()))
+    user = result.scalar_one_or_none()
+    if user is None or user.deleted_at is not None:
+        return generic_response
+
+    reset_token = _create_password_reset_token(user.id)
+    reset_url = f"{settings.PASSWORD_RESET_URL_BASE}?token={reset_token}"
+    send_password_reset_email(user.email, reset_url)
+
+    if not is_prod:
+        # Dev/TestFlight convenience: log and echo the token so testers without
+        # a deliverable inbox can still complete the flow.
+        logger.info("Password reset for user_id=%s token=%s", user.id, reset_token)
+        return {**generic_response, "debug_reset_token": reset_token}
+
+    return generic_response
+
+
+@router.post("/reset-password", response_model=Token)
+async def reset_password(payload: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+    if len(payload.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+    try:
+        decoded = jwt.decode(payload.token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if decoded.get("scope") != "password_reset":
+            raise HTTPException(status_code=401, detail="Invalid reset token.")
+        user_id = UUID(decoded["sub"])
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired reset token.")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None or user.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Account not found.")
+
+    user.hashed_password = hash_password(payload.new_password)
+    await db.flush()
+    token = create_access_token(user.id)
+    return Token(access_token=token)
 
 
 @router.post("/restore", response_model=Token)
