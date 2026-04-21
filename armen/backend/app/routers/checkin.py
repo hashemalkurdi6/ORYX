@@ -45,7 +45,8 @@ async def get_today_checkin(
     db: AsyncSession = Depends(get_db),
 ):
     """Return today's check-in status. Creates a window if none exists and time is valid."""
-    today = date.today()
+    from app.services.user_time import user_today
+    today = user_today(current_user)
     date_col = cast(DailyCheckin.created_at, Date)
 
     checkin_res = await db.execute(
@@ -99,7 +100,8 @@ async def save_checkin(
     db: AsyncSession = Depends(get_db),
 ):
     """Save the daily check-in and create a post."""
-    today = date.today()
+    from app.services.user_time import user_today
+    today = user_today(current_user)
     date_col = cast(DailyCheckin.created_at, Date)
     existing_res = await db.execute(
         select(DailyCheckin).where(
@@ -176,7 +178,8 @@ async def delete_today_checkin(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete today's check-in photo, post, and story."""
-    today = date.today()
+    from app.services.user_time import user_today
+    today = user_today(current_user)
     date_col = cast(DailyCheckin.created_at, Date)
     existing_res = await db.execute(
         select(DailyCheckin).where(

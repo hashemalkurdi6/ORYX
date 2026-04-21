@@ -49,11 +49,16 @@ import { useCountUp } from '@/services/animations';
 // All colour values route through services/theme so the design system is the
 // single source of truth. Names kept for backward compat with the rest of the
 // file.
-const CLR_GREEN  = T.readiness.high;  // chartreuse-leaning high readiness
-const CLR_AMBER  = T.readiness.mid;
-const CLR_RED    = T.readiness.low;
-const CLR_LOAD   = T.signal.load;     // electric blue for load arcs
-const CLR_ACCENT = T.accent;          // chartreuse brand accent
+// No module-level const palette here — a const would freeze the color to
+// whichever theme was live at import (dark default). All CLR_* identifiers
+// in this file read from T directly via the block below, where each property
+// is a live getter that re-reads T on every access.
+const CLR_PALETTE: Record<'GREEN' | 'AMBER' | 'RED' | 'LOAD' | 'ACCENT', string> = Object.create(null);
+Object.defineProperty(CLR_PALETTE, 'GREEN',  { get: () => T.readiness.high, enumerable: true });
+Object.defineProperty(CLR_PALETTE, 'AMBER',  { get: () => T.readiness.mid,  enumerable: true });
+Object.defineProperty(CLR_PALETTE, 'RED',    { get: () => T.readiness.low,  enumerable: true });
+Object.defineProperty(CLR_PALETTE, 'LOAD',   { get: () => T.signal.load,    enumerable: true });
+Object.defineProperty(CLR_PALETTE, 'ACCENT', { get: () => T.accent,         enumerable: true });
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -70,28 +75,28 @@ const INNER_C  = 2 * Math.PI * INNER_R;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function readinessHex(c: 'green' | 'amber' | 'red'): string {
-  if (c === 'green') return CLR_GREEN;
-  if (c === 'amber') return CLR_AMBER;
-  return CLR_RED;
+  if (c === 'green') return CLR_PALETTE.GREEN;
+  if (c === 'amber') return CLR_PALETTE.AMBER;
+  return CLR_PALETTE.RED;
 }
 
 function toneHex(tone: string): string {
-  if (tone === 'positive') return CLR_GREEN;
-  if (tone === 'warning')  return CLR_RED;
-  return CLR_AMBER;
+  if (tone === 'positive') return CLR_PALETTE.GREEN;
+  if (tone === 'warning')  return CLR_PALETTE.RED;
+  return CLR_PALETTE.AMBER;
 }
 
 function hooperHex(v: number): string {
-  if (v <= 2) return CLR_GREEN;
-  if (v <= 4) return CLR_AMBER;
-  return CLR_RED;
+  if (v <= 2) return CLR_PALETTE.GREEN;
+  if (v <= 4) return CLR_PALETTE.AMBER;
+  return CLR_PALETTE.RED;
 }
 
 function acwrHex(status: string): string {
-  if (status === 'optimal')       return CLR_GREEN;
+  if (status === 'optimal')       return CLR_PALETTE.GREEN;
   if (status === 'undertraining') return T.text.secondary;
-  if (status === 'caution')       return CLR_AMBER;
-  return CLR_RED;
+  if (status === 'caution')       return CLR_PALETTE.AMBER;
+  return CLR_PALETTE.RED;
 }
 
 function getTrainingIcon(sportType: string): string {
@@ -237,7 +242,7 @@ function SkeletonBlock({ width, height, style }: { width: string | number; heigh
 // ── Trend Arrow ───────────────────────────────────────────────────────────────
 function TrendArrow({ up }: { up: boolean | null }) {
   if (up === null) return null;
-  return <Text style={{ fontSize: 10, color: up ? CLR_GREEN : CLR_AMBER, marginLeft: 2 }}>{up ? '↑' : '↓'}</Text>;
+  return <Text style={{ fontSize: 10, color: up ? CLR_PALETTE.GREEN : CLR_PALETTE.AMBER, marginLeft: 2 }}>{up ? '↑' : '↓'}</Text>;
 }
 
 // ── Mini Arc ──────────────────────────────────────────────────────────────────
@@ -282,9 +287,10 @@ function ConcentricHero({
   // to compensate for the missing translucent-glow treatment dark mode gets.
   const outerSw = isLight ? OUTER_SW + 2 : OUTER_SW;
   const innerSw = isLight ? INNER_SW + 1 : INNER_SW;
-  // No cacheKey → animation replays every time the hero mounts.
-  const displayScore = useCountUp(score, 1000, 200);
-  const displayLoad  = useCountUp(Math.round(innerPct * 100), 1000, 400);
+  // cacheKey prevents the count-up from replaying on every mount. Key is
+  // per-screen so a fresh session (or a score change) still animates once.
+  const displayScore = useCountUp(score, 1000, 200, 'home:readiness-score');
+  const displayLoad  = useCountUp(Math.round(innerPct * 100), 1000, 400, 'home:readiness-load');
 
   // Draw-in: dasharray grows from 0 to final fill length as numbers count up.
   const outerFill = (OUTER_C * Math.min(displayScore, score)) / 100;
@@ -659,10 +665,10 @@ export default function HomeScreen() {
   const showEndOfDay = isEvening && hadSessionToday && (dashboard?.meals_logged_today ?? false);
 
   function strainBarColor(pct: number): string {
-    if (pct < 0.8)  return '#555';
-    if (pct <= 1.0) return CLR_GREEN;
-    if (pct <= 1.3) return CLR_AMBER;
-    return CLR_RED;
+    if (pct < 0.8)  return T.text.muted;
+    if (pct <= 1.0) return CLR_PALETTE.GREEN;
+    if (pct <= 1.3) return CLR_PALETTE.AMBER;
+    return CLR_PALETTE.RED;
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -682,7 +688,7 @@ export default function HomeScreen() {
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={T.text.muted} colors={[CLR_ACCENT]} />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={T.text.muted} colors={[CLR_PALETTE.ACCENT]} />
         }
       >
         {/* Error banner */}
@@ -731,7 +737,7 @@ export default function HomeScreen() {
         ) : showEndOfDay ? (
           <View style={s.heroCard}>
             <View style={s.eodHeader}>
-              <Ionicons name="moon-outline" size={13} color="#888" />
+              <Ionicons name="moon-outline" size={13} color={T.text.secondary} />
               <Text style={s.eodTitle}>DAILY SUMMARY</Text>
             </View>
             <Text style={s.eodText} numberOfLines={2}>
@@ -757,11 +763,11 @@ export default function HomeScreen() {
             </View>
             {dashboard?.acwr_status ? (
               <View style={s.eodTomorrow}>
-                <Ionicons name="today-outline" size={11} color="#888" />
+                <Ionicons name="today-outline" size={11} color={T.text.secondary} />
                 <Text style={s.eodTomorrowText}>
-                  Tomorrow: {acwrHex(dashboard.acwr_status) === CLR_GREEN
+                  Tomorrow: {acwrHex(dashboard.acwr_status) === CLR_PALETTE.GREEN
                     ? 'Full intensity'
-                    : acwrHex(dashboard.acwr_status) === CLR_AMBER
+                    : acwrHex(dashboard.acwr_status) === CLR_PALETTE.AMBER
                     ? 'Moderate load'
                     : 'Recovery focus'}
                 </Text>
@@ -967,7 +973,7 @@ export default function HomeScreen() {
 
                 {diagnosis?.recommendation ? (
                   <View style={s.recBox}>
-                    <Ionicons name="bulb-outline" size={12} color={CLR_AMBER} style={{ marginRight: 6, marginTop: 1 }} />
+                    <Ionicons name="bulb-outline" size={12} color={CLR_PALETTE.AMBER} style={{ marginRight: 6, marginTop: 1 }} />
                     <Text style={s.recText}>{diagnosis.recommendation}</Text>
                   </View>
                 ) : null}
@@ -990,13 +996,13 @@ export default function HomeScreen() {
           const goal       = dashboard?.weekly_training_goal ?? 0;
           const goalHit    = goal > 0 && sessions >= goal;
           const goalOver   = goal > 0 && sessions > goal;
-          const sessColor  = goalHit ? CLR_GREEN : '#fff';
+          const sessColor  = goalHit ? CLR_PALETTE.GREEN : T.text.primary;
 
           const streak     = dashboard?.current_streak ?? 0;
           const activeDays = dashboard?.active_days_this_week ?? sessions;
 
           const dsr        = Math.max(0, dashboard?.days_since_rest ?? 0);
-          const dsrColor   = dsr === 0 ? CLR_GREEN : dsr >= 6 ? CLR_RED : dsr >= 5 ? CLR_AMBER : '#fff';
+          const dsrColor   = dsr === 0 ? CLR_PALETTE.GREEN : dsr >= 6 ? CLR_PALETTE.RED : dsr >= 5 ? CLR_PALETTE.AMBER : T.text.primary;
 
           const thisWeek   = dashboard?.weekly_load ?? 0;
           const lastWeek   = dashboard?.last_week_load ?? 0;
@@ -1006,7 +1012,7 @@ export default function HomeScreen() {
           const lastPct    = Math.min(100, (lastWeek / maxScale) * 100);
           const trendUp    = thisWeek > lastWeek;
           const trendDown  = thisWeek < lastWeek;
-          const trendColor = trendUp ? CLR_GREEN : trendDown ? CLR_AMBER : '#888888';
+          const trendColor = trendUp ? CLR_PALETTE.GREEN : trendDown ? CLR_PALETTE.AMBER : T.text.secondary;
 
           const hadToday   = dashboard?.last_session?.date?.startsWith(todayISO()) ?? false;
           const rec        = getTrainingRecommendation(
@@ -1028,7 +1034,7 @@ export default function HomeScreen() {
                 {dashboard?.last_session ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <View style={s.lastSessionIcon}>
-                      <Ionicons name={getTrainingIcon(dashboard.last_session.sport_type) as any} size={16} color="#888" />
+                      <Ionicons name={getTrainingIcon(dashboard.last_session.sport_type) as any} size={16} color={T.text.secondary} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={s.lastSessionName} numberOfLines={1}>{dashboard.last_session.name}</Text>
@@ -1058,7 +1064,7 @@ export default function HomeScreen() {
                     <Text style={[s.trainStatVal, { color: sessColor }]}>
                       {sessions}{goal > 0 ? `/${goal}` : ''}{goalOver ? ` (+${sessions - goal})` : ''}
                     </Text>
-                    {goalHit && <Ionicons name="checkmark-circle" size={12} color={CLR_GREEN} />}
+                    {goalHit && <Ionicons name="checkmark-circle" size={12} color={CLR_PALETTE.GREEN} />}
                   </View>
                   <Text style={s.trainStatLabel}>SESSIONS</Text>
                 </View>
@@ -1069,11 +1075,11 @@ export default function HomeScreen() {
                 <View style={s.trainStat}>
                   {streak > 0 ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                      <Text style={[s.trainStatVal, { color: '#fff' }]}>{streak}</Text>
-                      <Ionicons name="flame" size={11} color={CLR_AMBER} />
+                      <Text style={[s.trainStatVal, { color: T.text.primary }]}>{streak}</Text>
+                      <Ionicons name="flame" size={11} color={CLR_PALETTE.AMBER} />
                     </View>
                   ) : (
-                    <Text style={[s.trainStatVal, { color: '#fff' }]}>{activeDays}</Text>
+                    <Text style={[s.trainStatVal, { color: T.text.primary }]}>{activeDays}</Text>
                   )}
                   <Text style={s.trainStatLabel}>{streak > 0 ? 'STREAK' : 'DAYS ACTIVE'}</Text>
                 </View>
@@ -1098,10 +1104,10 @@ export default function HomeScreen() {
                   {/* This week */}
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}>
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>{thisWeek}</Text>
-                      {trendUp   && <Ionicons name="arrow-up"   size={11} color={CLR_GREEN} />}
-                      {trendDown && <Ionicons name="arrow-down" size={11} color={CLR_AMBER} />}
-                      <Text style={{ fontSize: 10, color: '#888' }}>this week</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: T.text.primary }}>{thisWeek}</Text>
+                      {trendUp   && <Ionicons name="arrow-up"   size={11} color={CLR_PALETTE.GREEN} />}
+                      {trendDown && <Ionicons name="arrow-down" size={11} color={CLR_PALETTE.AMBER} />}
+                      <Text style={{ fontSize: 10, color: T.text.secondary }}>this week</Text>
                     </View>
                     {/* Stacked dual bars */}
                     <View style={{ gap: 2 }}>
@@ -1110,21 +1116,21 @@ export default function HomeScreen() {
                       </View>
                       {lastWeek > 0 && (
                         <View style={s.dualBarBg}>
-                          <View style={[s.dualBarFill, { width: `${lastPct}%` as any, backgroundColor: '#2a2a2a' }]} />
+                          <View style={[s.dualBarFill, { width: `${lastPct}%` as any, backgroundColor: T.glass.border }]} />
                         </View>
                       )}
                     </View>
                   </View>
 
                   {/* Divider */}
-                  <View style={{ width: 1, height: 38, backgroundColor: '#2a2a2a', marginHorizontal: 12, marginTop: 2 }} />
+                  <View style={{ width: 1, height: 38, backgroundColor: T.glass.border, marginHorizontal: 12, marginTop: 2 }} />
 
                   {/* Last week */}
                   <View style={{ flex: 1, alignItems: 'flex-end', paddingTop: 2 }}>
                     {lastWeek > 0 ? (
-                      <Text style={{ fontSize: 12, color: '#888' }}>{lastWeek} last week</Text>
+                      <Text style={{ fontSize: 12, color: T.text.secondary }}>{lastWeek} last week</Text>
                     ) : (
-                      <Text style={{ fontSize: 10, color: '#555', fontStyle: 'italic' }}>First week of data</Text>
+                      <Text style={{ fontSize: 10, color: T.text.muted, fontStyle: 'italic' }}>First week of data</Text>
                     )}
                   </View>
                 </View>
@@ -1134,9 +1140,9 @@ export default function HomeScreen() {
 
               {/* ── Zone 4: Recommendation ── */}
               <View style={[s.trainZone, { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingBottom: 0 }]}>
-                <Ionicons name="flash" size={12} color="#555" style={{ marginTop: 2 }} />
-                <Text style={{ flex: 1, fontSize: 12, color: '#888', fontStyle: 'italic' }}>{rec}</Text>
-                <Ionicons name="chevron-forward" size={13} color="#555" style={{ marginTop: 2 }} />
+                <Ionicons name="flash" size={12} color={T.text.muted} style={{ marginTop: 2 }} />
+                <Text style={{ flex: 1, fontSize: 12, color: T.text.secondary, fontStyle: 'italic' }}>{rec}</Text>
+                <Ionicons name="chevron-forward" size={13} color={T.text.muted} style={{ marginTop: 2 }} />
               </View>
             </TouchableOpacity>
           );
@@ -1173,7 +1179,7 @@ export default function HomeScreen() {
                   {[
                     { label: 'PROTEIN', val: Math.round(dashboard?.protein_today ?? 0), target: dashboard?.protein_target, color: '#ef4444' },
                     { label: 'CARBS',   val: Math.round(dashboard?.carbs_today   ?? 0), target: dashboard?.carbs_target,   color: '#f59e0b' },
-                    { label: 'FAT',     val: Math.round(dashboard?.fat_today     ?? 0), target: dashboard?.fat_target,     color: CLR_GREEN },
+                    { label: 'FAT',     val: Math.round(dashboard?.fat_today     ?? 0), target: dashboard?.fat_target,     color: CLR_PALETTE.GREEN },
                   ].map((m) => (
                     <View key={m.label} style={s.nutMacro}>
                       <MiniArc pct={m.target && m.target > 0 ? m.val / m.target : 0} color={m.color} />
@@ -1188,7 +1194,7 @@ export default function HomeScreen() {
                 <View style={s.nutBarBg}>
                   <View style={[s.nutBarFill, {
                     width: `${Math.min(100, caloriePct * 100)}%` as any,
-                    backgroundColor: caloriePct > 1.0 ? CLR_RED : caloriePct > 0.9 ? CLR_AMBER : CLR_GREEN,
+                    backgroundColor: caloriePct > 1.0 ? CLR_PALETTE.RED : caloriePct > 0.9 ? CLR_PALETTE.AMBER : CLR_PALETTE.GREEN,
                   }]} />
                 </View>
               </>
@@ -1212,19 +1218,19 @@ export default function HomeScreen() {
             {/* Header row */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={{ fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: 2 }}>WEIGHT</Text>
+                <Text style={{ fontSize: 10, color: T.text.muted, textTransform: 'uppercase', letterSpacing: 2 }}>WEIGHT</Text>
                 {weightSummary?.current_weight_display != null && (
                   <>
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: T.text.primary }}>
                       {weightSummary.current_weight_display}{weightSummary.display_unit}
                     </Text>
                     {(() => {
                       const goal = weightSummary.goal_alignment;
                       const rate = weightSummary.rate_of_change_kg_per_week;
-                      if (!rate || Math.abs(rate) < 0.05) return <Text style={{ fontSize: 12, color: '#888' }}>→</Text>;
-                      if (goal === 'on_track') return <Text style={{ fontSize: 12, color: CLR_GREEN }}>{rate < 0 ? '↓' : '↑'}</Text>;
-                      if (goal === 'off_track') return <Text style={{ fontSize: 12, color: '#c0392b' }}>{rate < 0 ? '↓' : '↑'}</Text>;
-                      return <Text style={{ fontSize: 12, color: '#888' }}>{rate < 0 ? '↓' : '↑'}</Text>;
+                      if (!rate || Math.abs(rate) < 0.05) return <Text style={{ fontSize: 12, color: T.text.secondary }}>→</Text>;
+                      if (goal === 'on_track') return <Text style={{ fontSize: 12, color: CLR_PALETTE.GREEN }}>{rate < 0 ? '↓' : '↑'}</Text>;
+                      if (goal === 'off_track') return <Text style={{ fontSize: 12, color: T.status.danger }}>{rate < 0 ? '↓' : '↑'}</Text>;
+                      return <Text style={{ fontSize: 12, color: T.text.secondary }}>{rate < 0 ? '↓' : '↑'}</Text>;
                     })()}
                   </>
                 )}
@@ -1234,8 +1240,8 @@ export default function HomeScreen() {
                 onPress={(e) => { e.stopPropagation(); setShowWeightSheet(true); }}
                 activeOpacity={0.7}
               >
-                <Ionicons name={weightLoggedToday ? 'checkmark' : 'add'} size={12} color={weightLoggedToday ? CLR_GREEN : '#ccc'} />
-                <Text style={{ fontSize: 11, fontWeight: '600', color: weightLoggedToday ? CLR_GREEN : '#ccc' }}>
+                <Ionicons name={weightLoggedToday ? 'checkmark' : 'add'} size={12} color={weightLoggedToday ? CLR_PALETTE.GREEN : T.text.secondary} />
+                <Text style={{ fontSize: 11, fontWeight: '600', color: weightLoggedToday ? CLR_PALETTE.GREEN : T.text.secondary }}>
                   {weightLoggedToday ? 'Logged' : 'Log Weight'}
                 </Text>
               </TouchableOpacity>
@@ -1257,7 +1263,7 @@ export default function HomeScreen() {
                 return `${x},${y}`;
               });
               const pathD = `M ${pts.join(' L ')}`;
-              const lineColor = weightSummary?.goal_alignment === 'on_track' ? CLR_GREEN : weightSummary?.goal_alignment === 'off_track' ? '#c0392b' : '#555';
+              const lineColor = weightSummary?.goal_alignment === 'on_track' ? CLR_PALETTE.GREEN : weightSummary?.goal_alignment === 'off_track' ? T.status.danger : T.text.muted;
               const weekAvg = vals.reduce((a, b) => a + b, 0) / vals.length;
               const firstVal = vals[0];
               const lastVal = vals[vals.length - 1];
@@ -1268,15 +1274,15 @@ export default function HomeScreen() {
                     <Path d={pathD} stroke={lineColor} strokeWidth={1.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
                   </Svg>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text style={{ fontSize: 11, color: '#555' }}>Avg: {weekAvg.toFixed(1)}{unit}</Text>
-                    <Text style={{ fontSize: 11, color: change === 0 ? '#555' : change < 0 ? CLR_GREEN : '#888' }}>
+                    <Text style={{ fontSize: 11, color: T.text.muted }}>Avg: {weekAvg.toFixed(1)}{unit}</Text>
+                    <Text style={{ fontSize: 11, color: change === 0 ? T.text.muted : change < 0 ? CLR_PALETTE.GREEN : T.text.secondary }}>
                       {change >= 0 ? '+' : ''}{change.toFixed(1)}{unit} this week
                     </Text>
                   </View>
                 </>
               );
             })() : (
-              <Text style={{ fontSize: 12, color: '#555', fontStyle: 'italic' }}>
+              <Text style={{ fontSize: 12, color: T.text.muted, fontStyle: 'italic' }}>
                 {(weightHistory7d?.entries.length ?? 0) < 3 ? 'Keep logging to see your trend' : 'No weight data yet'}
               </Text>
             )}
@@ -1331,7 +1337,7 @@ export default function HomeScreen() {
             <View style={s.weekStat}>
               <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
                 <Text style={s.weekStatVal}>{dashboard?.current_streak ?? 0}</Text>
-                <Ionicons name="flame" size={11} color={CLR_AMBER} style={{ marginLeft: 3 }} />
+                <Ionicons name="flame" size={11} color={CLR_PALETTE.AMBER} style={{ marginLeft: 3 }} />
               </View>
               <Text style={s.weekStatLabel}>DAY STREAK</Text>
             </View>
@@ -1395,7 +1401,7 @@ export default function HomeScreen() {
             <TextInput
               style={s.modalTextArea}
               placeholder="Any notes about today…"
-              placeholderTextColor="#555"
+              placeholderTextColor={T.text.muted}
               multiline
               numberOfLines={3}
               value={wellnessForm.notes}
@@ -1409,7 +1415,7 @@ export default function HomeScreen() {
               activeOpacity={0.85}
             >
               {submittingWellness
-                ? <ActivityIndicator size="small" color="#0a0a0a" />
+                ? <ActivityIndicator size="small" color={T.bg.primary} />
                 : <Text style={s.saveBtnText}>Save Check-in</Text>}
             </TouchableOpacity>
 
@@ -1448,7 +1454,7 @@ export default function HomeScreen() {
               return (
                 <View key={comp} style={s.infoRow}>
                   <View style={s.infoIcon}>
-                    <Ionicons name={info.icon as any} size={17} color="#888" />
+                    <Ionicons name={info.icon as any} size={17} color={T.text.secondary} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1488,7 +1494,7 @@ export default function HomeScreen() {
       {/* ─── WEIGHT TOAST ────────────────────────────────────────────────────── */}
       {weightToast ? (
         <View style={s.weightToast} pointerEvents="none">
-          <Ionicons name="checkmark-circle" size={16} color={CLR_GREEN} />
+          <Ionicons name="checkmark-circle" size={16} color={CLR_PALETTE.GREEN} />
           <Text style={s.weightToastText}>{weightToast}</Text>
         </View>
       ) : null}
@@ -1574,7 +1580,7 @@ function createStyles(t: ThemeColors) {
     errorBox: {
       backgroundColor: 'rgba(242,122,92,0.12)',
       borderLeftWidth: 3,
-      borderLeftColor: CLR_RED,
+      borderLeftColor: CLR_PALETTE.RED,
       borderRadius: R.sm,
       padding: SP[3],
       marginBottom: SP[3],
@@ -1582,9 +1588,9 @@ function createStyles(t: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'space-between',
     },
-    errorText: { color: CLR_RED, fontSize: 13, flex: 1 },
+    errorText: { color: CLR_PALETTE.RED, fontSize: 13, flex: 1 },
     retryBtn: { paddingHorizontal: SP[3], paddingVertical: 5, backgroundColor: 'rgba(242,122,92,0.15)', borderRadius: R.xs, marginLeft: SP[2] },
-    retryText: { color: CLR_RED, fontSize: 12, fontWeight: '600' },
+    retryText: { color: CLR_PALETTE.RED, fontSize: 12, fontWeight: '600' },
 
     // ── Section 1: Header ──────────────────────────────────────────────────────
     header: {
@@ -1810,7 +1816,7 @@ function createStyles(t: ThemeColors) {
     trainStatsRow: { flexDirection: 'row', alignItems: 'center' },
     lastSessionIcon: {
       width: 40, height: 40, borderRadius: R.sm,
-      backgroundColor: CLR_ACCENT, alignItems: 'center', justifyContent: 'center',
+      backgroundColor: CLR_PALETTE.ACCENT, alignItems: 'center', justifyContent: 'center',
     },
     lastSessionName: { fontSize: 16, fontWeight: '500', color: t.text.primary, marginBottom: 2, letterSpacing: -0.3 },
     lastSessionMeta: { fontSize: 12, color: t.text.secondary, fontFamily: TY.mono.medium, letterSpacing: 0.4 },
@@ -1919,7 +1925,7 @@ function createStyles(t: ThemeColors) {
       minHeight: 80, textAlignVertical: 'top', marginBottom: SP[6],
     },
     saveBtn: {
-      backgroundColor: CLR_ACCENT, borderRadius: R.md,
+      backgroundColor: CLR_PALETTE.ACCENT, borderRadius: R.md,
       paddingVertical: 15, alignItems: 'center', marginBottom: SP[3],
     },
     saveBtnText: { color: T.accentInk, fontSize: 16, fontWeight: '600' },
@@ -1952,7 +1958,7 @@ function createStyles(t: ThemeColors) {
       gap: SP[2],
       backgroundColor: t.glass.chrome,
       borderWidth: 1,
-      borderColor: CLR_ACCENT,
+      borderColor: CLR_PALETTE.ACCENT,
       borderRadius: R.pill,
       paddingHorizontal: SP[5],
       paddingVertical: SP[3],

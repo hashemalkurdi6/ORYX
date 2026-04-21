@@ -225,23 +225,17 @@ async def get_weekly_load(
     )
     oldest_date = oldest_result.scalar()
 
-    acwr = None
-    acwr_status = "insufficient_data"
-    if oldest_date and (today - oldest_date).days >= 28:
+    from app.services.training_load import compute_acwr
+    has_28_days = bool(oldest_date and (today - oldest_date).days >= 28)
+    chronic_weekly_avg = 0.0
+    if has_28_days:
         chronic_load = await sum_load(twenty_eight_days_ago, today + timedelta(days=1))
         chronic_weekly_avg = chronic_load / 4.0
-        if chronic_weekly_avg > 0:
-            acwr = round(acute_load / chronic_weekly_avg, 2)
-            if acwr < 0.8:
-                acwr_status = "undertraining"
-            elif acwr <= 1.3:
-                acwr_status = "optimal"
-            elif acwr <= 1.5:
-                acwr_status = "caution"
-            else:
-                acwr_status = "high_risk"
-        else:
-            acwr_status = "insufficient_data"
+    acwr, acwr_status = compute_acwr(
+        acute_load=acute_load,
+        chronic_weekly_avg=chronic_weekly_avg,
+        has_28_days=has_28_days,
+    )
 
     # Compute days until ACWR unlocks (only when still insufficient data)
     days_until_acwr: int | None = None
@@ -379,16 +373,20 @@ async def log_activity(
 @router.get("/", response_model=list[UserActivityOut])
 async def list_activities(
     sport_category: str | None = None,
+    limit: int = 200,
+    offset: int = 0,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    limit = max(1, min(limit, 500))
+    offset = max(0, offset)
     stmt = (
         select(UserActivity)
         .where(UserActivity.user_id == current_user.id)
     )
     if sport_category:
         stmt = stmt.where(UserActivity.sport_category == sport_category)
-    stmt = stmt.order_by(UserActivity.logged_at.desc())
+    stmt = stmt.order_by(UserActivity.logged_at.desc()).offset(offset).limit(limit)
     result = await db.execute(stmt)
     return result.scalars().all()
 

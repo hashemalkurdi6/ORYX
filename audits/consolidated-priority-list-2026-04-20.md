@@ -161,4 +161,52 @@ Alternate if you'd rather fix the most-visible-broken user experience first: swa
 
 - [x] **0.1 Delete Account** — completed 2026-04-20. Commits pending. Backend: Alembic init + migration 0002 (adds `users.deleted_at`, `users.delete_requested_at`, `account_deletion_events` audit table), `app/services/account_deletion.py` (soft_delete / restore / hard_delete_user / hard_delete_expired_users), `app/services/scheduler.py` (6-hour asyncio sweeper in lifespan), `POST /auth/restore` + login pending-deletion branch, `DELETE /users/me`, `get_current_user` blocks users with `delete_requested_at IS NOT NULL`. Social filter: `app/services/user_visibility.py` + 8 routers (feed, posts, social, users, stories, clubs, messages, plus self-view exemption) — soft-deleted users vanish from every social read. Mobile: `app/settings/delete-account.tsx` (3-step warning/confirm/success), `app/settings/restore-account.tsx`, login branches on `pending_deletion` response, `api.ts` `deleteMyAccount()` + `restoreAccount()`. Pulled Alembic setup forward from Day 5 (partial); Day 5 now only needs to migrate the ~140 raw ALTERs to versioned files.
 
+- [x] **2026-04-21 session — Tier 0 closeout + Tier 1/2 verification**
+  - **0.2 / 0.3 Rate limits** — confirmed DB-backed `check_rate_limit` already applied to `/auth/signup` (5/hr), `/auth/login` (10/min), `/auth/check-username` (30/min), `/auth/forgot-password` (5/10min), `/nutrition/meal-plan` regen (3/24h), `/nutrition/assistant` (20/24h), `/food/scan` (30/24h). Nothing to change.
+  - **0.4 JWT SecureStore** — confirmed `authStore.ts` uses `expo-secure-store` for token, AsyncStorage only for non-sensitive profile. `api.ts` reads token from zustand (backed by SecureStore).
+  - **0.5 CORS + logs + token encryption** — CORS already scoped via `CORS_ORIGINS` env. Downgraded PII-leaking OpenAI response logs in `claude_service.py` (activity_autopsy, hevy_autopsy, scan_food_image) from INFO→DEBUG so result text no longer lands in prod logs. **New**: `app/services/crypto.py` with Fernet-backed `EncryptedString` TypeDecorator; applied to Strava/Whoop/Oura `*_access_token` + `*_refresh_token` columns on `User`; widened columns to VARCHAR(1024) via migration; new `TOKEN_ENCRYPTION_KEY` setting (required in prod, warning in dev). Legacy plaintext rows are tolerated on read and re-encrypted on next write.
+  - **0.6 Base64 media fallback** — already gated: prod returns 503 when S3 not configured; dev capped at 256 KB.
+  - **0.7 Prompt injection in meal replacement** — added `_safe_user_text` / `_safe_user_list` sanitizers in `routers/meal_plan.py` (strip control chars, cap length, redact "ignore previous instructions"-class trigger phrases). Wrapped `foods_loved`/`foods_disliked`/`allergies`/`cuisines_liked` through sanitizers before they hit the meal-plan prompt. Added a data-not-instructions directive at the top of `_MEAL_PLAN_SYSTEM_PROMPT`. Rewrote `_generate_replacement_meal` to isolate the user request inside `<user_request>…</user_request>` tags with a system message instructing the model to treat that content as untrusted data.
+  - **1.1 Height ft bug** — confirmed both `onboarding.tsx` and `(auth)/signup.tsx` parse "5.11" as 5 ft 11 in (not 5.11 ft). Fixed previously.
+  - **1.2 patchOnboarding swallowed errors** — confirmed both screens log/surface errors (no silent `.catch(() => {})`).
+  - **1.3 Nutrition survey wipe** — confirmed `nutrition-survey.tsx` hydrates state from existing profile before editing.
+  - **1.4 Timezone** — **deferred** (60+ `utcnow()` sites, coordinated mobile+backend change; multi-day).
+  - **1.5 Alembic migrations** — partial (init + 0002 shipped in 0.1). Rewriting the ~140-statement `_USER_COLUMN_MIGRATIONS` into versioned files remains open.
+  - **1.6 User model drift** — confirmed `is_private`, `dm_privacy`, `checkin_streak` now on ORM model.
+  - **1.7 Conflicting diagnosis endpoints** — `/diagnosis/daily` now returns 410 Gone; `getDailyDiagnosis()` client routed to POST `/home/diagnosis` and marked `@deprecated`.
+  - **1.8 Home today-session date compare** — confirmed `hadSessionToday` uses `startsWith(todayISO())`.
+  - **1.9 Strength training_load recompute on RPE** — confirmed `PATCH /user-activities/{id}/rpe` recomputes `training_load`.
+  - **1.10 Signup sets onboarding_complete=False** — confirmed in `routers/auth.py:131`.
+  - **1.11 Duplicate onboarding flows** — both files remain but write the same schema; no user-visible divergence left.
+  - **1.12 Missing FK constraints** — DB-level cascade already present via `_USER_COLUMN_MIGRATIONS`; ORM-level FK decls remain a cleanup for 1.5 rewrite.
+  - **2.6 Feed filter mismatch** — confirmed posts write under both `post_type` and `insight_type` keys.
+  - **2.7 Auto-join clubs post-signup** — confirmed `(auth)/signup.tsx` + `onboarding.tsx` call `autoJoinClubs()` on completion.
+  - **2.9 Default API URL fallback** — confirmed throws when `EXPO_PUBLIC_API_URL` is unset.
+  - **2.12 Stories readiness ring color** — confirmed `routers/stories.py` reads `readiness_color` from story overlay per user.
+  - **2.14 readiness_delta_7d dangling UI** — confirmed `routers/home.py` now computes and returns it.
+  - **2.1 Weight standalone screen** — confirmed `app/weight.tsx` already exists (trend chart, range selector 7D–All, stats row, goal alignment card, streak, log CTA). Audit was stale.
+  - **2.3 Password reset** — confirmed `(auth)/forgot-password.tsx` + backend `/auth/forgot-password` + `/auth/reset-password` wired end-to-end.
+  - **2.4 Whoop/Oura OAuth** — switched both `/whoop/auth-url`/`callback` and `/oura/auth-url`/`callback` to Strava's state-based pattern (state = `user_id:nonce`, callback no longer requires JWT). Also updated `readiness_service._get_hardware_status` to report true whoop/oura availability by probing WhoopData/OuraData for yesterday. **Note**: the audit's second half — feeding Whoop/Oura numbers into the readiness components themselves — remains open (requires component weighting / dedupe with Apple Health).
+  - **2.5 Apple Health connect CTA** — confirmed the "Connect Apple Health" button on Home navigates to `/settings` when all vitals are missing.
+  - **2.8 Server-side privacy** — partial: private accounts are enforced on `/users/{id}/posts` (returns empty payload when not following), but feed/stories enforcement not audited here.
+  - **2.11 Nutrition profile card** — confirmed summary card rendered on Nutrition tab when survey complete.
+  - **2.13 OpenAI-key docs** — already reflected in `CLAUDE.md` ("OPENAI_API_KEY is LOAD-BEARING for prod").
+
+  Activity-audit items closed in-session:
+  - Weight screen launch blocker: cleared (file exists, fully wired).
+  - "Load Earlier Sessions" has-more flag: `hasMoreStrava` already gates the button.
+  - RPE badge on feed cards: already rendered at `activity.tsx:1168-1172`.
+  - Dead code weekly-volume chart + heatmap: already rendered (`activity.tsx:2372` + `:2396`).
+
+  Additional closeouts:
+  - **1.4 Timezone — infra + critical sites**: new `users.timezone` column (IANA name, default `UTC`), `app/services/user_time.py` helpers (`user_today`, `user_day_bounds`, `capture_user_timezone`), mobile axios interceptor now sends `X-User-Timezone` on every request, `X-User-Timezone` added to CORS `allow_headers`. Migrated the highest-risk daily-boundary sites to per-user time: `/auth/login` (capture), `/home/dashboard` (capture + today), `/home/diagnosis` (today), `/nutrition/today` (logs bounds), `/nutrition/water/today` + PATCH (today), `/checkin/today` (today), `/nutrition/assistant` (logs bounds), `_generate_meal_plan` (today), meal-plan GET/POST (today). Remaining `utcnow()` sites are cache keys, stats cutoffs, and DB timestamp defaults — less impactful and can migrate incrementally.
+  - **2.10 Plate calc / superset / muscle map**: confirmed all three are shipped (`components/PlateCalculator.tsx`, `components/MuscleMap.tsx`, `supersetGroup` on `ExerciseEntry` with `cycleSupersetGroup` UI). Audit was stale.
+
+  Still-open items (genuine multi-hour/day work, not closed in-session):
+  - 1.5 migrate `_USER_COLUMN_MIGRATIONS` to versioned Alembic files (mechanical but risky without a live DB to test against)
+  - 2.2 Wellness tab visibility (conflicts with Tier 4 deferral of wellness trend charts)
+  - Full Whoop/Oura readiness component integration (deferred half of 2.4 — needs weight design)
+  - Light-mode sweep (Tier 3 — 193 hex in activity.tsx + similar in wellness/nutrition)
+  - Tier 4 defers untouched by design.
+
 End of consolidated list.

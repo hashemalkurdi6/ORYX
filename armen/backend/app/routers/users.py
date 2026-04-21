@@ -15,7 +15,7 @@ from app.models.user_activity import UserActivity
 from app.models.user_block import UserBlock
 from app.models.user_report import UserReport
 from app.routers.auth import get_current_user
-from app.routers.posts import _build_post
+from app.routers.posts import _build_posts
 from app.services.account_deletion import soft_delete_user
 
 logger = logging.getLogger(__name__)
@@ -256,9 +256,7 @@ async def get_user_posts(
     has_more = len(posts) > limit
     posts = posts[:limit]
 
-    built = []
-    for p in posts:
-        built.append(await _build_post(p, str(current_user.id), db))
+    built = await _build_posts(list(posts), str(current_user.id), db)
 
     return {"posts": built, "is_private": False, "page": page, "has_more": has_more}
 

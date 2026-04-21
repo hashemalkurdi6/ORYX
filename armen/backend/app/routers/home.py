@@ -1,15 +1,16 @@
+import asyncio
 import json
 import logging
 import re
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from openai import AsyncOpenAI
 from sqlalchemy import cast, Date, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database import get_db
+from app.database import AsyncSessionLocal, get_db
 from app.models.daily_steps import DailySteps
 from app.models.diagnosis import Diagnosis
 from app.models.health_data import HealthSnapshot
@@ -23,6 +24,23 @@ from app.services.readiness_service import calculate_readiness
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/home", tags=["home"])
+
+
+# Run a read-only query in its own AsyncSession so multiple independent
+# queries can run concurrently via asyncio.gather — a single AsyncSession
+# doesn't support concurrent execute() calls.
+async def _run_query(query, *, mode: str = "result"):
+    async with AsyncSessionLocal() as s:
+        res = await s.execute(query)
+        if mode == "scalar":
+            return res.scalar()
+        if mode == "scalar_one_or_none":
+            return res.scalar_one_or_none()
+        if mode == "scalars_all":
+            return res.scalars().all()
+        if mode == "first":
+            return res.first()
+        return list(res)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -237,10 +255,13 @@ def _parse_diagnosis_response(response_text: str) -> dict:
 
 @router.get("/dashboard")
 async def get_dashboard(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    today = date.today()
+    from app.services.user_time import user_today, capture_user_timezone
+    capture_user_timezone(request, current_user)
+    today = user_today(current_user)
     yesterday = today - timedelta(days=1)
     week_start = today - timedelta(days=today.weekday())
     last_week_start = week_start - timedelta(days=7)
@@ -259,98 +280,145 @@ async def get_dashboard(
     sport_tags = current_user.sport_tags or []
     daily_calorie_target = current_user.daily_calorie_target
     weekly_training_goal = _parse_weekly_training_days(current_user.weekly_training_days)
-    macro_targets = _compute_macro_targets(daily_calorie_target, primary_goal)
+    # Prefer persisted macro targets from nutrition_service (single source of
+    # truth: Mifflin-St Jeor + profile preferences). Fall back to the simple
+    # percentage split only when the user has never computed nutrition targets.
+    from app.services.nutrition_service import get_cached_targets
+    cached = await get_cached_targets(current_user.id, db)
+    if cached and cached.get("protein_g") is not None:
+        macro_targets = {
+            "protein_target": round(cached["protein_g"]),
+            "carbs_target": round(cached["carbs_g"]),
+            "fat_target": round(cached["fat_g"]),
+        }
+    else:
+        macro_targets = _compute_macro_targets(daily_calorie_target, primary_goal)
 
     # ── Training ──────────────────────────────────────────────────────────────
-    last_session_res = await db.execute(
+    # Fan out independent reads over separate sessions so they run concurrently.
+    four_week_start = week_start - timedelta(weeks=4)
+
+    last_session_q = (
         select(UserActivity)
         .where(UserActivity.user_id == current_user.id, UserActivity.is_rest_day.is_(False))
         .order_by(UserActivity.logged_at.desc())
         .limit(1)
     )
-    last_session = last_session_res.scalar_one_or_none()
-
-    sw_count_res = await db.execute(
-        select(func.count()).where(
-            UserActivity.user_id == current_user.id,
-            UserActivity.is_rest_day.is_(False),
-            date_col >= week_start,
-        )
+    sw_count_q = select(func.count()).where(
+        UserActivity.user_id == current_user.id,
+        UserActivity.is_rest_day.is_(False),
+        date_col >= week_start,
     )
-    sessions_this_week = sw_count_res.scalar() or 0
-
-    # Distinct active days this week (for "days active" fallback when streak = 0)
-    active_days_res = await db.execute(
-        select(func.count(func.distinct(date_col))).where(
-            UserActivity.user_id == current_user.id,
-            UserActivity.is_rest_day.is_(False),
-            date_col >= week_start,
-        )
+    active_days_q = select(func.count(func.distinct(date_col))).where(
+        UserActivity.user_id == current_user.id,
+        UserActivity.is_rest_day.is_(False),
+        date_col >= week_start,
     )
-    active_days_this_week = int(active_days_res.scalar() or 0)
-
-    tw_load_res = await db.execute(
-        select(func.coalesce(func.sum(UserActivity.training_load), 0)).where(
-            UserActivity.user_id == current_user.id,
-            UserActivity.is_rest_day.is_(False),
-            date_col >= week_start,
-        )
+    tw_load_q = select(func.coalesce(func.sum(UserActivity.training_load), 0)).where(
+        UserActivity.user_id == current_user.id,
+        UserActivity.is_rest_day.is_(False),
+        date_col >= week_start,
     )
-    weekly_load = int(tw_load_res.scalar() or 0)
-
-    lw_load_res = await db.execute(
-        select(func.coalesce(func.sum(UserActivity.training_load), 0)).where(
+    lw_load_q = select(func.coalesce(func.sum(UserActivity.training_load), 0)).where(
+        UserActivity.user_id == current_user.id,
+        UserActivity.is_rest_day.is_(False),
+        date_col >= last_week_start,
+        date_col < week_start,
+    )
+    # 4-week daily loads — bucketed client-side into weeks 0..3.
+    four_week_daily_q = (
+        select(
+            date_col.label("d"),
+            func.coalesce(func.sum(UserActivity.training_load), 0).label("load"),
+        )
+        .where(
             UserActivity.user_id == current_user.id,
             UserActivity.is_rest_day.is_(False),
-            date_col >= last_week_start,
+            date_col >= four_week_start,
             date_col < week_start,
         )
+        .group_by(date_col)
     )
-    last_week_load = int(lw_load_res.scalar() or 0)
+    yday_load_q = select(func.coalesce(func.sum(UserActivity.training_load), 0)).where(
+        UserActivity.user_id == current_user.id,
+        UserActivity.is_rest_day.is_(False),
+        date_col == yesterday,
+    )
 
-    # 4-week average load (4 complete weeks before this week)
-    four_week_loads = []
-    for i in range(4):
-        ws = week_start - timedelta(weeks=i + 1)
-        we = week_start - timedelta(weeks=i)
-        wl_res = await db.execute(
-            select(func.coalesce(func.sum(UserActivity.training_load), 0)).where(
-                UserActivity.user_id == current_user.id,
-                UserActivity.is_rest_day.is_(False),
-                date_col >= ws,
-                date_col < we,
-            )
-        )
-        four_week_loads.append(int(wl_res.scalar() or 0))
+    (
+        last_session,
+        sessions_this_week_raw,
+        active_days_raw,
+        weekly_load_raw,
+        last_week_load_raw,
+        four_week_rows,
+        yesterday_load_raw,
+    ) = await asyncio.gather(
+        _run_query(last_session_q, mode="scalar_one_or_none"),
+        _run_query(sw_count_q, mode="scalar"),
+        _run_query(active_days_q, mode="scalar"),
+        _run_query(tw_load_q, mode="scalar"),
+        _run_query(lw_load_q, mode="scalar"),
+        _run_query(four_week_daily_q),
+        _run_query(yday_load_q, mode="scalar"),
+    )
+    sessions_this_week = sessions_this_week_raw or 0
+    active_days_this_week = int(active_days_raw or 0)
+    weekly_load = int(weekly_load_raw or 0)
+    last_week_load = int(last_week_load_raw or 0)
+    yesterday_load = int(yesterday_load_raw or 0)
+
+    four_week_loads = [0, 0, 0, 0]
+    for row in four_week_rows:
+        idx = (week_start - row.d).days // 7
+        if 0 <= idx < 4:
+            four_week_loads[idx] += int(row.load)
     four_week_avg_load = round(sum(four_week_loads) / 4.0, 1)
 
-    yday_load_res = await db.execute(
-        select(func.coalesce(func.sum(UserActivity.training_load), 0)).where(
-            UserActivity.user_id == current_user.id,
-            UserActivity.is_rest_day.is_(False),
-            date_col == yesterday,
-        )
-    )
-    yesterday_load = int(yday_load_res.scalar() or 0)
-
-    # Days since last rest day
-    last_rest_res = await db.execute(
+    # Days since last rest day, current streak, ACWR inputs, nutrition, health,
+    # steps, wellness, weight — all independent, run concurrently.
+    last_rest_q = (
         select(date_col.label("d"))
         .where(UserActivity.user_id == current_user.id, UserActivity.is_rest_day.is_(True))
         .order_by(date_col.desc())
         .limit(1)
     )
-    last_rest_row = last_rest_res.first()
+    act_dates_q = (
+        select(date_col.label("d"))
+        .where(UserActivity.user_id == current_user.id, UserActivity.is_rest_day.is_(False))
+        .group_by(date_col)
+        .order_by(date_col.desc())
+    )
+    all_dates_q = (
+        select(date_col.label("d"))
+        .where(UserActivity.user_id == current_user.id)
+        .group_by(date_col)
+        .order_by(date_col.desc())
+    )
+    load_day_q = (
+        select(
+            date_col.label("d"),
+            func.coalesce(func.sum(UserActivity.training_load), 0).label("load"),
+        )
+        .where(
+            UserActivity.user_id == current_user.id,
+            UserActivity.is_rest_day.is_(False),
+            date_col >= twenty_eight_days_ago,
+        )
+        .group_by(date_col)
+    )
+
+    last_rest_row, act_dates_rows, all_dates_rows, load_day_rows = await asyncio.gather(
+        _run_query(last_rest_q, mode="first"),
+        _run_query(act_dates_q),
+        _run_query(all_dates_q),
+        _run_query(load_day_q),
+    )
+
     if last_rest_row:
         days_since_rest = (today - last_rest_row.d).days
     else:
-        act_dates_res = await db.execute(
-            select(date_col.label("d"))
-            .where(UserActivity.user_id == current_user.id, UserActivity.is_rest_day.is_(False))
-            .group_by(date_col)
-            .order_by(date_col.desc())
-        )
-        act_dates = [row.d for row in act_dates_res]
+        act_dates = [row.d for row in act_dates_rows]
         days_since_rest = 0
         check = today
         for d in act_dates:
@@ -360,14 +428,7 @@ async def get_dashboard(
             else:
                 break
 
-    # Current streak
-    all_dates_res = await db.execute(
-        select(date_col.label("d"))
-        .where(UserActivity.user_id == current_user.id)
-        .group_by(date_col)
-        .order_by(date_col.desc())
-    )
-    all_dates = [row.d for row in all_dates_res]
+    all_dates = [row.d for row in all_dates_rows]
     current_streak = 0
     if all_dates:
         check = today
@@ -380,95 +441,116 @@ async def get_dashboard(
             else:
                 break
 
-    # ACWR
-    load_day_res = await db.execute(
-        select(
-            date_col.label("d"),
-            func.coalesce(func.sum(UserActivity.training_load), 0).label("load"),
-        )
-        .where(
-            UserActivity.user_id == current_user.id,
-            UserActivity.is_rest_day.is_(False),
-            date_col >= twenty_eight_days_ago,
-        )
-        .group_by(date_col)
-    )
-    load_by_day = {row.d: int(row.load) for row in load_day_res}
+    load_by_day = {row.d: int(row.load) for row in load_day_rows}
     acute_load = sum(v for d, v in load_by_day.items() if d >= seven_days_ago)
     chronic_weekly = sum(load_by_day.values()) / 4
+    has_28_days = bool(all_dates and (today - min(all_dates)).days >= 28)
+    from app.services.training_load import compute_acwr
+    acwr, acwr_status = compute_acwr(
+        acute_load=acute_load,
+        chronic_weekly_avg=chronic_weekly,
+        has_28_days=has_28_days,
+    )
 
-    acwr: float | None = None
-    acwr_status = "insufficient_data"
-    if all_dates and (today - min(all_dates)).days >= 28 and chronic_weekly > 0:
-        acwr = round(acute_load / chronic_weekly, 2)
-        if acwr < 0.8:
-            acwr_status = "undertraining"
-        elif acwr <= 1.3:
-            acwr_status = "optimal"
-        elif acwr <= 1.5:
-            acwr_status = "caution"
-        else:
-            acwr_status = "high_risk"
-
-    # ── Nutrition ─────────────────────────────────────────────────────────────
+    # ── Nutrition / Health / Steps / Wellness / Weight / Readiness delta ──────
+    # All independent of one another — fan out in a single gather.
     now_dt = datetime.utcnow()
     start_today = now_dt.replace(hour=0, minute=0, second=0, microsecond=0)
     end_today = start_today + timedelta(days=1)
     start_week_dt = datetime.combine(week_start, datetime.min.time())
+    wt_date_col = cast(WeightLog.logged_at, Date)
+    since_28 = today - timedelta(days=28)
 
-    meals_res = await db.execute(
-        select(NutritionLog).where(
-            NutritionLog.user_id == current_user.id,
-            NutritionLog.logged_at >= start_today,
-            NutritionLog.logged_at < end_today,
-        )
+    from datetime import timedelta as _td
+    from app.models.diagnosis import Diagnosis as _DiagModel
+    past_cutoff = (datetime.utcnow() - _td(days=7)).date()
+
+    meals_q = select(NutritionLog).where(
+        NutritionLog.user_id == current_user.id,
+        NutritionLog.logged_at >= start_today,
+        NutritionLog.logged_at < end_today,
     )
-    meals_today = meals_res.scalars().all()
+    week_cal_q = select(func.coalesce(func.sum(NutritionLog.calories), 0)).where(
+        NutritionLog.user_id == current_user.id,
+        NutritionLog.logged_at >= start_week_dt,
+    )
+    health_q = select(HealthSnapshot).where(
+        HealthSnapshot.user_id == current_user.id,
+        HealthSnapshot.date == yesterday,
+    )
+    steps_q = select(DailySteps).where(
+        DailySteps.user_id == current_user.id,
+        DailySteps.date == str(today),
+    )
+    wellness_q = select(WellnessCheckin).where(
+        WellnessCheckin.user_id == current_user.id,
+        WellnessCheckin.date == today,
+    )
+    latest_weight_q = (
+        select(WeightLog)
+        .where(WeightLog.user_id == current_user.id)
+        .order_by(WeightLog.logged_at.desc())
+        .limit(1)
+    )
+    wt_logs_q = (
+        select(WeightLog)
+        .where(WeightLog.user_id == current_user.id, wt_date_col >= since_28)
+        .order_by(WeightLog.logged_at.asc())
+    )
+    weight_today_q = select(WeightLog).where(
+        WeightLog.user_id == current_user.id,
+        wt_date_col == today,
+    )
+    past_diag_q = (
+        select(_DiagModel.readiness_score)
+        .where(
+            _DiagModel.user_id == current_user.id,
+            cast(_DiagModel.generated_at, Date) <= past_cutoff,
+            _DiagModel.readiness_score.is_not(None),
+        )
+        .order_by(_DiagModel.generated_at.desc())
+        .limit(1)
+    )
+
+    (
+        meals_today,
+        calories_this_week_raw,
+        last_night,
+        steps_row,
+        today_wellness,
+        latest_weight_row,
+        wt_logs,
+        weight_today_row,
+        past_score_or_exc,
+        readiness,
+    ) = await asyncio.gather(
+        _run_query(meals_q, mode="scalars_all"),
+        _run_query(week_cal_q, mode="scalar"),
+        _run_query(health_q, mode="scalar_one_or_none"),
+        _run_query(steps_q, mode="scalar_one_or_none"),
+        _run_query(wellness_q, mode="scalar_one_or_none"),
+        _run_query(latest_weight_q, mode="scalar_one_or_none"),
+        _run_query(wt_logs_q, mode="scalars_all"),
+        _run_query(weight_today_q, mode="scalar_one_or_none"),
+        _run_query(past_diag_q, mode="scalar_one_or_none"),
+        calculate_readiness(current_user.id, db),
+        return_exceptions=False,
+    )
+
     calories_today = round(sum(m.calories or 0 for m in meals_today))
     protein_today = round(sum(m.protein_g or 0 for m in meals_today), 1)
     carbs_today = round(sum(m.carbs_g or 0 for m in meals_today), 1)
     fat_today = round(sum(m.fat_g or 0 for m in meals_today), 1)
     meals_logged_today = len(meals_today) > 0
     calorie_deficit = (calories_today - daily_calorie_target) if daily_calorie_target else None
+    calories_this_week = round(calories_this_week_raw or 0)
 
-    week_cal_res = await db.execute(
-        select(func.coalesce(func.sum(NutritionLog.calories), 0)).where(
-            NutritionLog.user_id == current_user.id,
-            NutritionLog.logged_at >= start_week_dt,
-        )
-    )
-    calories_this_week = round(week_cal_res.scalar() or 0)
-
-    # ── Health snapshots ──────────────────────────────────────────────────────
-    health_res = await db.execute(
-        select(HealthSnapshot).where(
-            HealthSnapshot.user_id == current_user.id,
-            HealthSnapshot.date == yesterday,
-        )
-    )
-    last_night = health_res.scalar_one_or_none()
     sleep_hours = last_night.sleep_duration_hours if last_night else None
     hrv_ms = last_night.hrv_ms if last_night else None
     resting_heart_rate = last_night.resting_heart_rate if last_night else None
 
-    # ── Steps ─────────────────────────────────────────────────────────────────
-    steps_res = await db.execute(
-        select(DailySteps).where(
-            DailySteps.user_id == current_user.id,
-            DailySteps.date == str(today),
-        )
-    )
-    steps_row = steps_res.scalar_one_or_none()
     steps_today = steps_row.steps if steps_row else 0
 
-    # ── Wellness ──────────────────────────────────────────────────────────────
-    wellness_res = await db.execute(
-        select(WellnessCheckin).where(
-            WellnessCheckin.user_id == current_user.id,
-            WellnessCheckin.date == today,
-        )
-    )
-    today_wellness = wellness_res.scalar_one_or_none()
     energy_today = today_wellness.energy if today_wellness else None
     soreness_today = today_wellness.soreness if today_wellness else None
     mood_today = today_wellness.mood if today_wellness else None
@@ -486,27 +568,11 @@ async def get_dashboard(
     )
 
     # ── Weight ────────────────────────────────────────────────────────────────
-    wt_date_col = cast(WeightLog.logged_at, Date)
-    latest_weight_res = await db.execute(
-        select(WeightLog).where(
-            WeightLog.user_id == current_user.id,
-        ).order_by(WeightLog.logged_at.desc()).limit(1)
-    )
-    latest_weight_row = latest_weight_res.scalar_one_or_none()
     current_weight_kg = latest_weight_row.weight_kg if latest_weight_row else current_user.weight_kg
 
-    # 28-day trend for rate and weekly change
     weight_trend: str | None = None
     weekly_weight_change_kg: float | None = None
     weight_goal_alignment: str = "neutral"
-    since_28 = today - timedelta(days=28)
-    wt_logs_res = await db.execute(
-        select(WeightLog).where(
-            WeightLog.user_id == current_user.id,
-            wt_date_col >= since_28,
-        ).order_by(WeightLog.logged_at.asc())
-    )
-    wt_logs = wt_logs_res.scalars().all()
     if len(wt_logs) >= 2:
         xs = list(range(len(wt_logs)))
         ys = [w.weight_kg for w in wt_logs]
@@ -532,35 +598,11 @@ async def get_dashboard(
         else:
             weight_goal_alignment = "neutral"
 
-    # Logged weight today?
-    weight_logged_today_res = await db.execute(
-        select(WeightLog).where(
-            WeightLog.user_id == current_user.id,
-            wt_date_col == today,
-        )
-    )
-    weight_logged_today = weight_logged_today_res.scalar_one_or_none() is not None
+    weight_logged_today = weight_today_row is not None
 
-    # ── Readiness — single source of truth via readiness_service ──────────────
-    readiness = await calculate_readiness(current_user.id, db)
-
-    # 7-day readiness delta: today's score vs this user's score 7 days ago (or
-    # None if no history). Kept light — no trend chart, just a delta number.
-    from datetime import timedelta as _td
-    from app.models.diagnosis import Diagnosis as _DiagModel
+    # 7-day readiness delta: today's score vs this user's score 7 days ago.
     try:
-        past_cutoff = (datetime.utcnow() - _td(days=7)).date()
-        past_res = await db.execute(
-            select(_DiagModel.readiness_score)
-            .where(
-                _DiagModel.user_id == current_user.id,
-                cast(_DiagModel.generated_at, Date) <= past_cutoff,
-                _DiagModel.readiness_score.is_not(None),
-            )
-            .order_by(_DiagModel.generated_at.desc())
-            .limit(1)
-        )
-        past_score = past_res.scalar_one_or_none()
+        past_score = past_score_or_exc
         readiness_delta_7d: int | None = (
             int(readiness["score"] - past_score) if past_score is not None else None
         )
@@ -649,7 +691,8 @@ async def get_diagnosis(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    today = date.today()
+    from app.services.user_time import user_today
+    today = user_today(current_user)
     now = datetime.utcnow()
     one_hour_ago = now - timedelta(hours=1)
 

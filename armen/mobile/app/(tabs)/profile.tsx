@@ -152,7 +152,7 @@ const BADGES: Badge[] = [
     name: 'First Workout',
     subtitle: 'Started the journey',
     icon: 'checkmark-circle',
-    color: '#27ae60',
+    color: T.status.success,
     earned: (a) => a.length >= 1,
   },
   {
@@ -160,7 +160,7 @@ const BADGES: Badge[] = [
     name: '10 Workouts',
     subtitle: 'Building the habit',
     icon: 'star',
-    color: '#888888',
+    color: T.text.secondary,
     earned: (a) => a.length >= 10,
   },
   {
@@ -168,7 +168,7 @@ const BADGES: Badge[] = [
     name: '50 Workouts',
     subtitle: 'Committed athlete',
     icon: 'trophy',
-    color: '#888888',
+    color: T.text.secondary,
     earned: (a) => a.length >= 50,
   },
   {
@@ -176,7 +176,7 @@ const BADGES: Badge[] = [
     name: '100 Workouts',
     subtitle: 'Elite consistency',
     icon: 'ribbon',
-    color: '#888888',
+    color: T.text.secondary,
     earned: (a) => a.length >= 100,
   },
   {
@@ -184,7 +184,7 @@ const BADGES: Badge[] = [
     name: 'Early Bird',
     subtitle: 'Up before 6am',
     icon: 'sunny',
-    color: '#888888',
+    color: T.text.secondary,
     earned: (a) =>
       a.some((act) => {
         if (!act.start_date) return false;
@@ -197,7 +197,7 @@ const BADGES: Badge[] = [
     name: 'Distance King',
     subtitle: 'Half marathon+',
     icon: 'navigate',
-    color: '#888888',
+    color: T.text.secondary,
     earned: (a) => a.some((act) => (act.distance_meters ?? 0) > 21000),
   },
   {
@@ -205,7 +205,7 @@ const BADGES: Badge[] = [
     name: 'Consistent',
     subtitle: '7-day streak',
     icon: 'calendar',
-    color: '#888888',
+    color: T.text.secondary,
     earned: (a) => computeCurrentStreak(a) >= 7,
   },
   {
@@ -213,7 +213,7 @@ const BADGES: Badge[] = [
     name: 'Green Week',
     subtitle: 'Peak recovery run',
     icon: 'leaf',
-    color: '#27ae60',
+    color: T.status.success,
     earned: (_a) => false,
   },
 ];
@@ -276,7 +276,7 @@ function WorkoutHeatmap({ activities, entries }: { activities: Activity[]; entri
     if (count === 0) return theme.border;
     if (count === 1) return 'rgba(39,174,96,0.4)';
     if (count === 2) return 'rgba(39,174,96,0.7)';
-    return '#27ae60';
+    return T.status.success;
   }
 
   const CELL = 10;
@@ -1880,14 +1880,14 @@ export default function ProfileScreen() {
       visible={false}
       onRequestClose={() => {}}
     >
-      <View style={{ flex: 1, backgroundColor: '#141820' }}>
+      <View style={{ flex: 1, backgroundColor: T.bg.primary }}>
         <SafeAreaView edges={['top']} style={{ flex: 1 }}>
           {/* Header */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.10)' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: T.glass.border }}>
             <TouchableOpacity onPress={() => { setShowPostDetail(false); setSelectedPost(null); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="arrow-back" size={24} color="#F0F2F6" />
             </TouchableOpacity>
-            <Text style={{ flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '700', color: '#F0F2F6' }}>Post</Text>
+            <Text style={{ flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '700', color: T.text.primary }}>Post</Text>
             <TouchableOpacity
               onPress={() => selectedPost && setShowMenuForPost(selectedPost.id)}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -1906,15 +1906,15 @@ export default function ProfileScreen() {
               />
             )}
             {selectedPost?.oryx_data_card_json && (
-              <View style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' }}>
-                <Text style={{ fontSize: 12, color: '#888888' }}>{selectedPost.oryx_data_card_json.post_type?.toUpperCase() || 'ORYX CARD'}</Text>
+              <View style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: T.glass.border }}>
+                <Text style={{ fontSize: 12, color: T.text.secondary }}>{selectedPost.oryx_data_card_json.post_type?.toUpperCase() || 'ORYX CARD'}</Text>
               </View>
             )}
             {selectedPost?.caption && (
-              <Text style={{ fontSize: 14, color: '#F0F2F6', lineHeight: 20 }}>{selectedPost.caption}</Text>
+              <Text style={{ fontSize: 14, color: T.text.primary, lineHeight: 20 }}>{selectedPost.caption}</Text>
             )}
             {selectedPost?.time_ago && (
-              <Text style={{ fontSize: 11, color: '#555555' }}>{selectedPost.time_ago}</Text>
+              <Text style={{ fontSize: 11, color: T.text.muted }}>{selectedPost.time_ago}</Text>
             )}
           </ScrollView>
         </SafeAreaView>
@@ -1939,10 +1939,10 @@ export default function ProfileScreen() {
                 setEditCaptionText(selectedPost?.caption || '');
                 setShowEditCaption(true);
               }}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 12 }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: T.glass.border, borderRadius: 12 }}
             >
               <Ionicons name="pencil-outline" size={18} color="#F0F2F6" />
-              <Text style={{ fontSize: 15, color: '#F0F2F6' }}>Edit Caption</Text>
+              <Text style={{ fontSize: 15, color: T.text.primary }}>Edit Caption</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={async () => {
@@ -1964,10 +1964,10 @@ export default function ProfileScreen() {
                   }
                 ]);
               }}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 12 }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: T.glass.border, borderRadius: 12 }}
             >
               <Ionicons name="trash-outline" size={18} color="#FF6B4A" />
-              <Text style={{ fontSize: 15, color: '#FF6B4A' }}>Delete Post</Text>
+              <Text style={{ fontSize: 15, color: T.status.danger }}>Delete Post</Text>
             </TouchableOpacity>
             {selectedPost?.photo_url && (
               <TouchableOpacity
@@ -1981,17 +1981,17 @@ export default function ProfileScreen() {
                     Alert.alert('Error', 'Could not share as story.');
                   }
                 }}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 12 }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: T.glass.border, borderRadius: 12 }}
               >
                 <Ionicons name="share-outline" size={18} color="#F0F2F6" />
-                <Text style={{ fontSize: 15, color: '#F0F2F6' }}>Share as Story</Text>
+                <Text style={{ fontSize: 15, color: T.text.primary }}>Share as Story</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
               onPress={() => setShowMenuForPost(null)}
-              style={{ padding: 14, alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' }}
+              style={{ padding: 14, alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: T.glass.border }}
             >
-              <Text style={{ fontSize: 15, color: '#888888' }}>Cancel</Text>
+              <Text style={{ fontSize: 15, color: T.text.secondary }}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -2006,9 +2006,9 @@ export default function ProfileScreen() {
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 12, paddingBottom: insets.bottom + 20 }}>
-            <Text style={{ fontSize: 16, fontWeight: '700', color: '#F0F2F6' }}>Edit Caption</Text>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: T.text.primary }}>Edit Caption</Text>
             <TextInput
-              style={{ backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 12, padding: 12, color: '#F0F2F6', fontSize: 14, minHeight: 80 }}
+              style={{ backgroundColor: T.glass.border, borderRadius: 12, padding: 12, color: T.text.primary, fontSize: 14, minHeight: 80 }}
               value={editCaptionText}
               onChangeText={setEditCaptionText}
               multiline
@@ -2019,9 +2019,9 @@ export default function ProfileScreen() {
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <TouchableOpacity
                 onPress={() => setShowEditCaption(false)}
-                style={{ flex: 1, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', alignItems: 'center' }}
+                style={{ flex: 1, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: T.glass.border, alignItems: 'center' }}
               >
-                <Text style={{ color: '#888888', fontWeight: '600' }}>Cancel</Text>
+                <Text style={{ color: T.text.secondary, fontWeight: '600' }}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={async () => {
@@ -2037,9 +2037,9 @@ export default function ProfileScreen() {
                     Alert.alert('Error', 'Could not update caption.');
                   }
                 }}
-                style={{ flex: 1, padding: 14, borderRadius: 12, backgroundColor: '#F0F2F6', alignItems: 'center' }}
+                style={{ flex: 1, padding: 14, borderRadius: 12, backgroundColor: T.text.primary, alignItems: 'center' }}
               >
-                <Text style={{ color: '#0E1400', fontWeight: '700' }}>Save</Text>
+                <Text style={{ color: T.accentInk, fontWeight: '700' }}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>

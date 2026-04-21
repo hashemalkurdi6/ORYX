@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.services.crypto import EncryptedString
 
 
 class User(Base):
@@ -18,8 +19,8 @@ class User(Base):
         String(255), unique=True, index=True, nullable=False
     )
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
-    strava_access_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    strava_refresh_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    strava_access_token: Mapped[str | None] = mapped_column(EncryptedString(1024), nullable=True)
+    strava_refresh_token: Mapped[str | None] = mapped_column(EncryptedString(1024), nullable=True)
     strava_token_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True
     )
@@ -32,12 +33,12 @@ class User(Base):
     sports: Mapped[list | None] = mapped_column(JSON, nullable=True)
     followers_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0")
     following_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0")
-    whoop_access_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    whoop_refresh_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    whoop_access_token: Mapped[str | None] = mapped_column(EncryptedString(1024), nullable=True)
+    whoop_refresh_token: Mapped[str | None] = mapped_column(EncryptedString(1024), nullable=True)
     whoop_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     whoop_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    oura_access_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    oura_refresh_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    oura_access_token: Mapped[str | None] = mapped_column(EncryptedString(1024), nullable=True)
+    oura_refresh_token: Mapped[str | None] = mapped_column(EncryptedString(1024), nullable=True)
     oura_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
     hevy_api_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -63,6 +64,9 @@ class User(Base):
     is_private: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
     dm_privacy: Mapped[str] = mapped_column(String(20), default="mutuals", nullable=False, server_default="mutuals")
     checkin_streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0")
+    # IANA timezone name (e.g. "America/Los_Angeles"). Defaults to UTC if the
+    # client doesn't send one; updated on login via `X-User-Timezone` header.
+    timezone: Mapped[str] = mapped_column(String(64), default="UTC", nullable=False, server_default="UTC")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

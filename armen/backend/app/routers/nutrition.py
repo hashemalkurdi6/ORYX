@@ -95,10 +95,9 @@ async def get_nutrition_today(
     """Return today's logs, daily summary, and nutrition targets."""
     from app.models.daily_nutrition_summary import DailyNutritionSummary
     from app.services.nutrition_service import get_cached_targets
+    from app.services.user_time import user_day_bounds
 
-    now = datetime.utcnow()
-    start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_of_day = start_of_day + timedelta(days=1)
+    start_of_day, end_of_day = user_day_bounds(current_user)
 
     result = await db.execute(
         select(NutritionLog)
@@ -257,8 +256,9 @@ async def get_water_today(
 ):
     """Return today's water intake and personalized target."""
     from app.models.daily_water_intake import DailyWaterIntake
+    from app.services.user_time import user_today
 
-    today = datetime.utcnow().date()
+    today = user_today(current_user)
     result = await db.execute(
         select(DailyWaterIntake).where(
             DailyWaterIntake.user_id == current_user.id,
@@ -296,9 +296,10 @@ async def patch_water_today(
 ):
     """Upsert today's water intake (amount_ml)."""
     from app.models.daily_water_intake import DailyWaterIntake
+    from app.services.user_time import user_today
     from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-    today = datetime.utcnow().date()
+    today = user_today(current_user)
     amount_ml = max(0, payload.amount_ml)
     container_size_ml = max(50, payload.container_size_ml)
 
@@ -498,7 +499,7 @@ async def get_weekly_calories(
     )
     rows = {str(r[0]): (r[1] or 0) for r in res.all()}
 
-    _DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"]
+    _DAY_LABELS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
     result = []
     for i in range(7):
         d = (start + timedelta(days=i)).date()

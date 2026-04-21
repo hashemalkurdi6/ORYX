@@ -179,9 +179,9 @@ function MacroCircle({ label, value, target, unit, color, size = 76 }: MacroCirc
         <Text style={{ fontSize: 10, color: theme.text.muted }}>/ {target}{unit}</Text>
         {target > 0 && (() => {
           const pct = value / target;
-          if (pct > 1.1) return <Text style={{ fontSize: 9, color: '#c0392b', fontWeight: '600' }}>Over</Text>;
-          if (pct >= 0.8) return <Text style={{ fontSize: 9, color: '#e67e22', fontWeight: '600' }}>On Track</Text>;
-          return <Text style={{ fontSize: 9, color: '#666', fontWeight: '600' }}>Low</Text>;
+          if (pct > 1.1) return <Text style={{ fontSize: 9, color: T.status.danger, fontWeight: '600' }}>Over</Text>;
+          if (pct >= 0.8) return <Text style={{ fontSize: 9, color: T.status.warn, fontWeight: '600' }}>On Track</Text>;
+          return <Text style={{ fontSize: 9, color: T.text.muted, fontWeight: '600' }}>Low</Text>;
         })()}
       </View>
     </View>
@@ -405,9 +405,9 @@ function WeeklyCalorieTrend({ days }: WeeklyCalorieTrendProps) {
               : 0;
             const ratio = target > 0 ? d.calories_logged / target : 0;
             const barColor = d.calories_logged === 0 ? 'rgba(255,255,255,0.10)'
-              : ratio > 1 ? '#e67e22'
-              : ratio >= 0.9 ? '#e0e0e0'
-              : '#555';
+              : ratio > 1 ? T.status.warn
+              : ratio >= 0.9 ? T.text.body
+              : T.text.muted;
             return (
               <View key={i} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: CHART_H }}>
                 <View style={{
@@ -902,9 +902,14 @@ export default function NutritionScreen() {
   const handleSaveWaterSettings = async () => {
     setWaterLoading(true);
     try {
-      const targetOverride = settingsTargetInput.trim()
-        ? parseInt(settingsTargetInput, 10)
-        : null; // null = reset to recommended
+      const raw = settingsTargetInput.trim() ? parseInt(settingsTargetInput, 10) : NaN;
+      // Valid range: 500 ml – 8 L / day. Anything outside is almost always a typo.
+      if (!Number.isNaN(raw) && (raw < 500 || raw > 8000)) {
+        Alert.alert('Invalid target', 'Daily target must be between 500 ml and 8000 ml.');
+        setWaterLoading(false);
+        return;
+      }
+      const targetOverride = Number.isNaN(raw) ? null : raw; // null = reset to recommended
       const result = await patchWaterSettings({
         target_ml: targetOverride,
         container_size_ml: settingsContainerSize,
@@ -943,7 +948,7 @@ export default function NutritionScreen() {
   const waterPct = waterInputMode === 'ml'
     ? (waterTargetMl > 0 ? waterAmountMl / waterTargetMl : 0)
     : (dropCount > 0 ? currentGlasses / dropCount : 0);
-  const waterColor = waterPct >= 0.8 ? '#27ae60' : waterPct >= 0.5 ? '#e67e22' : '#e0e0e0';
+  const waterColor = waterPct >= 0.8 ? T.status.success : waterPct >= 0.5 ? T.status.warn : T.text.body;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -1017,8 +1022,8 @@ export default function NutritionScreen() {
             {/* Page 1: Macros */}
             <View style={[s.nutritionSwipePage, { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' }]}>
               <MacroCircle label="Protein" value={totalProtein} target={proteinTarget} unit="g" color={theme.accent} />
-              <MacroCircle label="Carbs" value={totalCarbs} target={carbsTarget} unit="g" color="#888888" />
-              <MacroCircle label="Fat" value={totalFat} target={fatTarget} unit="g" color="#FF6B35" />
+              <MacroCircle label="Carbs" value={totalCarbs} target={carbsTarget} unit="g" color={T.text.secondary} />
+              <MacroCircle label="Fat" value={totalFat} target={fatTarget} unit="g" color={T.status.danger} />
             </View>
             {/* Page 2: Fibre & Micros */}
             <View style={s.nutritionSwipePage}>
@@ -1167,7 +1172,7 @@ export default function NutritionScreen() {
                 disabled={!chatInput.trim() || chatLoading}
                 activeOpacity={0.7}
               >
-                <Ionicons name="arrow-up" size={18} color="#fff" />
+                <Ionicons name="arrow-up" size={18} color={T.text.primary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -1176,7 +1181,7 @@ export default function NutritionScreen() {
         {/* ── Meal Modified Banner ── */}
         {mealModifiedBanner && (
           <View style={s.mealModifiedBanner}>
-            <Ionicons name="checkmark-circle" size={16} color="#27ae60" />
+            <Ionicons name="checkmark-circle" size={16} color={T.status.success} />
             <Text style={s.mealModifiedBannerText}>{mealModifiedBanner}</Text>
           </View>
         )}
@@ -1261,7 +1266,7 @@ export default function NutritionScreen() {
                     setWaterContainerSizeMl(res.container_size_ml);
                   } catch {} finally { setWaterLoading(false); }
                 }}
-                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#252525', borderWidth: 1, borderColor: '#333', alignItems: 'center', justifyContent: 'center' }}
+                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: T.glass.card, borderWidth: 1, borderColor: T.glass.border, alignItems: 'center', justifyContent: 'center' }}
                 activeOpacity={0.7}
               >
                 <Ionicons name="remove" size={20} color={theme.text.primary} />
@@ -1283,7 +1288,7 @@ export default function NutritionScreen() {
                     setWaterContainerSizeMl(res.container_size_ml);
                   } catch {} finally { setWaterLoading(false); }
                 }}
-                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#252525', borderWidth: 1, borderColor: '#333', alignItems: 'center', justifyContent: 'center' }}
+                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: T.glass.card, borderWidth: 1, borderColor: T.glass.border, alignItems: 'center', justifyContent: 'center' }}
                 activeOpacity={0.7}
               >
                 <Ionicons name="add" size={20} color={theme.text.primary} />
@@ -1347,7 +1352,7 @@ export default function NutritionScreen() {
                     onPress={() => setSettingsInputMode(mode)}
                     style={{
                       flex: 1, paddingVertical: 9, borderRadius: 10, borderWidth: 1, alignItems: 'center',
-                      borderColor: settingsInputMode === mode ? theme.accent : '#333',
+                      borderColor: settingsInputMode === mode ? theme.accent : T.glass.border,
                       backgroundColor: settingsInputMode === mode ? `${theme.accent}22` : 'transparent',
                     }}
                     activeOpacity={0.7}
@@ -1361,14 +1366,14 @@ export default function NutritionScreen() {
 
               {/* Container size pills */}
               <Text style={{ fontSize: 11, color: theme.text.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Container Size</Text>
-              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 20 }}>
-                {[200, 250, 330, 400, 500].map(ml => (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 20 }}>
+                {[100, 200, 250, 330, 400, 500, 600, 750, 1000].map(ml => (
                   <TouchableOpacity
                     key={ml}
                     onPress={() => setSettingsContainerSize(ml)}
                     style={{
                       flex: 1, paddingVertical: 7, borderRadius: 8, borderWidth: 1, alignItems: 'center',
-                      borderColor: settingsContainerSize === ml ? theme.accent : '#333',
+                      borderColor: settingsContainerSize === ml ? theme.accent : T.glass.border,
                       backgroundColor: settingsContainerSize === ml ? `${theme.accent}22` : 'transparent',
                     }}
                     activeOpacity={0.7}
@@ -1384,7 +1389,7 @@ export default function NutritionScreen() {
               <Text style={{ fontSize: 11, color: theme.text.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Daily Target (ml)</Text>
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6 }}>
                 <TextInput
-                  style={{ flex: 1, height: 44, backgroundColor: '#252525', borderRadius: 10, borderWidth: 1, borderColor: '#333', paddingHorizontal: 12, fontSize: 15, color: theme.text.primary }}
+                  style={{ flex: 1, height: 44, backgroundColor: T.glass.card, borderRadius: 10, borderWidth: 1, borderColor: T.glass.border, paddingHorizontal: 12, fontSize: 15, color: theme.text.primary }}
                   placeholder={`${waterTargetMl} (current)`}
                   placeholderTextColor={theme.text.muted}
                   value={settingsTargetInput}
@@ -1393,7 +1398,7 @@ export default function NutritionScreen() {
                 />
                 <TouchableOpacity
                   onPress={() => setSettingsTargetInput('')}
-                  style={{ height: 44, paddingHorizontal: 14, backgroundColor: '#252525', borderRadius: 10, borderWidth: 1, borderColor: '#333', alignItems: 'center', justifyContent: 'center' }}
+                  style={{ height: 44, paddingHorizontal: 14, backgroundColor: T.glass.card, borderRadius: 10, borderWidth: 1, borderColor: T.glass.border, alignItems: 'center', justifyContent: 'center' }}
                   activeOpacity={0.7}
                 >
                   <Text style={{ fontSize: 12, color: theme.text.muted }}>Reset</Text>
@@ -1460,12 +1465,12 @@ export default function NutritionScreen() {
                     )}
                     {entry.carbs_g !== null && (
                       <View style={[s.macroChip, { borderColor: 'rgba(255,184,0,0.4)' }]}>
-                        <Text style={[s.macroChipText, { color: '#888888' }]}>{entry.carbs_g}g C</Text>
+                        <Text style={[s.macroChipText, { color: T.text.secondary }]}>{entry.carbs_g}g C</Text>
                       </View>
                     )}
                     {entry.fat_g !== null && (
                       <View style={[s.macroChip, { borderColor: 'rgba(255,107,53,0.4)' }]}>
-                        <Text style={[s.macroChipText, { color: '#FF6B35' }]}>{entry.fat_g}g F</Text>
+                        <Text style={[s.macroChipText, { color: T.status.danger }]}>{entry.fat_g}g F</Text>
                       </View>
                     )}
                   </View>
@@ -1561,7 +1566,7 @@ export default function NutritionScreen() {
           >
             <View style={s.surveyPromptLeft}>
               <View style={s.surveyIconWrap}>
-                <Ionicons name="nutrition-outline" size={22} color="#fff" />
+                <Ionicons name="nutrition-outline" size={22} color={T.text.primary} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.surveyPromptTitle}>Set Up Your Meal Plan</Text>
@@ -1622,7 +1627,7 @@ export default function NutritionScreen() {
                         // Parse meal.time e.g. "8:00 AM", "12:30 PM"
                         const now2 = new Date();
                         const match = /^(\d+):(\d+)\s*(AM|PM)$/i.exec(meal.time?.trim() ?? '');
-                        let dotColor: string = '#333';
+                        let dotColor: string = T.glass.border;
                         if (match) {
                           let h = parseInt(match[1], 10);
                           const m = parseInt(match[2], 10);
@@ -1631,11 +1636,11 @@ export default function NutritionScreen() {
                           const mealMinutes = h * 60 + m;
                           const nowMinutes = now2.getHours() * 60 + now2.getMinutes();
                           const diff = Math.abs(nowMinutes - mealMinutes);
-                          if (diff <= 30) dotColor = '#27ae60';       // current window
-                          else if (mealMinutes < nowMinutes) dotColor = '#444'; // past
-                          else dotColor = '#555';                               // upcoming
+                          if (diff <= 30) dotColor = T.status.success;       // current window
+                          else if (mealMinutes < nowMinutes) dotColor = T.text.muted; // past
+                          else dotColor = T.text.muted;                               // upcoming
                         }
-                        const isCurrent = dotColor === '#27ae60';
+                        const isCurrent = dotColor === T.status.success;
                         return (
                           <View style={[s.mpTimingDot, { backgroundColor: dotColor }, isCurrent && { opacity: 1 }]} />
                         );
@@ -1643,7 +1648,7 @@ export default function NutritionScreen() {
                       <Text style={s.mpMealTime}>{meal.time}</Text>
                       <Text style={s.mpMealName} numberOfLines={1}>{meal.meal_name}</Text>
                       <Text style={s.mpMealCals}>{meal.calories}</Text>
-                      <Ionicons name={isExpanded ? 'chevron-down' : 'chevron-forward'} size={13} color="#444" />
+                      <Ionicons name={isExpanded ? 'chevron-down' : 'chevron-forward'} size={13} color={T.text.muted} />
                     </TouchableOpacity>
                     {isExpanded && (
                       <View style={s.mpMealExpanded}>
@@ -1662,7 +1667,7 @@ export default function NutritionScreen() {
                             <Text style={s.mpLogBtnText}>Log</Text>
                           </TouchableOpacity>
                           <TouchableOpacity onPress={() => handleBookmarkMeal(meal)} activeOpacity={0.8}>
-                            <Ionicons name="bookmark-outline" size={16} color="#555" />
+                            <Ionicons name="bookmark-outline" size={16} color={T.text.muted} />
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -1779,7 +1784,7 @@ export default function NutritionScreen() {
                           {!!meal.calories && <Text style={s.savedMealMacro}>{meal.calories} kcal</Text>}
                           {!!meal.protein_g && <Text style={[s.savedMealMacro, { color: theme.accent }]}>{meal.protein_g}g P</Text>}
                           {!!meal.carbs_g && <Text style={s.savedMealMacro}>{meal.carbs_g}g C</Text>}
-                          {!!meal.fat_g && <Text style={[s.savedMealMacro, { color: '#FF6B35' }]}>{meal.fat_g}g F</Text>}
+                          {!!meal.fat_g && <Text style={[s.savedMealMacro, { color: T.status.danger }]}>{meal.fat_g}g F</Text>}
                         </View>
                       </View>
                       <TouchableOpacity onPress={() => handleDeleteSavedMeal(meal.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 4, marginLeft: 8 }}>
@@ -1864,8 +1869,8 @@ export default function NutritionScreen() {
               {[
                 { key: 'calories', label: 'Calories', unit: 'kcal', color: theme.text.primary },
                 { key: 'protein_g', label: 'Protein', unit: 'g', color: theme.accent },
-                { key: 'carbs_g', label: 'Carbs', unit: 'g', color: '#888888' },
-                { key: 'fat_g', label: 'Fat', unit: 'g', color: '#FF6B35' },
+                { key: 'carbs_g', label: 'Carbs', unit: 'g', color: T.text.secondary },
+                { key: 'fat_g', label: 'Fat', unit: 'g', color: T.status.danger },
               ].map(({ key, label, unit, color }) => (
                 <View key={key} style={s.macroInputBox}>
                   <TextInput
@@ -2010,8 +2015,8 @@ export default function NutritionScreen() {
                   {[
                     { key: 'calories', label: 'Calories', unit: 'kcal', color: theme.text.primary },
                     { key: 'protein_g', label: 'Protein', unit: 'g', color: theme.accent },
-                    { key: 'carbs_g', label: 'Carbs', unit: 'g', color: '#888888' },
-                    { key: 'fat_g', label: 'Fat', unit: 'g', color: '#FF6B35' },
+                    { key: 'carbs_g', label: 'Carbs', unit: 'g', color: T.text.secondary },
+                    { key: 'fat_g', label: 'Fat', unit: 'g', color: T.status.danger },
                   ].map(({ key, label, unit, color }) => (
                     <View key={key} style={s.macroInputBox}>
                       <TextInput
@@ -2071,7 +2076,7 @@ export default function NutritionScreen() {
                 {scanImageUri && (
                   <Image source={{ uri: scanImageUri }} style={s.scanThumbnailLarge} />
                 )}
-                <Ionicons name="alert-circle-outline" size={40} color="#FF6B35" style={{ marginTop: 16 }} />
+                <Ionicons name="alert-circle-outline" size={40} color={T.status.danger} style={{ marginTop: 16 }} />
                 <Text style={s.scanErrorTitle}>Could not analyze this photo</Text>
                 <Text style={s.scanErrorDetail}>{scanError}</Text>
                 <TouchableOpacity style={s.scanRetryBtn} onPress={() => { resetScan(); handleScanPhoto(); }} activeOpacity={0.75}>
@@ -2139,9 +2144,9 @@ function createStyles(t: ThemeColors) {
     mealPlanTitle: { fontSize: 20, fontWeight: '700', color: t.text.primary },
     cheatDayBadge: {
       backgroundColor: '#FF6B3520', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
-      borderWidth: 1, borderColor: '#FF6B35',
+      borderWidth: 1, borderColor: T.status.danger,
     },
-    cheatDayText: { fontSize: 11, fontWeight: '700', color: '#FF6B35', letterSpacing: 1 },
+    cheatDayText: { fontSize: 11, fontWeight: '700', color: T.status.danger, letterSpacing: 1 },
     mealPlanNote: { fontSize: 13, color: t.text.secondary, lineHeight: 18, marginBottom: 14 },
     macroPillsRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 14 },
     macroPill: {
@@ -2332,10 +2337,10 @@ function createStyles(t: ThemeColors) {
       gap: 6, paddingBottom: 10,
     },
     swipeDot: {
-      width: 6, height: 6, borderRadius: 3, backgroundColor: '#555555',
+      width: 6, height: 6, borderRadius: 3, backgroundColor: T.text.muted,
     },
     swipeDotActive: {
-      backgroundColor: '#ffffff',
+      backgroundColor: T.text.primary,
     },
 
     // Fibre & Micros
@@ -2601,7 +2606,7 @@ function createStyles(t: ThemeColors) {
       backgroundColor: 'rgba(39,174,96,0.12)', borderRadius: 10, padding: 12,
       borderWidth: 1, borderColor: 'rgba(39,174,96,0.3)', marginBottom: 12,
     },
-    mealModifiedBannerText: { fontSize: 14, color: '#27ae60', fontWeight: '600' },
+    mealModifiedBannerText: { fontSize: 14, color: T.status.success, fontWeight: '600' },
 
     // Ask ORYX chat
     chatCollapsed: {
@@ -2647,13 +2652,13 @@ function createStyles(t: ThemeColors) {
       backgroundColor: 'rgba(28,34,46,0.72)', alignSelf: 'flex-start',
       borderBottomLeftRadius: 4, borderWidth: 1, borderColor: t.border,
     },
-    chatBubbleText: { fontSize: 14, color: '#fff', lineHeight: 20 },
+    chatBubbleText: { fontSize: 14, color: T.text.primary, lineHeight: 20 },
     chatInputRow: {
       flexDirection: 'row', alignItems: 'center', gap: 8,
       padding: 10, borderTopWidth: 1, borderTopColor: t.border,
     },
     chatInput: {
-      flex: 1, backgroundColor: '#111', borderRadius: 20,
+      flex: 1, backgroundColor: T.bg.tint, borderRadius: 20,
       paddingHorizontal: 14, paddingVertical: 9,
       fontSize: 14, color: t.text.primary,
       borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',

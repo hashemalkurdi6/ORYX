@@ -94,7 +94,9 @@ async def get_whoop_auth_url(
     _: None = Depends(_require_whoop_keys),
 ):
     """Return the WHOOP OAuth authorization URL."""
-    state = secrets.token_urlsafe(16)
+    # Embed user id in state so the browser-driven callback can identify the
+    # user without an Authorization header (redirect drops it).
+    state = f"{current_user.id}:{secrets.token_urlsafe(16)}"
     url = whoop_service.get_auth_url(state=state)
     return {"url": url, "state": state}
 
@@ -104,13 +106,24 @@ async def whoop_callback(
     code: str = Query(...),
     state: str = Query(default=""),
     _: None = Depends(_require_whoop_keys),
-    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Handle WHOOP OAuth callback: exchange code for tokens, save to user,
     fetch 7 days of recovery data, upsert WhoopData rows.
     """
+    user_id_str = state.split(":")[0] if ":" in state else None
+    if not user_id_str:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid state parameter")
+    import uuid as _uuid
+    try:
+        user_uuid = _uuid.UUID(user_id_str)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user ID in state")
+    user_result = await db.execute(select(User).where(User.id == user_uuid))
+    current_user = user_result.scalar_one_or_none()
+    if current_user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     try:
         token_data = await whoop_service.exchange_code(code)
     except Exception as exc:

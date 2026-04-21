@@ -549,6 +549,16 @@ CREATE TABLE IF NOT EXISTS rate_limit_events (
     )
     """,
     "CREATE INDEX IF NOT EXISTS ix_messages_conversation_created ON messages (conversation_id, created_at DESC)",
+    # Widen OAuth token columns to hold Fernet ciphertext (plaintext tokens are ~200 chars,
+    # Fernet blob is ~1.3× plus overhead — 1024 is comfortable).
+    "ALTER TABLE users ALTER COLUMN strava_access_token TYPE VARCHAR(1024)",
+    "ALTER TABLE users ALTER COLUMN strava_refresh_token TYPE VARCHAR(1024)",
+    "ALTER TABLE users ALTER COLUMN whoop_access_token TYPE VARCHAR(1024)",
+    "ALTER TABLE users ALTER COLUMN whoop_refresh_token TYPE VARCHAR(1024)",
+    "ALTER TABLE users ALTER COLUMN oura_access_token TYPE VARCHAR(1024)",
+    "ALTER TABLE users ALTER COLUMN oura_refresh_token TYPE VARCHAR(1024)",
+    # Per-user timezone (IANA name) for day-boundary queries.
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(64) NOT NULL DEFAULT 'UTC'",
 ]
 
 
@@ -621,7 +631,7 @@ app.add_middleware(
     allow_origins=_cors_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "X-User-Timezone"],
 )
 
 # Include routers

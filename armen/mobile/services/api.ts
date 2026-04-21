@@ -488,13 +488,18 @@ const apiClient: AxiosInstance = axios.create({
   },
 });
 
-// Request interceptor: attach Bearer token if available
+// Request interceptor: attach Bearer token + user timezone header so the
+// backend can do day-boundary math in the user's local timezone instead of UTC.
 apiClient.interceptors.request.use(
   (config) => {
     const token = useAuthStore.getState().token;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (tz) config.headers['X-User-Timezone'] = tz;
+    } catch { /* Intl not available — skip */ }
     return config;
   },
   (error) => Promise.reject(error)
@@ -710,8 +715,9 @@ export async function getHealthSnapshots(
 
 // ── Diagnosis ──────────────────────────────────────────────────────────────
 
+/** @deprecated Use getDiagnosis() — /diagnosis/daily is retired (410). */
 export async function getDailyDiagnosis(): Promise<DiagnosisResult> {
-  const response = await apiClient.get<DiagnosisResult>('/diagnosis/daily');
+  const response = await apiClient.post<DiagnosisResult>('/home/diagnosis');
   return response.data;
 }
 

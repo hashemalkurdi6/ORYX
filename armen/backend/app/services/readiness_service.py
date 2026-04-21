@@ -492,6 +492,9 @@ def _factor_text(key: str, score: float) -> str:
 
 
 async def _get_hardware_status(user_id: UUID, yesterday: date, db: AsyncSession) -> dict:
+    from app.models.whoop_data import WhoopData
+    from app.models.oura_data import OuraData
+
     res = await db.execute(
         select(HealthSnapshot).where(
             HealthSnapshot.user_id == user_id,
@@ -502,12 +505,28 @@ async def _get_hardware_status(user_id: UUID, yesterday: date, db: AsyncSession)
     sleep_available = snap is not None and snap.sleep_duration_hours is not None
     hrv_available = snap is not None and snap.hrv_ms is not None
 
+    whoop_res = await db.execute(
+        select(WhoopData.id).where(
+            WhoopData.user_id == user_id,
+            WhoopData.date == yesterday,
+        ).limit(1)
+    )
+    whoop_available = whoop_res.scalar_one_or_none() is not None
+
+    oura_res = await db.execute(
+        select(OuraData.id).where(
+            OuraData.user_id == user_id,
+            OuraData.date == yesterday,
+        ).limit(1)
+    )
+    oura_available = oura_res.scalar_one_or_none() is not None
+
     return {
         "apple_watch": sleep_available,
-        "whoop": False,
-        "oura": False,
-        "hrv_available": hrv_available,
-        "sleep_available": sleep_available,
+        "whoop": whoop_available,
+        "oura": oura_available,
+        "hrv_available": hrv_available or whoop_available or oura_available,
+        "sleep_available": sleep_available or whoop_available or oura_available,
     }
 
 

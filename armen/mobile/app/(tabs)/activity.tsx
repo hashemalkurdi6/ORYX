@@ -101,12 +101,15 @@ type FeedItem =
 const { width: SCREEN_W } = Dimensions.get('window');
 const FILTERS: FilterType[] = ['All', 'Strength', 'Cardio', 'Sport', 'Strava', 'Hevy'];
 const INTENSITIES: IntensityType[] = ['Easy', 'Moderate', 'Hard', 'Max'];
-const SET_TYPES: { key: SetType; label: string; color: string }[] = [
-  { key: 'working', label: 'W', color: '#F0F2F6' },
-  { key: 'warmup', label: 'U', color: '#8B95A8' },
-  { key: 'drop', label: 'D', color: '#FF6B35' },
-  { key: 'failure', label: 'F', color: '#c0392b' },
+// Evaluated at call time so color tokens track the active theme (module-level
+// array literals would freeze the palette to whatever theme was live at import).
+const getSetTypes = (): { key: SetType; label: string; color: string }[] => [
+  { key: 'working', label: 'W', color: T.text.primary },
+  { key: 'warmup', label: 'U', color: T.text.secondary },
+  { key: 'drop', label: 'D', color: T.status.danger },
+  { key: 'failure', label: 'F', color: T.status.danger },
 ];
+const SET_TYPE_KEYS: SetType[] = ['working', 'warmup', 'drop', 'failure'];
 const CATEGORY_ICONS: Record<string, string> = {
   strength: 'barbell-outline',
   cardio: 'walk-outline',
@@ -148,11 +151,11 @@ function formatDuration(minutes: number): string {
 
 function intensityColor(v: string): string {
   switch (v) {
-    case 'Easy': return '#27ae60';
-    case 'Moderate': return '#8B95A8';
-    case 'Hard': return '#FF6B35';
-    case 'Max': return '#c0392b';
-    default: return '#8B95A8';
+    case 'Easy': return T.status.success;
+    case 'Moderate': return T.text.secondary;
+    case 'Hard': return T.status.danger;
+    case 'Max': return T.status.danger;
+    default: return T.text.secondary;
   }
 }
 
@@ -173,10 +176,10 @@ function uniqueMuscles(exercises: ExerciseEntry[]): string[] {
 }
 
 function loadColor(load: number): string {
-  if (load < 150) return '#27ae60';
-  if (load < 300) return '#f39c12';
-  if (load < 500) return '#e67e22';
-  return '#c0392b';
+  if (load < 150) return T.status.success;
+  if (load < 300) return T.status.warn;
+  if (load < 500) return T.status.warn;
+  return T.status.danger;
 }
 
 function getStravaActivityIcon(sportType: string): string {
@@ -368,16 +371,16 @@ const ExerciseSearchModal = ({
         <View style={styles.exSearchHeader}>
           <Text style={styles.exSearchTitle}>Add Exercise</Text>
           <TouchableOpacity onPress={onClose}>
-            <Ionicons name="close" size={24} color="#F0F2F6" />
+            <Ionicons name="close" size={24} color={T.text.primary} />
           </TouchableOpacity>
         </View>
 
         <View style={styles.exSearchInputWrap}>
-          <Ionicons name="search-outline" size={16} color="#525E72" />
+          <Ionicons name="search-outline" size={16} color={T.text.muted} />
           <TextInput
             style={styles.exSearchInput}
             placeholder="Search exercises..."
-            placeholderTextColor="#555"
+            placeholderTextColor={T.text.muted}
             value={query}
             onChangeText={setQuery}
           />
@@ -400,12 +403,12 @@ const ExerciseSearchModal = ({
           keyExtractor={i => i.id}
           renderItem={({ item }) => (
             <TouchableOpacity style={styles.exRow} onPress={() => { onSelect(item); onClose(); }}>
-              <View style={[styles.exDot, { backgroundColor: MUSCLE_COLORS[item.muscleGroup] ?? '#F0F2F6' }]} />
+              <View style={[styles.exDot, { backgroundColor: MUSCLE_COLORS[item.muscleGroup] ?? T.text.primary }]} />
               <View style={styles.exRowInfo}>
                 <Text style={styles.exRowName}>{item.name}</Text>
                 <Text style={styles.exRowGroup}>{MUSCLE_GROUP_LABELS[item.muscleGroup] ?? item.muscleGroup}</Text>
               </View>
-              <Ionicons name="add-circle-outline" size={20} color="#F0F2F6" />
+              <Ionicons name="add-circle-outline" size={20} color={T.text.primary} />
             </TouchableOpacity>
           )}
           contentContainerStyle={{ paddingBottom: 40 }}
@@ -432,7 +435,8 @@ const SetRow = ({
   onChange: (field: keyof ExerciseSet, value: string | boolean | SetType) => void;
   onComplete: () => void;
 }) => {
-  const setTypeInfo = SET_TYPES.find(t => t.key === set.type)!;
+  const setTypes = getSetTypes();
+  const setTypeInfo = setTypes.find(t => t.key === set.type)!;
   return (
     <View style={[styles.setRow, set.completed && styles.setRowCompleted]}>
       {/* Set number */}
@@ -442,8 +446,8 @@ const SetRow = ({
       <TouchableOpacity
         style={[styles.setTypePill, { borderColor: setTypeInfo.color }]}
         onPress={() => {
-          const idx = SET_TYPES.findIndex(t => t.key === set.type);
-          onChange('type', SET_TYPES[(idx + 1) % SET_TYPES.length].key);
+          const idx = SET_TYPE_KEYS.indexOf(set.type);
+          onChange('type', SET_TYPE_KEYS[(idx + 1) % SET_TYPE_KEYS.length]);
         }}
       >
         <Text style={[styles.setTypeText, { color: setTypeInfo.color }]}>{setTypeInfo.label}</Text>
@@ -453,7 +457,7 @@ const SetRow = ({
       <TextInput
         style={styles.setInput}
         placeholder={prevWeight ?? 'kg'}
-        placeholderTextColor="#525E72"
+        placeholderTextColor={T.text.muted}
         keyboardType="decimal-pad"
         value={set.weight}
         onChangeText={v => onChange('weight', v)}
@@ -463,7 +467,7 @@ const SetRow = ({
       <TextInput
         style={styles.setInput}
         placeholder={prevReps ?? 'reps'}
-        placeholderTextColor="#525E72"
+        placeholderTextColor={T.text.muted}
         keyboardType="number-pad"
         value={set.reps}
         onChangeText={v => onChange('reps', v)}
@@ -473,7 +477,7 @@ const SetRow = ({
       <TextInput
         style={[styles.setInput, styles.setInputRPE]}
         placeholder="RPE"
-        placeholderTextColor="#525E72"
+        placeholderTextColor={T.text.muted}
         keyboardType="decimal-pad"
         maxLength={3}
         value={set.rpe}
@@ -485,7 +489,7 @@ const SetRow = ({
         <Ionicons
           name={set.completed ? 'checkmark-circle' : 'ellipse-outline'}
           size={22}
-          color={set.completed ? '#27ae60' : '#525E72'}
+          color={set.completed ? T.status.success : T.text.muted}
         />
       </TouchableOpacity>
     </View>
@@ -493,11 +497,12 @@ const SetRow = ({
 };
 
 // ── RPE Prompt ─────────────────────────────────────────────────────────────────
-const RPE_COLORS: Record<number, string> = {
-  1: '#27ae60', 2: '#27ae60', 3: '#27ae60',
-  4: '#f39c12', 5: '#f39c12', 6: '#f39c12',
-  7: '#e67e22', 8: '#e67e22', 9: '#e67e22',
-  10: '#c0392b',
+// Evaluated at call time so light mode actually picks up — a module-level
+// object literal would freeze to whichever theme was live at import.
+const rpeColor = (n: number): string => {
+  if (n <= 3) return T.status.success;
+  if (n <= 9) return T.status.warn;
+  return T.status.danger;
 };
 const RPE_LABELS: Record<number, string> = {
   1: 'Easy', 2: 'Easy', 3: 'Moderate', 4: 'Moderate',
@@ -524,18 +529,18 @@ const RPEPrompt = ({
             key={n}
             style={[
               styles.rpeCircle,
-              selected === n && { backgroundColor: RPE_COLORS[n], borderColor: RPE_COLORS[n] },
+              selected === n && { backgroundColor: rpeColor(n), borderColor: rpeColor(n) },
             ]}
             onPress={() => setSelected(n)}
             activeOpacity={0.75}
           >
-            <Text style={[styles.rpeCircleNum, selected === n && { color: '#141820' }]}>{n}</Text>
+            <Text style={[styles.rpeCircleNum, selected === n && { color: T.bg.primary }]}>{n}</Text>
           </TouchableOpacity>
         ))}
       </View>
       {selected !== null && (
-        <View style={[styles.rpeLabelPill, { backgroundColor: RPE_COLORS[selected] + '22', borderColor: RPE_COLORS[selected] }]}>
-          <Text style={[styles.rpeLabelText, { color: RPE_COLORS[selected] }]}>{RPE_LABELS[selected]}</Text>
+        <View style={[styles.rpeLabelPill, { backgroundColor: rpeColor(selected) + '22', borderColor: rpeColor(selected) }]}>
+          <Text style={[styles.rpeLabelText, { color: rpeColor(selected) }]}>{RPE_LABELS[selected]}</Text>
         </View>
       )}
       <TouchableOpacity
@@ -644,7 +649,7 @@ const StrengthBuilder = ({
       {/* Header */}
       <View style={[styles.strengthHeader, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={onBack}>
-          <Ionicons name="chevron-back" size={24} color="#F0F2F6" />
+          <Ionicons name="chevron-back" size={24} color={T.text.primary} />
         </TouchableOpacity>
         <View style={{ flex: 1, alignItems: 'center' }}>
           <Text style={styles.elapsedTimer}>{formatSeconds(elapsedSeconds)}</Text>
@@ -663,7 +668,7 @@ const StrengthBuilder = ({
       <TextInput
         style={styles.workoutNameInput}
         placeholder={sportLabel ? `${sportLabel} Day` : 'Workout name'}
-        placeholderTextColor="#555"
+        placeholderTextColor={T.text.muted}
         value={workoutName}
         onChangeText={onWorkoutNameChange}
       />
@@ -672,15 +677,15 @@ const StrengthBuilder = ({
         {exercises.map((ex, exIdx) => (
           <View key={ex.id} style={styles.exerciseCard}>
             <View style={styles.exerciseCardHeader}>
-              <View style={[styles.exDot, { backgroundColor: MUSCLE_COLORS[ex.muscleGroup] ?? '#F0F2F6' }]} />
+              <View style={[styles.exDot, { backgroundColor: MUSCLE_COLORS[ex.muscleGroup] ?? T.text.primary }]} />
               <Text style={styles.exerciseCardName}>{ex.name}</Text>
               <TouchableOpacity
                 onPress={() => cycleSupersetGroup(exIdx)}
                 style={{
                   paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10,
                   borderWidth: 1,
-                  borderColor: ex.supersetGroup ? '#DEFF47' : 'rgba(255,255,255,0.15)',
-                  backgroundColor: ex.supersetGroup ? 'rgba(222,255,71,0.14)' : 'transparent',
+                  borderColor: ex.supersetGroup ? T.accent : T.glass.border,
+                  backgroundColor: ex.supersetGroup ? T.accentDim : 'transparent',
                 }}
                 activeOpacity={0.7}
                 hitSlop={6}
@@ -688,17 +693,17 @@ const StrengthBuilder = ({
                 <Text style={{
                   fontFamily: TY.mono.semibold,
                   fontSize: 11,
-                  color: ex.supersetGroup ? '#DEFF47' : '#8B95A8',
+                  color: ex.supersetGroup ? T.accent : T.text.secondary,
                   letterSpacing: 0.5,
                 }}>
                   {ex.supersetGroup ? `SS·${ex.supersetGroup}` : 'SS'}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => openPlateCalc(ex.sets.at(-1)?.weight ?? '')} hitSlop={6}>
-                <Ionicons name="calculator-outline" size={18} color="#8B95A8" />
+                <Ionicons name="calculator-outline" size={18} color={T.text.secondary} />
               </TouchableOpacity>
               <TouchableOpacity onPress={() => removeExercise(exIdx)}>
-                <Ionicons name="trash-outline" size={18} color="#c0392b" />
+                <Ionicons name="trash-outline" size={18} color={T.status.danger} />
               </TouchableOpacity>
             </View>
 
@@ -729,14 +734,14 @@ const StrengthBuilder = ({
             ))}
 
             <TouchableOpacity style={styles.addSetBtn} onPress={() => addSet(exIdx)}>
-              <Ionicons name="add-outline" size={16} color="#F0F2F6" />
+              <Ionicons name="add-outline" size={16} color={T.text.primary} />
               <Text style={styles.addSetText}>Add Set</Text>
             </TouchableOpacity>
 
             <TextInput
               style={styles.exNotesInput}
               placeholder="Exercise notes..."
-              placeholderTextColor="#525E72"
+              placeholderTextColor={T.text.muted}
               value={ex.notes}
               onChangeText={v => updateExercise(exIdx, { ...ex, notes: v })}
             />
@@ -744,7 +749,7 @@ const StrengthBuilder = ({
         ))}
 
         <TouchableOpacity style={styles.addExerciseBtn} onPress={onAddExercise}>
-          <Ionicons name="add-circle-outline" size={20} color="#F0F2F6" />
+          <Ionicons name="add-circle-outline" size={20} color={T.text.primary} />
           <Text style={styles.addExerciseText}>Add Exercise</Text>
         </TouchableOpacity>
 
@@ -803,10 +808,10 @@ const CardioLogger = ({
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <View style={[styles.cardioHeader, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={onBack}>
-          <Ionicons name="chevron-back" size={24} color="#F0F2F6" />
+          <Ionicons name="chevron-back" size={24} color={T.text.primary} />
         </TouchableOpacity>
         <View style={styles.cardioSportTag}>
-          <Ionicons name={sport.icon as any} size={16} color="#F0F2F6" />
+          <Ionicons name={sport.icon as any} size={16} color={T.text.primary} />
           <Text style={styles.cardioSportLabel}>{sport.label}</Text>
         </View>
         <View style={{ width: 32 }} />
@@ -816,7 +821,7 @@ const CardioLogger = ({
         <TextInput
           style={styles.workoutNameInput}
           placeholder={`${sport.label} session`}
-          placeholderTextColor="#555"
+          placeholderTextColor={T.text.muted}
           value={workoutName}
           onChangeText={v => onChange('workoutName', v)}
         />
@@ -828,7 +833,7 @@ const CardioLogger = ({
               <TextInput
                 style={styles.cardioInput}
                 placeholder="45"
-                placeholderTextColor="#555"
+                placeholderTextColor={T.text.muted}
                 keyboardType="number-pad"
                 value={duration}
                 onChangeText={v => onChange('duration', v)}
@@ -842,7 +847,7 @@ const CardioLogger = ({
               <TextInput
                 style={styles.cardioInput}
                 placeholder="5.0"
-                placeholderTextColor="#555"
+                placeholderTextColor={T.text.muted}
                 keyboardType="decimal-pad"
                 value={distance}
                 onChangeText={v => onChange('distance', v)}
@@ -860,14 +865,14 @@ const CardioLogger = ({
               style={[styles.intensityPill, intensity === i && { backgroundColor: intensityColor(i) }]}
               onPress={() => onChange('intensity', i)}
             >
-              <Text style={[styles.intensityPillText, intensity === i && { color: '#F0F2F6' }]}>{i}</Text>
+              <Text style={[styles.intensityPillText, intensity === i && { color: T.text.primary }]}>{i}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
         {durationNum > 0 && (
           <View style={styles.calsPreviewCard}>
-            <Ionicons name="flame-outline" size={20} color="#FF6B35" />
+            <Ionicons name="flame-outline" size={20} color={T.status.danger} />
             <Text style={styles.calsPreviewText}>~{cals} kcal estimated</Text>
           </View>
         )}
@@ -876,7 +881,7 @@ const CardioLogger = ({
         <TextInput
           style={styles.notesInput}
           placeholder="How did it feel? Any issues?"
-          placeholderTextColor="#525E72"
+          placeholderTextColor={T.text.muted}
           multiline
           numberOfLines={3}
           value={notes}
@@ -889,10 +894,10 @@ const CardioLogger = ({
           disabled={!duration || submitting}
         >
           {submitting ? (
-            <ActivityIndicator color="#F0F2F6" />
+            <ActivityIndicator color={T.text.primary} />
           ) : (
             <>
-              <Ionicons name="checkmark-circle-outline" size={20} color="#F0F2F6" />
+              <Ionicons name="checkmark-circle-outline" size={20} color={T.text.primary} />
               <Text style={styles.submitBtnText}>Log Session</Text>
             </>
           )}
@@ -1022,7 +1027,7 @@ const PostSessionView = ({
   return (
     <ScrollView contentContainerStyle={[styles.reviewScroll, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }]}>
       <View style={styles.reviewCheckCircle}>
-        <Ionicons name="checkmark-circle" size={64} color="#27ae60" />
+        <Ionicons name="checkmark-circle" size={64} color={T.status.success} />
       </View>
       <Text style={styles.reviewTitle}>Session Complete</Text>
       <Text style={styles.reviewSubtitle}>{activity.activity_type}</Text>
@@ -1060,9 +1065,9 @@ const PostSessionView = ({
           </View>
           <View style={styles.muscleTagsRow}>
             {muscles.map(m => (
-              <View key={m} style={[styles.muscleTag, { backgroundColor: (MUSCLE_COLORS[m] ?? '#F0F2F6') + '33', borderColor: MUSCLE_COLORS[m] ?? '#F0F2F6' }]}>
-                <View style={[styles.muscleDot, { backgroundColor: MUSCLE_COLORS[m] ?? '#F0F2F6' }]} />
-                <Text style={[styles.muscleTagText, { color: MUSCLE_COLORS[m] ?? '#F0F2F6' }]}>
+              <View key={m} style={[styles.muscleTag, { backgroundColor: (MUSCLE_COLORS[m] ?? T.text.primary) + '33', borderColor: MUSCLE_COLORS[m] ?? T.text.primary }]}>
+                <View style={[styles.muscleDot, { backgroundColor: MUSCLE_COLORS[m] ?? T.text.primary }]} />
+                <Text style={[styles.muscleTagText, { color: MUSCLE_COLORS[m] ?? T.text.primary }]}>
                   {MUSCLE_GROUP_LABELS[m] ?? m}
                 </Text>
               </View>
@@ -1074,7 +1079,7 @@ const PostSessionView = ({
       {/* AI Autopsy */}
       <View style={styles.autopsyCard}>
         <View style={styles.autopsyHeader}>
-          <Ionicons name="analytics-outline" size={16} color="#F0F2F6" />
+          <Ionicons name="analytics-outline" size={16} color={T.text.primary} />
           <Text style={styles.autopsyTitle}>AI Analysis</Text>
         </View>
         {autopsyText ? (
@@ -1089,7 +1094,7 @@ const PostSessionView = ({
               activeOpacity={0.8}
             >
               {autopsyRetrying ? (
-                <ActivityIndicator size="small" color="#8B95A8" />
+                <ActivityIndicator size="small" color={T.text.secondary} />
               ) : (
                 <Text style={styles.autopsyRetryText}>Tap to retry</Text>
               )}
@@ -1097,7 +1102,7 @@ const PostSessionView = ({
           </>
         ) : (
           <>
-            <ActivityIndicator size="small" color="#8B95A8" style={{ marginTop: 8 }} />
+            <ActivityIndicator size="small" color={T.text.secondary} style={{ marginTop: 8 }} />
             <Text style={styles.autopsyGenerating}>Generating AI analysis...</Text>
           </>
         )}
@@ -1121,14 +1126,14 @@ const FeedCard = ({ item, onPress, onShare }: { item: FeedItem; onPress: () => v
       return (
         <TouchableOpacity style={[styles.feedCard, styles.feedCardRest]} onPress={onPress} activeOpacity={0.8}>
           <View style={styles.feedCardTop}>
-            <View style={[styles.feedIconWrap, { backgroundColor: 'rgba(28,34,46,0.72)' }]}>
-              <Ionicons name="moon-outline" size={22} color="#525E72" />
+            <View style={[styles.feedIconWrap, { backgroundColor: T.glass.card }]}>
+              <Ionicons name="moon-outline" size={22} color={T.text.muted} />
             </View>
             <View style={{ flex: 1 }}>
               <View style={styles.feedCardTitleRow}>
-                <Text style={[styles.feedCardTitle, { color: '#525E72' }]} numberOfLines={1}>{a.activity_type}</Text>
-                <View style={[styles.sourceBadge, { borderColor: 'rgba(255,255,255,0.10)' }]}>
-                  <Text style={[styles.sourceBadgeText, { color: '#444444' }]}>REST DAY</Text>
+                <Text style={[styles.feedCardTitle, { color: T.text.muted }]} numberOfLines={1}>{a.activity_type}</Text>
+                <View style={[styles.sourceBadge, { borderColor: T.glass.border }]}>
+                  <Text style={[styles.sourceBadgeText, { color: T.text.muted }]}>REST DAY</Text>
                 </View>
               </View>
               <Text style={styles.feedCardMeta}>{fmtDate(a.logged_at)}</Text>
@@ -1143,14 +1148,14 @@ const FeedCard = ({ item, onPress, onShare }: { item: FeedItem; onPress: () => v
       <TouchableOpacity style={styles.feedCard} onPress={onPress} activeOpacity={0.8}>
         <View style={styles.feedCardTop}>
           <View style={styles.feedIconWrap}>
-            <Ionicons name={CATEGORY_ICONS[a.sport_category ?? 'other'] as any} size={22} color="#F0F2F6" />
+            <Ionicons name={CATEGORY_ICONS[a.sport_category ?? 'other'] as any} size={22} color={T.text.primary} />
           </View>
           <View style={{ flex: 1 }}>
             <View style={styles.feedCardTitleRow}>
               <Text style={styles.feedCardTitle} numberOfLines={1}>{a.activity_type}</Text>
               <View style={styles.sourceBadge}><Text style={styles.sourceBadgeText}>manual</Text></View>
               <TouchableOpacity onPress={() => onShare(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="share-outline" size={16} color="#525E72" />
+                <Ionicons name="share-outline" size={16} color={T.text.muted} />
               </TouchableOpacity>
             </View>
             <Text style={styles.feedCardMeta}>{fmtDate(a.logged_at)} · {formatDuration(a.duration_minutes)}</Text>
@@ -1166,13 +1171,13 @@ const FeedCard = ({ item, onPress, onShare }: { item: FeedItem; onPress: () => v
             </View>
           )}
           {a.rpe != null && a.rpe > 0 && (
-            <View style={[styles.loadBadge, { backgroundColor: 'rgba(222,255,71,0.14)', borderColor: '#DEFF47' }]}>
-              <Text style={[styles.loadBadgeText, { color: '#DEFF47' }]}>RPE {a.rpe}</Text>
+            <View style={[styles.loadBadge, { backgroundColor: T.accentDim, borderColor: T.accent }]}>
+              <Text style={[styles.loadBadgeText, { color: T.accent }]}>RPE {a.rpe}</Text>
             </View>
           )}
           {a.calories_burned != null && (
             <View style={styles.feedStatItem}>
-              <Ionicons name="flame-outline" size={12} color="#FF6B35" />
+              <Ionicons name="flame-outline" size={12} color={T.status.danger} />
               <Text style={styles.feedStatText}>{Math.round(a.calories_burned)} kcal</Text>
             </View>
           )}
@@ -1183,7 +1188,7 @@ const FeedCard = ({ item, onPress, onShare }: { item: FeedItem; onPress: () => v
         {muscles.length > 0 && (
           <View style={styles.feedMuscleRow}>
             {muscles.slice(0, 5).map(m => (
-              <View key={m} style={[styles.feedMuscleDot, { backgroundColor: MUSCLE_COLORS[m] ?? '#F0F2F6' }]} />
+              <View key={m} style={[styles.feedMuscleDot, { backgroundColor: MUSCLE_COLORS[m] ?? T.text.primary }]} />
             ))}
           </View>
         )}
@@ -1196,17 +1201,17 @@ const FeedCard = ({ item, onPress, onShare }: { item: FeedItem; onPress: () => v
     return (
       <TouchableOpacity style={styles.feedCard} onPress={onPress} activeOpacity={0.8}>
         <View style={styles.feedCardTop}>
-          <View style={[styles.feedIconWrap, { backgroundColor: 'rgba(28,34,46,0.72)' }]}>
-            <Ionicons name="barbell-outline" size={22} color="#F0F2F6" />
+          <View style={[styles.feedIconWrap, { backgroundColor: T.glass.card }]}>
+            <Ionicons name="barbell-outline" size={22} color={T.text.primary} />
           </View>
           <View style={{ flex: 1 }}>
             <View style={styles.feedCardTitleRow}>
               <Text style={styles.feedCardTitle} numberOfLines={1}>{h.title}</Text>
-              <View style={[styles.sourceBadge, { backgroundColor: 'rgba(28,34,46,0.72)', borderColor: 'rgba(28,34,46,0.72)' }]}>
-                <Text style={[styles.sourceBadgeText, { color: '#8B95A8' }]}>Hevy</Text>
+              <View style={[styles.sourceBadge, { backgroundColor: T.glass.card, borderColor: T.glass.card }]}>
+                <Text style={[styles.sourceBadgeText, { color: T.text.secondary }]}>Hevy</Text>
               </View>
               <TouchableOpacity onPress={() => onShare(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="share-outline" size={16} color="#525E72" />
+                <Ionicons name="share-outline" size={16} color={T.text.muted} />
               </TouchableOpacity>
             </View>
             <Text style={styles.feedCardMeta}>{fmtDate(h.started_at)} · {h.duration_seconds ? formatDuration(Math.round(h.duration_seconds / 60)) : '—'}</Text>
@@ -1215,12 +1220,12 @@ const FeedCard = ({ item, onPress, onShare }: { item: FeedItem; onPress: () => v
         <View style={styles.feedCardStats}>
           {h.volume_kg != null && (
             <View style={styles.feedStatItem}>
-              <Ionicons name="trending-up-outline" size={12} color="#8B95A8" />
+              <Ionicons name="trending-up-outline" size={12} color={T.text.secondary} />
               <Text style={styles.feedStatText}>{Math.round(h.volume_kg)} kg vol.</Text>
             </View>
           )}
           <View style={styles.feedStatItem}>
-            <Ionicons name="barbell-outline" size={12} color="#8B95A8" />
+            <Ionicons name="barbell-outline" size={12} color={T.text.secondary} />
             <Text style={styles.feedStatText}>{h.exercises?.length ?? 0} exercises</Text>
           </View>
         </View>
@@ -1231,19 +1236,19 @@ const FeedCard = ({ item, onPress, onShare }: { item: FeedItem; onPress: () => v
                 key={i}
                 style={{
                   flexDirection: 'row', alignItems: 'center', gap: 4,
-                  backgroundColor: 'rgba(222,255,71,0.14)',
-                  borderWidth: 1, borderColor: '#DEFF47',
+                  backgroundColor: T.accentDim,
+                  borderWidth: 1, borderColor: T.accent,
                   borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3,
                 }}
               >
-                <Ionicons name="trophy-outline" size={11} color="#DEFF47" />
-                <Text style={{ fontFamily: TY.mono.semibold, fontSize: 10, color: '#DEFF47', letterSpacing: 0.3 }}>
+                <Ionicons name="trophy-outline" size={11} color={T.accent} />
+                <Text style={{ fontFamily: TY.mono.semibold, fontSize: 10, color: T.accent, letterSpacing: 0.3 }}>
                   {pr.kind === '1rm' ? '1RM' : pr.kind === 'max_weight' ? 'WEIGHT' : 'REPS'} PR · {pr.exercise}
                 </Text>
               </View>
             ))}
             {h.prs.length > 3 && (
-              <Text style={{ fontFamily: TY.mono.semibold, fontSize: 10, color: '#DEFF47', alignSelf: 'center' }}>
+              <Text style={{ fontFamily: TY.mono.semibold, fontSize: 10, color: T.accent, alignSelf: 'center' }}>
                 +{h.prs.length - 3} more
               </Text>
             )}
@@ -1261,17 +1266,17 @@ const FeedCard = ({ item, onPress, onShare }: { item: FeedItem; onPress: () => v
   return (
     <TouchableOpacity style={styles.feedCard} onPress={onPress} activeOpacity={0.8}>
       <View style={styles.feedCardTop}>
-        <View style={[styles.feedIconWrap, { backgroundColor: 'rgba(28,34,46,0.72)' }]}>
+        <View style={[styles.feedIconWrap, { backgroundColor: T.glass.card }]}>
           <Ionicons name={getStravaActivityIcon(s.sport_type) as any} size={22} color="#FC4C02" />
         </View>
         <View style={{ flex: 1 }}>
           <View style={styles.feedCardTitleRow}>
             <Text style={styles.feedCardTitle} numberOfLines={1}>{s.name}</Text>
-            <View style={[styles.sourceBadge, { backgroundColor: 'rgba(28,34,46,0.72)', borderColor: '#FC4C02' }]}>
+            <View style={[styles.sourceBadge, { backgroundColor: T.glass.card, borderColor: '#FC4C02' }]}>
               <Text style={[styles.sourceBadgeText, { color: '#FC4C02' }]}>Strava</Text>
             </View>
             <TouchableOpacity onPress={() => onShare(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="share-outline" size={16} color="#525E72" />
+              <Ionicons name="share-outline" size={16} color={T.text.muted} />
             </TouchableOpacity>
           </View>
           <Text style={styles.feedCardMeta}>{fmtDate(s.start_date)} · {s.elapsed_time_seconds ? formatDuration(Math.round(s.elapsed_time_seconds / 60)) : '—'}</Text>
@@ -1362,7 +1367,7 @@ const StravaDetail = ({ activity }: { activity: Activity }) => {
       {autopsy ? (
         <View style={[styles.autopsyCard, { marginTop: 16 }]}>
           <View style={styles.autopsyHeader}>
-            <Ionicons name="analytics-outline" size={16} color="#F0F2F6" />
+            <Ionicons name="analytics-outline" size={16} color={T.text.primary} />
             <Text style={styles.autopsyTitle}>AI Analysis</Text>
           </View>
           <Text style={styles.autopsyText}>{autopsy}</Text>
@@ -1432,9 +1437,9 @@ const ExpandedModal = ({ item, onClose }: { item: FeedItem | null; onClose: () =
               <Text style={styles.expandSectionTitle}>Muscles Worked</Text>
               <View style={styles.muscleTagsRow}>
                 {muscles.map(m => (
-                  <View key={m} style={[styles.muscleTag, { backgroundColor: (MUSCLE_COLORS[m] ?? '#F0F2F6') + '33', borderColor: MUSCLE_COLORS[m] ?? '#F0F2F6' }]}>
-                    <View style={[styles.muscleDot, { backgroundColor: MUSCLE_COLORS[m] ?? '#F0F2F6' }]} />
-                    <Text style={[styles.muscleTagText, { color: MUSCLE_COLORS[m] ?? '#F0F2F6' }]}>{MUSCLE_GROUP_LABELS[m] ?? m}</Text>
+                  <View key={m} style={[styles.muscleTag, { backgroundColor: (MUSCLE_COLORS[m] ?? T.text.primary) + '33', borderColor: MUSCLE_COLORS[m] ?? T.text.primary }]}>
+                    <View style={[styles.muscleDot, { backgroundColor: MUSCLE_COLORS[m] ?? T.text.primary }]} />
+                    <Text style={[styles.muscleTagText, { color: MUSCLE_COLORS[m] ?? T.text.primary }]}>{MUSCLE_GROUP_LABELS[m] ?? m}</Text>
                   </View>
                 ))}
               </View>
@@ -1458,7 +1463,7 @@ const ExpandedModal = ({ item, onClose }: { item: FeedItem | null; onClose: () =
           {a.autopsy_text && (
             <View style={[styles.autopsyCard, { marginTop: 16 }]}>
               <View style={styles.autopsyHeader}>
-                <Ionicons name="analytics-outline" size={16} color="#F0F2F6" />
+                <Ionicons name="analytics-outline" size={16} color={T.text.primary} />
                 <Text style={styles.autopsyTitle}>AI Analysis</Text>
               </View>
               <Text style={styles.autopsyText}>{a.autopsy_text}</Text>
@@ -1495,7 +1500,7 @@ const ExpandedModal = ({ item, onClose }: { item: FeedItem | null; onClose: () =
           {h.autopsy_text && (
             <View style={[styles.autopsyCard, { marginTop: 16 }]}>
               <View style={styles.autopsyHeader}>
-                <Ionicons name="analytics-outline" size={16} color="#F0F2F6" />
+                <Ionicons name="analytics-outline" size={16} color={T.text.primary} />
                 <Text style={styles.autopsyTitle}>AI Analysis</Text>
               </View>
               <Text style={styles.autopsyText}>{h.autopsy_text}</Text>
@@ -1513,7 +1518,7 @@ const ExpandedModal = ({ item, onClose }: { item: FeedItem | null; onClose: () =
       <SafeAreaView style={styles.expandContainer}>
         <View style={styles.expandHeader}>
           <TouchableOpacity onPress={onClose}>
-            <Ionicons name="chevron-down" size={24} color="#F0F2F6" />
+            <Ionicons name="chevron-down" size={24} color={T.text.primary} />
           </TouchableOpacity>
         </View>
         <ScrollView contentContainerStyle={styles.expandScroll}>{renderContent()}</ScrollView>
@@ -1531,8 +1536,8 @@ const ReadinessCard = ({
   onLogRestDay: () => void;
 }) => {
   const [showRestModal, setShowRestModal] = useState(false);
-  const colorMap = { green: '#27ae60', amber: '#f39c12', red: '#c0392b' };
-  const c = colorMap[data.color] ?? '#8B95A8';
+  const colorMap = { green: T.status.success, amber: T.status.warn, red: T.status.danger };
+  const c = colorMap[data.color] ?? T.text.secondary;
   return (
     <View style={styles.readinessCard}>
       <View style={styles.readinessTopRow}>
@@ -1545,14 +1550,14 @@ const ReadinessCard = ({
       <Text style={styles.readinessExplanation}>{data.explanation}</Text>
       {data.score < 60 && (
         <TouchableOpacity style={styles.restDayBanner} onPress={() => setShowRestModal(true)}>
-          <Ionicons name="moon-outline" size={14} color="#e67e22" />
+          <Ionicons name="moon-outline" size={14} color={T.status.warn} />
           <Text style={styles.restDayBannerText}>Rest Day Recommended</Text>
         </TouchableOpacity>
       )}
       <Modal visible={showRestModal} transparent animationType="fade" onRequestClose={() => setShowRestModal(false)}>
         <TouchableOpacity style={styles.restModalOverlay} activeOpacity={1} onPress={() => setShowRestModal(false)}>
           <View style={styles.restModalSheet}>
-            <Ionicons name="moon-outline" size={32} color="#e67e22" style={{ marginBottom: 12 }} />
+            <Ionicons name="moon-outline" size={32} color={T.status.warn} style={{ marginBottom: 12 }} />
             <Text style={styles.restModalTitle}>Rest Day Recommended</Text>
             <Text style={styles.restModalBody}>Based on your training load, sleep, and soreness, your body would benefit from a rest day today. Light walking or stretching is fine.</Text>
             <TouchableOpacity style={styles.restModalDismiss} onPress={() => setShowRestModal(false)}>
@@ -1568,9 +1573,9 @@ const ReadinessCard = ({
 // ── Weekly Load Card ───────────────────────────────────────────────────────────
 const WeeklyLoadCard = ({ data }: { data: WeeklyLoad }) => {
   const barPct = data.four_week_average > 0 ? Math.min(1, data.this_week_load / (data.four_week_average * 1.5)) : 0;
-  const barColor = data.status === 'high' ? '#c0392b' : data.status === 'elevated' ? '#f39c12' : '#27ae60';
+  const barColor = data.status === 'high' ? T.status.danger : data.status === 'elevated' ? T.status.warn : T.status.success;
   const pctChange = data.percentage_change;
-  const acwrColor = data.acwr_status === 'optimal' ? '#27ae60' : data.acwr_status === 'caution' ? '#f39c12' : data.acwr_status === 'high_risk' ? '#c0392b' : '#525E72';
+  const acwrColor = data.acwr_status === 'optimal' ? T.status.success : data.acwr_status === 'caution' ? T.status.warn : data.acwr_status === 'high_risk' ? T.status.danger : T.text.muted;
   const acwrLabel: Record<string, string> = { undertraining: 'Undertraining', optimal: 'Optimal', caution: 'Caution', high_risk: 'High Injury Risk', insufficient_data: 'Not enough data yet' };
   const acwrExplanation: Record<string, string> = {
     undertraining: 'Your training load is lower than usual.',
@@ -1589,9 +1594,9 @@ const WeeklyLoadCard = ({ data }: { data: WeeklyLoad }) => {
           <Ionicons
             name={pctChange >= 0 ? 'arrow-up-outline' : 'arrow-down-outline'}
             size={14}
-            color={pctChange >= 0 ? '#27ae60' : '#f39c12'}
+            color={pctChange >= 0 ? T.status.success : T.status.warn}
           />
-          <Text style={[styles.weeklyLoadChangePct, { color: pctChange >= 0 ? '#27ae60' : '#f39c12' }]}>
+          <Text style={[styles.weeklyLoadChangePct, { color: pctChange >= 0 ? T.status.success : T.status.warn }]}>
             {Math.abs(pctChange).toFixed(0)}% from last week
           </Text>
         </View>
@@ -1656,12 +1661,12 @@ const ActivityHeatmap = ({ data }: { data: HeatmapEntry[] }) => {
   }, [dateMap]);
 
   const getColor = (entry?: HeatmapEntry) => {
-    if (!entry) return 'rgba(28,34,46,0.72)';
+    if (!entry) return T.glass.card;
     const h = entry.total_minutes;
-    if (h >= 90) return '#F0F2F6';
-    if (h >= 45) return '#F0F2F6';
-    if (h >= 20) return 'rgba(28,34,46,0.72)';
-    return 'rgba(255,255,255,0.10)';
+    if (h >= 90) return T.text.primary;
+    if (h >= 45) return T.text.primary;
+    if (h >= 20) return T.glass.card;
+    return T.glass.border;
   };
 
   return (
@@ -2114,8 +2119,8 @@ export default function ActivityScreen() {
       return sum;
     }, 0);
     return [
-      { id: 'sessions', label: 'Weekly Sessions', target: 5, current: thisWeek.length, unit: 'sessions', color: '#F0F2F6' },
-      { id: 'hours', label: 'Training Hours', target: 6, current: Math.round(weekMin / 60 * 10) / 10, unit: 'hrs', color: '#27ae60' },
+      { id: 'sessions', label: 'Weekly Sessions', target: 5, current: thisWeek.length, unit: 'sessions', color: T.text.primary },
+      { id: 'hours', label: 'Training Hours', target: 6, current: Math.round(weekMin / 60 * 10) / 10, unit: 'hrs', color: T.status.success },
     ];
   }, [feed]);
 
@@ -2170,11 +2175,11 @@ export default function ActivityScreen() {
         counts[key] = (counts[key] ?? 0) + 1;
       });
     const total = Object.values(counts).reduce((s, n) => s + n, 0);
-    const colors: Record<string, string> = { strength: '#F0F2F6', cardio: '#27ae60', combat: '#c0392b', sport: '#8B95A8', mindBody: '#8B95A8', other: '#8B95A8' };
+    const colors: Record<string, string> = { strength: T.text.primary, cardio: T.status.success, combat: T.status.danger, sport: T.text.secondary, mindBody: T.text.secondary, other: T.text.secondary };
     return Object.entries(counts)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 4)
-      .map(([key, count]) => ({ label: key.charAt(0).toUpperCase() + key.slice(1), pct: total > 0 ? Math.round(count / total * 100) : 0, color: colors[key] ?? '#8B95A8' }));
+      .map(([key, count]) => ({ label: key.charAt(0).toUpperCase() + key.slice(1), pct: total > 0 ? Math.round(count / total * 100) : 0, color: colors[key] ?? T.text.secondary }));
   }, [feed]);
 
   // ── Weekly Groups ─────────────────────────────────────────────────────────────
@@ -2240,7 +2245,7 @@ export default function ActivityScreen() {
           <Text style={styles.weekHeaderLabel}>{item.weekLabel}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Text style={styles.weekHeaderCount}>{item.itemCount} sessions</Text>
-            <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={14} color="#555" />
+            <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={14} color={T.text.muted} />
           </View>
         </TouchableOpacity>
       );
@@ -2268,7 +2273,7 @@ export default function ActivityScreen() {
       return (
         <TouchableOpacity style={styles.loadEarlierBtn} onPress={handleLoadEarlier} disabled={loadingMore}>
           {loadingMore
-            ? <ActivityIndicator size="small" color="#525E72" />
+            ? <ActivityIndicator size="small" color={T.text.muted} />
             : <Text style={styles.loadEarlierText}>Load Earlier Sessions</Text>}
         </TouchableOpacity>
       );
@@ -2361,7 +2366,7 @@ export default function ActivityScreen() {
       {/* Progress Section Toggle */}
       <TouchableOpacity style={styles.progressToggle} onPress={() => setShowProgress(p => !p)}>
         <Text style={styles.progressToggleText}>Progress & Records</Text>
-        <Ionicons name={showProgress ? 'chevron-up' : 'chevron-down'} size={18} color="#8B95A8" />
+        <Ionicons name={showProgress ? 'chevron-up' : 'chevron-down'} size={18} color={T.text.secondary} />
       </TouchableOpacity>
 
       {showProgress && (
@@ -2380,8 +2385,8 @@ export default function ActivityScreen() {
                 backgroundGradientToOpacity: 0,
                 decimalPlaces: 1,
                 color: (o = 1) => `rgba(222,255,71,${o})`,
-                labelColor: () => '#8B95A8',
-                propsForBackgroundLines: { stroke: 'rgba(255,255,255,0.08)' },
+                labelColor: () => T.text.secondary,
+                propsForBackgroundLines: { stroke: T.hairline },
               }}
               fromZero
               withInnerLines
@@ -2425,11 +2430,11 @@ export default function ActivityScreen() {
             <View style={styles.badgesGrid}>
               {badges.map(b => (
                 <View key={b.id} style={[styles.badgeTile, !b.unlocked && styles.badgeLocked]}>
-                  <Ionicons name={b.icon as any} size={28} color={b.unlocked ? '#F0F2F6' : 'rgba(255,255,255,0.10)'} />
+                  <Ionicons name={b.icon as any} size={28} color={b.unlocked ? T.text.primary : T.glass.border} />
                   <Text style={[styles.badgeLabel, !b.unlocked && styles.badgeLabelLocked]}>{b.label}</Text>
                   {!b.unlocked && (
                     <View style={{ position: 'absolute', top: 6, right: 6 }}>
-                      <Ionicons name="lock-closed" size={10} color="rgba(255,255,255,0.10)" />
+                      <Ionicons name="lock-closed" size={10} color={T.glass.border} />
                     </View>
                   )}
                 </View>
@@ -2451,7 +2456,7 @@ export default function ActivityScreen() {
                 <Text style={styles.goalLabel}>{g.label}</Text>
                 <View style={styles.goalRight}>
                   <Text style={styles.goalProgress}>{g.current}/{g.target} {g.unit}</Text>
-                  {done && <Ionicons name="checkmark-circle" size={16} color="#27ae60" />}
+                  {done && <Ionicons name="checkmark-circle" size={16} color={T.status.success} />}
                 </View>
               </View>
               {done && <Text style={styles.goalReachedText}>Goal reached</Text>}
@@ -2481,7 +2486,7 @@ export default function ActivityScreen() {
           <Ionicons
             name={journalExpanded ? 'chevron-up' : 'chevron-down'}
             size={15}
-            color="#555"
+            color={T.text.muted}
           />
         </View>
       </TouchableOpacity>
@@ -2489,17 +2494,17 @@ export default function ActivityScreen() {
       {journalExpanded && (
         <>
           <View style={styles.journalSearchWrap}>
-            <Ionicons name="search-outline" size={15} color="#525E72" />
+            <Ionicons name="search-outline" size={15} color={T.text.muted} />
             <TextInput
               style={styles.journalSearchInput}
               placeholder="Search sessions..."
-              placeholderTextColor="#525E72"
+              placeholderTextColor={T.text.muted}
               value={journalSearch}
               onChangeText={setJournalSearch}
             />
             {journalSearch.length > 0 && (
               <TouchableOpacity onPress={() => setJournalSearch('')}>
-                <Ionicons name="close-circle" size={16} color="#525E72" />
+                <Ionicons name="close-circle" size={16} color={T.text.muted} />
               </TouchableOpacity>
             )}
           </View>
@@ -2525,7 +2530,7 @@ export default function ActivityScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <ActivityIndicator style={{ flex: 1 }} color="#F0F2F6" />
+        <ActivityIndicator style={{ flex: 1 }} color={T.text.primary} />
       </SafeAreaView>
     );
   }
@@ -2546,7 +2551,7 @@ export default function ActivityScreen() {
         ListEmptyComponent={
           journalExpanded ? (
             <View style={styles.emptyState}>
-              <Ionicons name={FILTER_EMPTY[filter].icon as any} size={40} color="rgba(255,255,255,0.10)" />
+              <Ionicons name={FILTER_EMPTY[filter].icon as any} size={40} color={T.glass.border} />
               <Text style={styles.emptyText}>{FILTER_EMPTY[filter].title}</Text>
               <Text style={styles.emptySubText}>{FILTER_EMPTY[filter].subtitle}</Text>
             </View>
@@ -2605,10 +2610,10 @@ export default function ActivityScreen() {
                 activeOpacity={0.75}
               >
                 <View style={styles.menuIconWrap}>
-                  <Ionicons name={item.icon as any} size={20} color="#F0F2F6" />
+                  <Ionicons name={item.icon as any} size={20} color={T.text.primary} />
                 </View>
                 <Text style={styles.menuItemText}>{item.label}</Text>
-                <Ionicons name="chevron-forward" size={14} color="#525E72" />
+                <Ionicons name="chevron-forward" size={14} color={T.text.muted} />
               </TouchableOpacity>
             ))}
           </View>
@@ -2666,7 +2671,7 @@ export default function ActivityScreen() {
           {logStep === 'rpe' && (
             submitting && !completedActivity ? (
               <View style={styles.reviewLoading}>
-                <ActivityIndicator size="large" color="#F0F2F6" />
+                <ActivityIndicator size="large" color={T.text.primary} />
                 <Text style={styles.reviewLoadingText}>Saving session...</Text>
               </View>
             ) : (
@@ -2680,7 +2685,7 @@ export default function ActivityScreen() {
           {logStep === 'review' && (
             submitting && !completedActivity ? (
               <View style={styles.reviewLoading}>
-                <ActivityIndicator size="large" color="#F0F2F6" />
+                <ActivityIndicator size="large" color={T.text.primary} />
                 <Text style={styles.reviewLoadingText}>Saving session...</Text>
               </View>
             ) : completedActivity ? (
@@ -2719,14 +2724,14 @@ export default function ActivityScreen() {
 // ── Chart Config ──────────────────────────────────────────────────────────────
 
 const chartConfig = {
-  backgroundColor: 'rgba(28,34,46,0.72)',
-  backgroundGradientFrom: 'rgba(28,34,46,0.72)',
-  backgroundGradientTo: 'rgba(28,34,46,0.72)',
+  backgroundColor: T.glass.card,
+  backgroundGradientFrom: T.glass.card,
+  backgroundGradientTo: T.glass.card,
   decimalPlaces: 1,
   color: (opacity = 1) => `rgba(224,224,224,${opacity})`,
-  labelColor: () => '#525E72',
+  labelColor: () => T.text.muted,
   style: { borderRadius: 8 },
-  propsForBackgroundLines: { stroke: 'rgba(28,34,46,0.72)' },
+  propsForBackgroundLines: { stroke: T.glass.card },
   barPercentage: 0.6,
 };
 
@@ -2763,7 +2768,7 @@ function createStyles(t: ThemeColors) {
     fontSize: 11, color: t.text.muted,
     fontFamily: TY.mono.regular, letterSpacing: 0.3,
   },
-  stepsBarBg: { height: 6, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: R.pill, overflow: 'hidden' },
+  stepsBarBg: { height: 6, backgroundColor: T.hairline, borderRadius: R.pill, overflow: 'hidden' },
   stepsBarFill: { height: 6, borderRadius: R.pill },
 
   // Stats bar — two rows of 3
@@ -2805,7 +2810,7 @@ function createStyles(t: ThemeColors) {
   heatmapLegend: { flexDirection: 'row', gap: 12, marginTop: 8 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendDot: { width: 10, height: 10, borderRadius: 2 },
-  legendText: { fontSize: 10, color: '#525E72' },
+  legendText: { fontSize: 10, color: T.text.muted },
 
   // Breakdown
   breakdownRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 8 },
@@ -2813,7 +2818,7 @@ function createStyles(t: ThemeColors) {
     width: 72, fontSize: 12, color: t.text.secondary,
     fontFamily: TY.sans.regular,
   },
-  breakdownBarBg: { flex: 1, height: 8, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: R.pill, overflow: 'hidden' },
+  breakdownBarBg: { flex: 1, height: 8, backgroundColor: T.hairline, borderRadius: R.pill, overflow: 'hidden' },
   breakdownBarFill: { height: 8, borderRadius: R.pill },
   breakdownPct: {
     width: 40, fontSize: 11, color: t.text.secondary, textAlign: 'right',
@@ -2855,7 +2860,7 @@ function createStyles(t: ThemeColors) {
     fontSize: 12, color: t.text.secondary,
     fontFamily: TY.mono.regular, letterSpacing: 0.3,
   },
-  goalBarBg: { height: 6, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: R.pill, overflow: 'hidden' },
+  goalBarBg: { height: 6, backgroundColor: T.hairline, borderRadius: R.pill, overflow: 'hidden' },
   goalBarFill: { height: 6, borderRadius: R.pill },
 
   // Journal
@@ -2940,7 +2945,7 @@ function createStyles(t: ThemeColors) {
   },
 
   // Log modal
-  logModalContainer: { flex: 1, backgroundColor: '#141820' },
+  logModalContainer: { flex: 1, backgroundColor: T.bg.primary },
 
   // Sport selector
   sportSelectorHeader: {
@@ -3004,156 +3009,156 @@ function createStyles(t: ThemeColors) {
   },
 
   // Strength builder
-  strengthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(28,34,46,0.72)' },
-  elapsedTimer: { fontSize: 22, fontWeight: '700', color: '#F0F2F6' },
-  elapsedLabel: { fontSize: 11, color: '#525E72', textAlign: 'center' },
-  completeBtn: { backgroundColor: '#27ae60', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-  completeBtnText: { color: '#F0F2F6', fontWeight: '700', fontSize: 14 },
+  strengthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: T.glass.card },
+  elapsedTimer: { fontSize: 22, fontWeight: '700', color: T.text.primary },
+  elapsedLabel: { fontSize: 11, color: T.text.muted, textAlign: 'center' },
+  completeBtn: { backgroundColor: T.status.success, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  completeBtnText: { color: T.text.primary, fontWeight: '700', fontSize: 14 },
   strengthScrollContent: { paddingHorizontal: 16, paddingBottom: 20 },
-  workoutNameInput: { marginHorizontal: 16, marginVertical: 10, backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 10, padding: 12, fontSize: 15, fontWeight: '600', color: '#F0F2F6', borderWidth: 1, borderColor: 'rgba(28,34,46,0.72)' },
+  workoutNameInput: { marginHorizontal: 16, marginVertical: 10, backgroundColor: T.glass.card, borderRadius: 10, padding: 12, fontSize: 15, fontWeight: '600', color: T.text.primary, borderWidth: 1, borderColor: T.glass.card },
 
   // Exercise card
-  exerciseCard: { backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 12, padding: 12, marginBottom: 12 },
+  exerciseCard: { backgroundColor: T.glass.card, borderRadius: 12, padding: 12, marginBottom: 12 },
   exerciseCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  exerciseCardName: { flex: 1, fontSize: 15, fontWeight: '600', color: '#F0F2F6' },
+  exerciseCardName: { flex: 1, fontSize: 15, fontWeight: '600', color: T.text.primary },
   exDot: { width: 10, height: 10, borderRadius: 5 },
 
   // Set headers
   setHeaderRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 2, marginBottom: 4 },
-  setHeaderNum: { width: 22, fontSize: 10, color: '#525E72', textAlign: 'center' },
-  setHeaderType: { width: 32, fontSize: 10, color: '#525E72', textAlign: 'center' },
-  setHeaderInput: { flex: 1, fontSize: 10, color: '#525E72', textAlign: 'center' },
-  setHeaderRPE: { width: 36, fontSize: 10, color: '#525E72', textAlign: 'center' },
-  setHeaderCheck: { width: 28, fontSize: 10, color: '#525E72', textAlign: 'center' },
+  setHeaderNum: { width: 22, fontSize: 10, color: T.text.muted, textAlign: 'center' },
+  setHeaderType: { width: 32, fontSize: 10, color: T.text.muted, textAlign: 'center' },
+  setHeaderInput: { flex: 1, fontSize: 10, color: T.text.muted, textAlign: 'center' },
+  setHeaderRPE: { width: 36, fontSize: 10, color: T.text.muted, textAlign: 'center' },
+  setHeaderCheck: { width: 28, fontSize: 10, color: T.text.muted, textAlign: 'center' },
 
   // Set row
   setRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5, gap: 4 },
   setRowCompleted: { opacity: 0.6 },
-  setNum: { width: 22, fontSize: 12, color: '#525E72', textAlign: 'center' },
+  setNum: { width: 22, fontSize: 12, color: T.text.muted, textAlign: 'center' },
   setTypePill: { width: 30, height: 24, borderRadius: 6, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   setTypeText: { fontSize: 11, fontWeight: '700' },
-  setInput: { flex: 1, height: 34, backgroundColor: '#141820', borderRadius: 6, textAlign: 'center', color: '#F0F2F6', fontSize: 13, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  setInput: { flex: 1, height: 34, backgroundColor: T.bg.primary, borderRadius: 6, textAlign: 'center', color: T.text.primary, fontSize: 13, borderWidth: 1, borderColor: T.hairline },
   setInputRPE: { width: 36, flex: 0 },
   setCheckBtn: { width: 28, alignItems: 'center' },
 
   addSetBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, justifyContent: 'center' },
-  addSetText: { fontSize: 13, color: '#F0F2F6', fontWeight: '600' },
-  exNotesInput: { marginTop: 4, backgroundColor: '#141820', borderRadius: 8, padding: 8, fontSize: 12, color: '#8B95A8', borderWidth: 1, borderColor: 'rgba(28,34,46,0.72)' },
+  addSetText: { fontSize: 13, color: T.text.primary, fontWeight: '600' },
+  exNotesInput: { marginTop: 4, backgroundColor: T.bg.primary, borderRadius: 8, padding: 8, fontSize: 12, color: T.text.secondary, borderWidth: 1, borderColor: T.glass.card },
 
-  addExerciseBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 12, padding: 14, justifyContent: 'center', borderWidth: 1, borderColor: '#F0F2F6' + '44' },
-  addExerciseText: { fontSize: 14, color: '#F0F2F6', fontWeight: '600' },
+  addExerciseBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: T.glass.card, borderRadius: 12, padding: 14, justifyContent: 'center', borderWidth: 1, borderColor: T.text.primary + '44' },
+  addExerciseText: { fontSize: 14, color: T.text.primary, fontWeight: '600' },
 
   // Rest timer
-  restTimerBanner: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(28,34,46,0.72)', paddingVertical: 14, paddingHorizontal: 20, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.10)', alignItems: 'center', gap: 4 },
-  restTimerLabel: { fontSize: 11, color: '#8B95A8', textTransform: 'uppercase', letterSpacing: 1 },
-  restTimerCount: { fontSize: 32, fontWeight: '700', color: '#F0F2F6' },
+  restTimerBanner: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: T.glass.card, paddingVertical: 14, paddingHorizontal: 20, borderTopWidth: 1, borderTopColor: T.glass.border, alignItems: 'center', gap: 4 },
+  restTimerLabel: { fontSize: 11, color: T.text.secondary, textTransform: 'uppercase', letterSpacing: 1 },
+  restTimerCount: { fontSize: 32, fontWeight: '700', color: T.text.primary },
   restTimerRow: { flexDirection: 'row', gap: 16, alignItems: 'center' },
-  restAdjBtn: { paddingHorizontal: 14, paddingVertical: 7, backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 8 },
-  restAdjText: { fontSize: 13, color: '#8B95A8' },
-  restSkipBtn: { paddingHorizontal: 24, paddingVertical: 8, backgroundColor: '#F0F2F6', borderRadius: 20 },
-  restSkipText: { fontSize: 13, fontWeight: '600', color: '#F0F2F6' },
+  restAdjBtn: { paddingHorizontal: 14, paddingVertical: 7, backgroundColor: T.glass.card, borderRadius: 8 },
+  restAdjText: { fontSize: 13, color: T.text.secondary },
+  restSkipBtn: { paddingHorizontal: 24, paddingVertical: 8, backgroundColor: T.text.primary, borderRadius: 20 },
+  restSkipText: { fontSize: 13, fontWeight: '600', color: T.text.primary },
 
   // Exercise search
-  exSearchContainer: { flex: 1, backgroundColor: '#141820' },
+  exSearchContainer: { flex: 1, backgroundColor: T.bg.primary },
   exSearchHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16 },
-  exSearchTitle: { fontSize: 20, fontWeight: '700', color: '#F0F2F6' },
-  exSearchInputWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
-  exSearchInput: { flex: 1, fontSize: 14, color: '#F0F2F6' },
-  exRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(28,34,46,0.72)', gap: 10 },
+  exSearchTitle: { fontSize: 20, fontWeight: '700', color: T.text.primary },
+  exSearchInputWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, backgroundColor: T.glass.card, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  exSearchInput: { flex: 1, fontSize: 14, color: T.text.primary },
+  exRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: T.glass.card, gap: 10 },
   exRowInfo: { flex: 1 },
-  exRowName: { fontSize: 14, fontWeight: '600', color: '#F0F2F6' },
-  exRowGroup: { fontSize: 12, color: '#525E72', marginTop: 1 },
+  exRowName: { fontSize: 14, fontWeight: '600', color: T.text.primary },
+  exRowGroup: { fontSize: 12, color: T.text.muted, marginTop: 1 },
 
   // Cardio form
-  cardioHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(28,34,46,0.72)' },
+  cardioHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: T.glass.card },
   cardioSportTag: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  cardioSportLabel: { fontSize: 15, fontWeight: '600', color: '#F0F2F6' },
+  cardioSportLabel: { fontSize: 15, fontWeight: '600', color: T.text.primary },
   cardioScrollContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 },
   cardioRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   cardioField: { flex: 1 },
-  cardioFieldLabel: { fontSize: 12, color: '#8B95A8', marginBottom: 6 },
-  cardioInputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(28,34,46,0.72)', paddingHorizontal: 12 },
-  cardioInput: { flex: 1, paddingVertical: 12, fontSize: 16, color: '#F0F2F6' },
-  cardioUnit: { fontSize: 13, color: '#525E72' },
-  sectionLabel: { fontSize: 12, color: '#8B95A8', marginBottom: 8, marginTop: 4 },
+  cardioFieldLabel: { fontSize: 12, color: T.text.secondary, marginBottom: 6 },
+  cardioInputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: T.glass.card, borderRadius: 10, borderWidth: 1, borderColor: T.glass.card, paddingHorizontal: 12 },
+  cardioInput: { flex: 1, paddingVertical: 12, fontSize: 16, color: T.text.primary },
+  cardioUnit: { fontSize: 13, color: T.text.muted },
+  sectionLabel: { fontSize: 12, color: T.text.secondary, marginBottom: 8, marginTop: 4 },
   intensityRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  intensityPill: { flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: 'rgba(28,34,46,0.72)', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(28,34,46,0.72)' },
-  intensityPillText: { fontSize: 12, fontWeight: '600', color: '#8B95A8' },
-  calsPreviewCard: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 10, padding: 12, marginBottom: 16 },
-  calsPreviewText: { fontSize: 14, color: '#FF6B35', fontWeight: '600' },
-  notesInput: { backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 10, padding: 12, fontSize: 13, color: '#8B95A8', borderWidth: 1, borderColor: 'rgba(28,34,46,0.72)', minHeight: 80, textAlignVertical: 'top', marginBottom: 20 },
-  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#F0F2F6', paddingVertical: 14, borderRadius: 12 },
-  submitBtnText: { fontSize: 15, fontWeight: '700', color: '#F0F2F6' },
+  intensityPill: { flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: T.glass.card, alignItems: 'center', borderWidth: 1, borderColor: T.glass.card },
+  intensityPillText: { fontSize: 12, fontWeight: '600', color: T.text.secondary },
+  calsPreviewCard: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: T.glass.card, borderRadius: 10, padding: 12, marginBottom: 16 },
+  calsPreviewText: { fontSize: 14, color: T.status.danger, fontWeight: '600' },
+  notesInput: { backgroundColor: T.glass.card, borderRadius: 10, padding: 12, fontSize: 13, color: T.text.secondary, borderWidth: 1, borderColor: T.glass.card, minHeight: 80, textAlignVertical: 'top', marginBottom: 20 },
+  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: T.text.primary, paddingVertical: 14, borderRadius: 12 },
+  submitBtnText: { fontSize: 15, fontWeight: '700', color: T.text.primary },
 
   // Post session / review
   reviewScroll: { padding: 24, paddingTop: 80, alignItems: 'center' },
   reviewCheckCircle: { marginBottom: 12 },
-  reviewTitle: { fontSize: 22, fontWeight: '700', color: '#F0F2F6', marginBottom: 4 },
-  reviewSubtitle: { fontSize: 14, color: '#8B95A8', marginBottom: 20 },
+  reviewTitle: { fontSize: 22, fontWeight: '700', color: T.text.primary, marginBottom: 4 },
+  reviewSubtitle: { fontSize: 14, color: T.text.secondary, marginBottom: 20 },
   reviewStatsRow: { flexDirection: 'row', gap: 12, marginBottom: 20, flexWrap: 'wrap', justifyContent: 'center' },
-  reviewStat: { backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, alignItems: 'center', minWidth: 80 },
-  reviewStatVal: { fontSize: 20, fontWeight: '700', color: '#F0F2F6' },
-  reviewStatLabel: { fontSize: 11, color: '#525E72', marginTop: 2 },
+  reviewStat: { backgroundColor: T.glass.card, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, alignItems: 'center', minWidth: 80 },
+  reviewStatVal: { fontSize: 20, fontWeight: '700', color: T.text.primary },
+  reviewStatLabel: { fontSize: 11, color: T.text.muted, marginTop: 2 },
   reviewSection: { width: '100%', marginBottom: 16 },
-  reviewSectionTitle: { fontSize: 12, color: '#8B95A8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+  reviewSectionTitle: { fontSize: 12, color: T.text.secondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
   muscleTagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   muscleTag: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
   muscleDot: { width: 7, height: 7, borderRadius: 3.5 },
   muscleTagText: { fontSize: 12, fontWeight: '600' },
-  stravaMapWrap: { width: '100%', height: 220, borderRadius: 16, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' },
+  stravaMapWrap: { width: '100%', height: 220, borderRadius: 16, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: T.glass.border },
   stravaMap: { width: '100%', height: '100%' },
   generateAutopsyBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16, paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12, borderWidth: 1, borderColor: '#FC4C02', backgroundColor: 'rgba(252,76,2,0.08)', justifyContent: 'center' },
   generateAutopsyText: { fontSize: 14, fontWeight: '600', color: '#FC4C02' },
-  autopsyCard: { width: '100%', backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' },
+  autopsyCard: { width: '100%', backgroundColor: T.glass.card, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: T.glass.border },
   autopsyHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-  autopsyTitle: { fontSize: 12, fontWeight: '700', color: '#F0F2F6', textTransform: 'uppercase', letterSpacing: 0.5 },
-  autopsyText: { fontSize: 13, color: '#8B95A8', lineHeight: 20 },
-  autopsyGenerating: { fontSize: 13, color: '#525E72', marginTop: 8, textAlign: 'center' },
-  doneBtn: { marginTop: 24, backgroundColor: '#F0F2F6', paddingHorizontal: 48, paddingVertical: 14, borderRadius: 12, width: '100%', alignItems: 'center' },
-  doneBtnText: { fontSize: 16, fontWeight: '700', color: '#F0F2F6' },
+  autopsyTitle: { fontSize: 12, fontWeight: '700', color: T.text.primary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  autopsyText: { fontSize: 13, color: T.text.secondary, lineHeight: 20 },
+  autopsyGenerating: { fontSize: 13, color: T.text.muted, marginTop: 8, textAlign: 'center' },
+  doneBtn: { marginTop: 24, backgroundColor: T.text.primary, paddingHorizontal: 48, paddingVertical: 14, borderRadius: 12, width: '100%', alignItems: 'center' },
+  doneBtnText: { fontSize: 16, fontWeight: '700', color: T.text.primary },
   reviewLoading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 },
-  reviewLoadingText: { fontSize: 14, color: '#8B95A8' },
+  reviewLoadingText: { fontSize: 14, color: T.text.secondary },
 
   // Autopsy retry
-  autopsyRetryBtn: { marginTop: 10, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 8, alignSelf: 'flex-start' },
-  autopsyRetryText: { fontSize: 13, color: '#F0F2F6', fontWeight: '600' },
+  autopsyRetryBtn: { marginTop: 10, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: T.glass.border, borderRadius: 8, alignSelf: 'flex-start' },
+  autopsyRetryText: { fontSize: 13, color: T.text.primary, fontWeight: '600' },
 
   // Plus button (matches Nutrition page)
-  plusBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F0F2F6', alignItems: 'center', justifyContent: 'center' },
+  plusBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: T.text.primary, alignItems: 'center', justifyContent: 'center' },
 
   // Action menu
   menuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  menuSheet: { backgroundColor: 'rgba(28,34,46,0.72)', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingHorizontal: 20, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' },
-  menuHandle: { width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.10)' },
-  menuIconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.10)', alignItems: 'center', justifyContent: 'center' },
-  menuItemText: { flex: 1, fontSize: 16, color: '#F0F2F6', fontWeight: '500' },
+  menuSheet: { backgroundColor: T.glass.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingHorizontal: 20, paddingBottom: 40, borderWidth: 1, borderColor: T.glass.border },
+  menuHandle: { width: 40, height: 4, backgroundColor: T.glass.border, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: T.glass.border },
+  menuIconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: T.glass.border, alignItems: 'center', justifyContent: 'center' },
+  menuItemText: { flex: 1, fontSize: 16, color: T.text.primary, fontWeight: '500' },
 
   // Expanded modal
-  expandContainer: { flex: 1, backgroundColor: '#141820' },
+  expandContainer: { flex: 1, backgroundColor: T.bg.primary },
   expandHeader: { paddingHorizontal: 20, paddingVertical: 12 },
   expandScroll: { padding: 20 },
-  expandTitle: { fontSize: 22, fontWeight: '700', color: '#F0F2F6', marginBottom: 4 },
-  expandMeta: { fontSize: 13, color: '#8B95A8', marginBottom: 4 },
-  expandSectionTitle: { fontSize: 12, color: '#8B95A8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 16, marginBottom: 8 },
-  expandExRow: { backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 10, padding: 10, marginBottom: 8 },
-  expandExName: { fontSize: 13, fontWeight: '600', color: '#F0F2F6', marginBottom: 4 },
-  expandSetText: { fontSize: 12, color: '#8B95A8', marginBottom: 2 },
-  expandNotes: { fontSize: 13, color: '#8B95A8', fontStyle: 'italic', marginTop: 16 },
+  expandTitle: { fontSize: 22, fontWeight: '700', color: T.text.primary, marginBottom: 4 },
+  expandMeta: { fontSize: 13, color: T.text.secondary, marginBottom: 4 },
+  expandSectionTitle: { fontSize: 12, color: T.text.secondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 16, marginBottom: 8 },
+  expandExRow: { backgroundColor: T.glass.card, borderRadius: 10, padding: 10, marginBottom: 8 },
+  expandExName: { fontSize: 13, fontWeight: '600', color: T.text.primary, marginBottom: 4 },
+  expandSetText: { fontSize: 12, color: T.text.secondary, marginBottom: 2 },
+  expandNotes: { fontSize: 13, color: T.text.secondary, fontStyle: 'italic', marginTop: 16 },
 
   // RPE Prompt
   rpeContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, gap: 20 },
-  rpeQuestion: { fontSize: 24, fontWeight: '700', color: '#F0F2F6', textAlign: 'center' },
-  rpeSubtitle: { fontSize: 14, color: '#8B95A8', textAlign: 'center', marginTop: -12 },
+  rpeQuestion: { fontSize: 24, fontWeight: '700', color: T.text.primary, textAlign: 'center' },
+  rpeSubtitle: { fontSize: 14, color: T.text.secondary, textAlign: 'center', marginTop: -12 },
   rpeCirclesRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center' },
-  rpeCircle: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.10)', backgroundColor: 'rgba(28,34,46,0.72)', alignItems: 'center', justifyContent: 'center' },
-  rpeCircleNum: { fontSize: 15, fontWeight: '700', color: '#F0F2F6' },
+  rpeCircle: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: T.glass.border, backgroundColor: T.glass.card, alignItems: 'center', justifyContent: 'center' },
+  rpeCircleNum: { fontSize: 15, fontWeight: '700', color: T.text.primary },
   rpeLabelPill: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
   rpeLabelText: { fontSize: 13, fontWeight: '600' },
-  rpeSubmitBtn: { backgroundColor: '#F0F2F6', paddingHorizontal: 48, paddingVertical: 14, borderRadius: 12, width: '100%', alignItems: 'center' },
-  rpeSubmitText: { fontSize: 16, fontWeight: '700', color: '#141820' },
+  rpeSubmitBtn: { backgroundColor: T.text.primary, paddingHorizontal: 48, paddingVertical: 14, borderRadius: 12, width: '100%', alignItems: 'center' },
+  rpeSubmitText: { fontSize: 16, fontWeight: '700', color: T.bg.primary },
   rpeSkipBtn: { paddingVertical: 10 },
-  rpeSkipText: { fontSize: 14, color: '#525E72' },
+  rpeSkipText: { fontSize: 14, color: T.text.muted },
 
   // Load badge (feed card)
   loadBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
@@ -3181,35 +3186,35 @@ function createStyles(t: ThemeColors) {
     fontSize: 13, color: t.text.body, lineHeight: 19,
     fontFamily: TY.sans.regular,
   },
-  restDayBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: '#e67e2222', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, alignSelf: 'flex-start', borderWidth: 1, borderColor: '#e67e22' },
-  restDayBannerText: { fontSize: 12, fontWeight: '600', color: '#e67e22' },
+  restDayBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: T.status.warn + '22', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, alignSelf: 'flex-start', borderWidth: 1, borderColor: T.status.warn },
+  restDayBannerText: { fontSize: 12, fontWeight: '600', color: T.status.warn },
   restModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: 32 },
-  restModalSheet: { backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 20, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', width: '100%' },
-  restModalTitle: { fontSize: 18, fontWeight: '700', color: '#F0F2F6', marginBottom: 12, textAlign: 'center' },
-  restModalBody: { fontSize: 14, color: '#8B95A8', lineHeight: 21, textAlign: 'center', marginBottom: 20 },
-  restModalDismiss: { backgroundColor: 'rgba(255,255,255,0.10)', paddingHorizontal: 32, paddingVertical: 12, borderRadius: 10 },
-  restModalDismissText: { fontSize: 14, fontWeight: '600', color: '#F0F2F6' },
+  restModalSheet: { backgroundColor: T.glass.card, borderRadius: 20, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: T.glass.border, width: '100%' },
+  restModalTitle: { fontSize: 18, fontWeight: '700', color: T.text.primary, marginBottom: 12, textAlign: 'center' },
+  restModalBody: { fontSize: 14, color: T.text.secondary, lineHeight: 21, textAlign: 'center', marginBottom: 20 },
+  restModalDismiss: { backgroundColor: T.glass.border, paddingHorizontal: 32, paddingVertical: 12, borderRadius: 10 },
+  restModalDismissText: { fontSize: 14, fontWeight: '600', color: T.text.primary },
 
   // Goals — reached label
-  goalReachedText: { fontSize: 11, color: '#27ae60', fontWeight: '600', marginTop: 2, marginBottom: 4 },
+  goalReachedText: { fontSize: 11, color: T.status.success, fontWeight: '600', marginTop: 2, marginBottom: 4 },
 
   // Feed card — rest day variant
-  feedCardRest: { backgroundColor: 'rgba(36,44,60,0.80)' },
+  feedCardRest: { backgroundColor: T.glass.cardHi },
 
   // Journal search bar
-  journalSearchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: 'rgba(28,34,46,0.72)' },
-  journalSearchInput: { flex: 1, fontSize: 13, color: '#F0F2F6' },
+  journalSearchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, backgroundColor: T.glass.card, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: T.glass.card },
+  journalSearchInput: { flex: 1, fontSize: 13, color: T.text.primary },
 
   // Weekly journal group headers
   weekHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 10, marginTop: 4 },
-  weekHeaderLabel: { fontSize: 13, fontWeight: '600', color: '#8B95A8' },
-  weekHeaderCount: { fontSize: 11, color: '#525E72' },
+  weekHeaderLabel: { fontSize: 13, fontWeight: '600', color: T.text.secondary },
+  weekHeaderCount: { fontSize: 11, color: T.text.muted },
 
   // Show more / load earlier
-  showMoreBtn: { marginHorizontal: 16, marginBottom: 4, paddingVertical: 10, alignItems: 'center', backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(28,34,46,0.72)' },
-  showMoreText: { fontSize: 13, color: '#8B95A8', fontWeight: '500' },
-  loadEarlierBtn: { marginHorizontal: 16, marginTop: 8, marginBottom: 16, paddingVertical: 14, alignItems: 'center', backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' },
-  loadEarlierText: { fontSize: 13, color: '#525E72', fontWeight: '500' },
+  showMoreBtn: { marginHorizontal: 16, marginBottom: 4, paddingVertical: 10, alignItems: 'center', backgroundColor: T.glass.card, borderRadius: 10, borderWidth: 1, borderColor: T.glass.card },
+  showMoreText: { fontSize: 13, color: T.text.secondary, fontWeight: '500' },
+  loadEarlierBtn: { marginHorizontal: 16, marginTop: 8, marginBottom: 16, paddingVertical: 14, alignItems: 'center', backgroundColor: T.glass.card, borderRadius: 10, borderWidth: 1, borderColor: T.glass.border },
+  loadEarlierText: { fontSize: 13, color: T.text.muted, fontWeight: '500' },
 
   // Weekly load card
   weeklyLoadCard: {
@@ -3228,15 +3233,15 @@ function createStyles(t: ThemeColors) {
   },
   weeklyLoadChange: { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 6 },
   weeklyLoadChangePct: { fontSize: 12, fontWeight: '600' },
-  weeklyLoadBarBg: { height: 8, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 4, marginBottom: 4, overflow: 'hidden' },
+  weeklyLoadBarBg: { height: 8, backgroundColor: T.glass.border, borderRadius: 4, marginBottom: 4, overflow: 'hidden' },
   weeklyLoadBarFill: { height: 8, borderRadius: 4 },
-  weeklyLoadAvgLabel: { fontSize: 11, color: '#525E72', marginBottom: 12 },
+  weeklyLoadAvgLabel: { fontSize: 11, color: T.text.muted, marginBottom: 12 },
   acwrRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  acwrLabel: { fontSize: 12, color: '#8B95A8', fontWeight: '600' },
+  acwrLabel: { fontSize: 12, color: T.text.secondary, fontWeight: '600' },
   acwrValue: { fontSize: 18, fontWeight: '800' },
   acwrStatusPill: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1 },
   acwrStatusText: { fontSize: 11, fontWeight: '600' },
-  acwrInsufficient: { fontSize: 12, color: '#525E72' },
-  acwrExplanation: { fontSize: 12, color: '#525E72', lineHeight: 17 },
+  acwrInsufficient: { fontSize: 12, color: T.text.muted },
+  acwrExplanation: { fontSize: 12, color: T.text.muted, lineHeight: 17 },
   });
 }

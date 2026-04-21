@@ -104,108 +104,16 @@ def _nutrition_to_dict(n: NutritionLog) -> dict:
     }
 
 
-@router.get("/daily")
+@router.get("/daily", deprecated=True)
 async def daily_diagnosis(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Run a daily diagnosis using the last 7 days of health data, WHOOP data,
-    Oura data, today's wellness check-in, today's nutrition, and last 3 activities.
-    """
-    today = date.today()
-    cutoff_7 = today - timedelta(days=7)
-
-    # Apple Health snapshots
-    snap_result = await db.execute(
-        select(HealthSnapshot)
-        .where(
-            HealthSnapshot.user_id == current_user.id,
-            HealthSnapshot.date >= cutoff_7,
-        )
-        .order_by(HealthSnapshot.date.asc())
+    """Deprecated. Use POST /home/diagnosis — this endpoint 410s in the next release."""
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="GET /diagnosis/daily is retired. Use POST /home/diagnosis.",
     )
-    snapshots = snap_result.scalars().all()
-
-    # Last 3 activities
-    act_result = await db.execute(
-        select(Activity)
-        .where(Activity.user_id == current_user.id)
-        .order_by(Activity.start_date.desc())
-        .limit(3)
-    )
-    activities = act_result.scalars().all()
-
-    # WHOOP data — last 7 days
-    whoop_result = await db.execute(
-        select(WhoopData)
-        .where(
-            WhoopData.user_id == current_user.id,
-            WhoopData.date >= cutoff_7,
-        )
-        .order_by(WhoopData.date.asc())
-    )
-    whoop_rows = whoop_result.scalars().all()
-
-    # Oura data — last 7 days
-    oura_result = await db.execute(
-        select(OuraData)
-        .where(
-            OuraData.user_id == current_user.id,
-            OuraData.date >= cutoff_7,
-        )
-        .order_by(OuraData.date.asc())
-    )
-    oura_rows = oura_result.scalars().all()
-
-    # Today's wellness check-in
-    wellness_result = await db.execute(
-        select(WellnessCheckin).where(
-            WellnessCheckin.user_id == current_user.id,
-            WellnessCheckin.date == today,
-        )
-    )
-    wellness_row = wellness_result.scalar_one_or_none()
-
-    # Today's nutrition logs (UTC)
-    now = datetime.utcnow()
-    start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    from datetime import timedelta as td
-    end_of_day = start_of_day + td(days=1)
-    nutrition_result = await db.execute(
-        select(NutritionLog)
-        .where(
-            NutritionLog.user_id == current_user.id,
-            NutritionLog.logged_at >= start_of_day,
-            NutritionLog.logged_at < end_of_day,
-        )
-        .order_by(NutritionLog.logged_at.asc())
-    )
-    nutrition_rows = nutrition_result.scalars().all()
-
-    health_dicts = [_snapshot_to_dict(s) for s in snapshots]
-    activity_dicts = [_activity_to_dict(a) for a in activities]
-    whoop_dicts = [_whoop_to_dict(w) for w in whoop_rows] if whoop_rows else None
-    oura_dicts = [_oura_to_dict(o) for o in oura_rows] if oura_rows else None
-    wellness_dict = _wellness_to_dict(wellness_row) if wellness_row else None
-    nutrition_dicts = [_nutrition_to_dict(n) for n in nutrition_rows] if nutrition_rows else None
-
-    try:
-        result = await claude_service.generate_daily_diagnosis(
-            health_snapshots=health_dicts,
-            recent_activities=activity_dicts,
-            whoop_data=whoop_dicts,
-            oura_data=oura_dicts,
-            wellness_checkin=wellness_dict,
-            nutrition_today=nutrition_dicts,
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Failed to generate diagnosis: {exc}",
-        )
-
-    return result
 
 
 @router.post("/autopsy/{activity_id}")

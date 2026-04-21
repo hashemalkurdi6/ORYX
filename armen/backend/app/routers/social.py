@@ -48,17 +48,20 @@ async def follow_user(
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
 
-    existing_res = await db.execute(
-        select(SocialFollow).where(
-            SocialFollow.follower_id == current_user.id,
-            SocialFollow.following_id == user_id,
-        )
+    # Atomic: insert with ON CONFLICT DO NOTHING on the (follower_id, following_id)
+    # unique constraint. If RETURNING gives us a row, it's a new follow and we
+    # bump the counters; if it gives nothing, we were already following and
+    # counters stay put. Prevents double-increment under concurrent follow taps.
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    stmt = (
+        pg_insert(SocialFollow)
+        .values(follower_id=current_user.id, following_id=user_id)
+        .on_conflict_do_nothing(index_elements=["follower_id", "following_id"])
+        .returning(SocialFollow.id)
     )
-    if existing_res.scalar_one_or_none():
+    inserted = (await db.execute(stmt)).scalar_one_or_none()
+    if inserted is None:
         return {"message": "already following"}
-
-    follow = SocialFollow(follower_id=current_user.id, following_id=user_id)
-    db.add(follow)
     current_user.following_count = (current_user.following_count or 0) + 1
     target.followers_count = (target.followers_count or 0) + 1
     await db.flush()
@@ -71,16 +74,22 @@ async def unfollow_user(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    res = await db.execute(
-        select(SocialFollow).where(
-            SocialFollow.follower_id == current_user.id,
-            SocialFollow.following_id == user_id,
+    # Atomic: DELETE ... RETURNING gives us a row iff the follow existed. If
+    # nothing came back we no-op, which prevents double-decrement on concurrent
+    # unfollow taps.
+    from sqlalchemy import delete as sa_delete
+    deleted = (
+        await db.execute(
+            sa_delete(SocialFollow)
+            .where(
+                SocialFollow.follower_id == current_user.id,
+                SocialFollow.following_id == user_id,
+            )
+            .returning(SocialFollow.id)
         )
-    )
-    follow = res.scalar_one_or_none()
-    if not follow:
+    ).scalar_one_or_none()
+    if deleted is None:
         return {"message": "not following"}
-    await db.delete(follow)
     current_user.following_count = max(0, (current_user.following_count or 0) - 1)
     target_res = await db.execute(select(User).where(User.id == user_id))
     target = target_res.scalar_one_or_none()
@@ -222,8 +231,11 @@ async def get_suggestions(
     already_following = {str(r) for r in follows_res.scalars().all()}
     already_following.add(str(current_user.id))
 
+    # Cap the candidate pool — this scans the users table, which will hurt
+    # once the user count grows. 500 is enough headroom for the overlap scoring
+    # to surface a good top-20 without loading the whole table.
     users_res = await db.execute(
-        select(User).where(User.id != current_user.id, active_user_filter())
+        select(User).where(User.id != current_user.id, active_user_filter()).limit(500)
     )
     all_users = users_res.scalars().all()
 
@@ -259,22 +271,21 @@ async def search_users(
     )
     blocked_ids = {str(r) for r in blocked_res.scalars().all()}
 
-    q_lower = q.lower()
+    # Push the name/username filter into SQL so we don't scan the whole table
+    # and then filter 30 rows client-side.
+    from sqlalchemy import func as sa_func, or_
+    q_pattern = f"%{q.lower()}%"
     users_res = await db.execute(
         select(User).where(
             User.id != current_user.id,
             active_user_filter(),
+            or_(
+                sa_func.lower(User.display_name).like(q_pattern),
+                sa_func.lower(User.username).like(q_pattern),
+            ),
         ).limit(30)
     )
-    all_users = users_res.scalars().all()
-    matched = [
-        u for u in all_users
-        if str(u.id) not in blocked_ids
-        and (
-            q_lower in (u.display_name or "").lower()
-            or q_lower in (u.username or "").lower()
-        )
-    ]
+    matched = [u for u in users_res.scalars().all() if str(u.id) not in blocked_ids]
     return {
         "users": [_user_preview(u, str(u.id) in following_ids) for u in matched[:20]]
     }

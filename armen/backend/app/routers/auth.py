@@ -210,6 +210,10 @@ async def login(payload: UserLogin, request: Request, db: AsyncSession = Depends
                 "pending_token": pending_token,
             },
         )
+    # Drift the user's IANA timezone in from the client header on every login.
+    from app.services.user_time import capture_user_timezone
+    capture_user_timezone(request, user)
+    await db.flush()
     token = create_access_token(user.id)
     return {"access_token": token, "token_type": "bearer"}
 

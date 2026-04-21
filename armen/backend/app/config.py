@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     RESEND_FROM_EMAIL: str = "ORYX <noreply@oryx.app>"
     PASSWORD_RESET_URL_BASE: str = "https://oryx.app/reset"
     ENV: str = "dev"
+    # Fernet key (base64) used to encrypt OAuth tokens (Strava/Whoop/Oura) at rest.
+    # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # If missing in dev, tokens are stored plaintext with a warning; in prod the app refuses to start.
+    TOKEN_ENCRYPTION_KEY: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

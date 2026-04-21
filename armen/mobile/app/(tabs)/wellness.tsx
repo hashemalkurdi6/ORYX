@@ -32,6 +32,7 @@ import {
   DiagnosisResult,
   WellnessTrends,
 } from '@/services/api';
+import { theme as T } from '@/services/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - 40;
@@ -58,15 +59,15 @@ function formatShortDate(dateStr: string): string {
 }
 
 function wellnessColor(value: number): string {
-  if (value >= 4) return '#27ae60';
-  if (value === 3) return '#888888';
-  return '#c0392b';
+  if (value >= 4) return T.status.success;
+  if (value === 3) return T.text.secondary;
+  return T.status.danger;
 }
 
 function recoveryHex(color: 'green' | 'yellow' | 'red'): string {
-  if (color === 'green') return '#27ae60';
-  if (color === 'yellow') return '#888888';
-  return '#c0392b';
+  if (color === 'green') return T.status.success;
+  if (color === 'yellow') return T.text.secondary;
+  return T.status.danger;
 }
 
 function recoveryLabel(color: 'green' | 'yellow' | 'red'): string {
@@ -198,7 +199,7 @@ export default function WellnessScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FFFFFF" />
+        <ActivityIndicator size="large" color={T.text.primary} />
       </View>
     );
   }
@@ -209,7 +210,7 @@ export default function WellnessScreen() {
         style={styles.container}
         contentContainerStyle={styles.contentContainer}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#FFFFFF" colors={['#f0f0f0']} />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={T.text.primary} colors={[T.text.primary]} />
         }
       >
         {/* Header */}
@@ -220,7 +221,7 @@ export default function WellnessScreen() {
               <Text style={styles.pageSubtitle}>{formatDate()}</Text>
             </View>
             <TouchableOpacity style={styles.logButton} onPress={openModal} activeOpacity={0.8}>
-              <Ionicons name="add" size={18} color="#0a0a0a" />
+              <Ionicons name="add" size={18} color={T.bg.primary} />
               <Text style={styles.logButtonText}>Log</Text>
             </TouchableOpacity>
           </View>
@@ -297,12 +298,12 @@ export default function WellnessScreen() {
             ) : (
               <View style={styles.promptRow}>
                 <View style={styles.promptIcons}>
-                  <Ionicons name="happy-outline" size={20} color="#888888" />
-                  <Ionicons name="flash-outline" size={20} color="#888888" />
-                  <Ionicons name="body-outline" size={20} color="#888888" />
+                  <Ionicons name="happy-outline" size={20} color={T.text.secondary} />
+                  <Ionicons name="flash-outline" size={20} color={T.text.secondary} />
+                  <Ionicons name="body-outline" size={20} color={T.text.secondary} />
                 </View>
                 <Text style={styles.promptText}>Log how you feel today</Text>
-                <Ionicons name="chevron-forward" size={16} color="#555555" />
+                <Ionicons name="chevron-forward" size={16} color={T.text.muted} />
               </View>
             )}
           </View>
@@ -316,7 +317,7 @@ export default function WellnessScreen() {
               <View style={styles.deviceDataGrid}>
                 {latestWhoop.recovery_score !== null && (
                   <View style={styles.deviceMetricBox}>
-                    <Text style={[styles.deviceMetricValue, { color: '#FF6B35' }]}>
+                    <Text style={[styles.deviceMetricValue, { color: T.status.danger }]}>
                       {Math.round(latestWhoop.recovery_score)}%
                     </Text>
                     <Text style={styles.deviceMetricLabel}>Recovery</Text>
@@ -340,7 +341,7 @@ export default function WellnessScreen() {
                 )}
                 {latestWhoop.sleep_performance_pct !== null && (
                   <View style={styles.deviceMetricBox}>
-                    <Text style={[styles.deviceMetricValue, { color: '#27ae60' }]}>
+                    <Text style={[styles.deviceMetricValue, { color: T.status.success }]}>
                       {Math.round(latestWhoop.sleep_performance_pct)}%
                     </Text>
                     <Text style={styles.deviceMetricLabel}>Sleep</Text>
@@ -360,7 +361,7 @@ export default function WellnessScreen() {
               <View style={styles.deviceDataGrid}>
                 {latestOura.readiness_score !== null && (
                   <View style={styles.deviceMetricBox}>
-                    <Text style={[styles.deviceMetricValue, { color: '#00B894' }]}>
+                    <Text style={[styles.deviceMetricValue, { color: T.status.success }]}>
                       {latestOura.readiness_score}
                     </Text>
                     <Text style={styles.deviceMetricLabel}>Readiness</Text>
@@ -382,7 +383,7 @@ export default function WellnessScreen() {
                 )}
                 {latestOura.sleep_efficiency !== null && (
                   <View style={styles.deviceMetricBox}>
-                    <Text style={[styles.deviceMetricValue, { color: '#27ae60' }]}>
+                    <Text style={[styles.deviceMetricValue, { color: T.status.success }]}>
                       {Math.round(latestOura.sleep_efficiency)}%
                     </Text>
                     <Text style={styles.deviceMetricLabel}>Efficiency</Text>
@@ -408,7 +409,7 @@ export default function WellnessScreen() {
                 )}
               </View>
               <LineChart
-                data={{ labels: [], datasets: [{ data: hrvPoints, color: () => '#27ae60', strokeWidth: 2 }] }}
+                data={{ labels: [], datasets: [{ data: hrvPoints, color: () => T.status.success, strokeWidth: 2 }] }}
                 width={CARD_WIDTH - 32}
                 height={90}
                 withDots={false}
@@ -418,9 +419,9 @@ export default function WellnessScreen() {
                 withVerticalLabels={false}
                 chartConfig={{
                   backgroundColor: 'transparent',
-                  backgroundGradientFrom: '#1a1a1a',
-                  backgroundGradientTo: '#1a1a1a',
-                  color: () => '#27ae60',
+                  backgroundGradientFrom: T.glass.card,
+                  backgroundGradientTo: T.glass.card,
+                  color: () => T.status.success,
                   strokeWidth: 2,
                   propsForBackgroundLines: { stroke: 'transparent' },
                 }}
@@ -438,7 +439,7 @@ export default function WellnessScreen() {
             <View style={styles.card}>
               <Text style={styles.cardInnerLabel}>7-Day Mood History</Text>
               <LineChart
-                data={{ labels: [], datasets: [{ data: moodPoints, color: () => '#e0e0e0', strokeWidth: 2 }] }}
+                data={{ labels: [], datasets: [{ data: moodPoints, color: () => T.text.body, strokeWidth: 2 }] }}
                 width={CARD_WIDTH - 32}
                 height={100}
                 withDots
@@ -447,13 +448,13 @@ export default function WellnessScreen() {
                 withHorizontalLabels={false}
                 withVerticalLabels={false}
                 chartConfig={{
-                  backgroundColor: '#111111',
-                  backgroundGradientFrom: '#111111',
-                  backgroundGradientTo: '#111111',
-                  color: () => '#e0e0e0',
+                  backgroundColor: T.bg.tint,
+                  backgroundGradientFrom: T.bg.tint,
+                  backgroundGradientTo: T.bg.tint,
+                  color: () => T.text.body,
                   strokeWidth: 2,
                   propsForBackgroundLines: { stroke: 'transparent' },
-                  propsForDots: { r: '4', strokeWidth: '0', fill: '#e0e0e0' },
+                  propsForDots: { r: '4', strokeWidth: '0', fill: T.text.body },
                 }}
                 bezier
                 style={styles.chart}
@@ -496,7 +497,7 @@ export default function WellnessScreen() {
 
         {checkins.length === 0 && !latestWhoop && !latestOura && (
           <View style={styles.emptyState}>
-            <Ionicons name="pulse-outline" size={48} color="#222222" />
+            <Ionicons name="pulse-outline" size={48} color={T.text.muted} />
             <Text style={styles.emptyTitle}>No wellness data yet</Text>
             <Text style={styles.emptySubtitle}>
               Log your first check-in or connect WHOOP / Oura Ring to see insights here.
@@ -517,9 +518,9 @@ export default function WellnessScreen() {
                   { label: '30D AVG', val: trends.hrv_stats.thirty_day_avg != null ? `${Math.round(trends.hrv_stats.thirty_day_avg)}ms` : '--' },
                 ].map((stat, i) => (
                   <View key={stat.label} style={{ flex: 1, alignItems: 'center' }}>
-                    {i > 0 && <View style={{ position: 'absolute', left: 0, top: 4, width: 1, height: 28, backgroundColor: '#2a2a2a' }} />}
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#f0f0f0', marginBottom: 2 }}>{stat.val}</Text>
-                    <Text style={{ fontSize: 9, color: '#555', textTransform: 'uppercase', letterSpacing: 0.5 }}>{stat.label}</Text>
+                    {i > 0 && <View style={{ position: 'absolute', left: 0, top: 4, width: 1, height: 28, backgroundColor: T.glass.border }} />}
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: T.text.primary, marginBottom: 2 }}>{stat.val}</Text>
+                    <Text style={{ fontSize: 9, color: T.text.muted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{stat.label}</Text>
                   </View>
                 ))}
               </View>
@@ -528,7 +529,7 @@ export default function WellnessScreen() {
                 const pts = trends.hrv_data.slice(-30).map(d => d.hrv_ms);
                 return (
                   <LineChart
-                    data={{ labels: [], datasets: [{ data: pts, color: () => '#27ae60', strokeWidth: 2 }] }}
+                    data={{ labels: [], datasets: [{ data: pts, color: () => T.status.success, strokeWidth: 2 }] }}
                     width={CARD_WIDTH - 32}
                     height={100}
                     withDots={false}
@@ -536,7 +537,7 @@ export default function WellnessScreen() {
                     withOuterLines={false}
                     withHorizontalLabels={false}
                     withVerticalLabels={false}
-                    chartConfig={{ backgroundColor: 'transparent', backgroundGradientFrom: '#1a1a1a', backgroundGradientTo: '#1a1a1a', color: () => '#27ae60', strokeWidth: 2, propsForBackgroundLines: { stroke: 'transparent' } }}
+                    chartConfig={{ backgroundColor: 'transparent', backgroundGradientFrom: T.glass.card, backgroundGradientTo: T.glass.card, color: () => T.status.success, strokeWidth: 2, propsForBackgroundLines: { stroke: 'transparent' } }}
                     bezier
                     style={styles.chart}
                   />
@@ -548,8 +549,8 @@ export default function WellnessScreen() {
           <>
             <Text style={styles.sectionLabel}>HRV TRENDS</Text>
             <View style={[styles.card, { alignItems: 'center', paddingVertical: 20 }]}>
-              <Ionicons name="heart-outline" size={28} color="#2a2a2a" />
-              <Text style={{ fontSize: 13, color: '#555', marginTop: 8, textAlign: 'center' }}>
+              <Ionicons name="heart-outline" size={28} color={T.glass.border} />
+              <Text style={{ fontSize: 13, color: T.text.muted, marginTop: 8, textAlign: 'center' }}>
                 Connect Apple Watch, Whoop, or Oura to track HRV
               </Text>
             </View>
@@ -569,9 +570,9 @@ export default function WellnessScreen() {
                   { label: 'BEST/MO', val: trends.sleep_stats.best_this_month != null ? `${trends.sleep_stats.best_this_month.toFixed(1)}h` : '--' },
                 ].map((stat, i) => (
                   <View key={stat.label} style={{ flex: 1, alignItems: 'center' }}>
-                    {i > 0 && <View style={{ position: 'absolute', left: 0, top: 4, width: 1, height: 28, backgroundColor: '#2a2a2a' }} />}
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#f0f0f0', marginBottom: 2 }}>{stat.val}</Text>
-                    <Text style={{ fontSize: 9, color: '#555', textTransform: 'uppercase', letterSpacing: 0.5 }}>{stat.label}</Text>
+                    {i > 0 && <View style={{ position: 'absolute', left: 0, top: 4, width: 1, height: 28, backgroundColor: T.glass.border }} />}
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: T.text.primary, marginBottom: 2 }}>{stat.val}</Text>
+                    <Text style={{ fontSize: 9, color: T.text.muted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{stat.label}</Text>
                   </View>
                 ))}
               </View>
@@ -580,7 +581,7 @@ export default function WellnessScreen() {
                 const sleepVals = recentSleep.map(d => Math.min(d.duration_hours, 12));
                 return (
                   <LineChart
-                    data={{ labels: [], datasets: [{ data: sleepVals, color: () => '#27ae60', strokeWidth: 2 }] }}
+                    data={{ labels: [], datasets: [{ data: sleepVals, color: () => T.status.success, strokeWidth: 2 }] }}
                     width={CARD_WIDTH - 32}
                     height={90}
                     withDots={true}
@@ -588,7 +589,7 @@ export default function WellnessScreen() {
                     withOuterLines={false}
                     withHorizontalLabels={false}
                     withVerticalLabels={false}
-                    chartConfig={{ backgroundColor: 'transparent', backgroundGradientFrom: '#1a1a1a', backgroundGradientTo: '#1a1a1a', color: () => '#27ae60', strokeWidth: 2, propsForBackgroundLines: { stroke: 'transparent' }, propsForDots: { r: '3', fill: '#27ae60' } }}
+                    chartConfig={{ backgroundColor: 'transparent', backgroundGradientFrom: T.glass.card, backgroundGradientTo: T.glass.card, color: () => T.status.success, strokeWidth: 2, propsForBackgroundLines: { stroke: 'transparent' }, propsForDots: { r: '3', fill: T.status.success } }}
                     bezier
                     style={styles.chart}
                   />
@@ -596,10 +597,10 @@ export default function WellnessScreen() {
               })()}
               {/* Bedtime consistency */}
               {trends.sleep_stats.avg_bedtime_variance_minutes != null && (
-                <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#2a2a2a' }}>
-                  <Text style={{ fontSize: 11, color: '#888' }}>
+                <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: T.glass.border }}>
+                  <Text style={{ fontSize: 11, color: T.text.secondary }}>
                     Bedtime consistency: varied by{' '}
-                    <Text style={{ color: trends.sleep_stats.avg_bedtime_variance_minutes < 30 ? '#27ae60' : trends.sleep_stats.avg_bedtime_variance_minutes < 60 ? '#e67e22' : '#c0392b', fontWeight: '600' }}>
+                    <Text style={{ color: trends.sleep_stats.avg_bedtime_variance_minutes < 30 ? T.status.success : trends.sleep_stats.avg_bedtime_variance_minutes < 60 ? T.status.warn : T.status.danger, fontWeight: '600' }}>
                       ~{Math.round(trends.sleep_stats.avg_bedtime_variance_minutes)} min
                     </Text>
                     {' '}over 7 nights
@@ -619,7 +620,7 @@ export default function WellnessScreen() {
                 const pts = trends.readiness_history.slice(-30).map(d => d.score);
                 return (
                   <LineChart
-                    data={{ labels: [], datasets: [{ data: pts, color: () => '#888888', strokeWidth: 2 }] }}
+                    data={{ labels: [], datasets: [{ data: pts, color: () => T.text.secondary, strokeWidth: 2 }] }}
                     width={CARD_WIDTH - 32}
                     height={90}
                     withDots={false}
@@ -627,7 +628,7 @@ export default function WellnessScreen() {
                     withOuterLines={false}
                     withHorizontalLabels={false}
                     withVerticalLabels={false}
-                    chartConfig={{ backgroundColor: 'transparent', backgroundGradientFrom: '#1a1a1a', backgroundGradientTo: '#1a1a1a', color: () => '#888888', strokeWidth: 2, propsForBackgroundLines: { stroke: 'transparent' } }}
+                    chartConfig={{ backgroundColor: 'transparent', backgroundGradientFrom: T.glass.card, backgroundGradientTo: T.glass.card, color: () => T.text.secondary, strokeWidth: 2, propsForBackgroundLines: { stroke: 'transparent' } }}
                     bezier
                     style={{ ...styles.chart, marginBottom: 12 }}
                   />
@@ -640,10 +641,10 @@ export default function WellnessScreen() {
                   { label: 'MONTHLY AVG', val: trends.readiness_stats.monthly_average != null ? `${Math.round(trends.readiness_stats.monthly_average)}` : '--', sub: '' },
                 ].map((stat, i) => (
                   <View key={stat.label} style={{ flex: 1, alignItems: 'center' }}>
-                    {i > 0 && <View style={{ position: 'absolute', left: 0, top: 4, width: 1, height: 28, backgroundColor: '#2a2a2a' }} />}
-                    <Text style={{ fontSize: 18, fontWeight: '700', color: '#f0f0f0' }}>{stat.val}</Text>
-                    <Text style={{ fontSize: 9, color: '#555', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>{stat.label}</Text>
-                    {stat.sub ? <Text style={{ fontSize: 9, color: '#444', marginTop: 1 }}>{stat.sub}</Text> : null}
+                    {i > 0 && <View style={{ position: 'absolute', left: 0, top: 4, width: 1, height: 28, backgroundColor: T.glass.border }} />}
+                    <Text style={{ fontSize: 18, fontWeight: '700', color: T.text.primary }}>{stat.val}</Text>
+                    <Text style={{ fontSize: 9, color: T.text.muted, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>{stat.label}</Text>
+                    {stat.sub ? <Text style={{ fontSize: 9, color: T.text.muted, marginTop: 1 }}>{stat.sub}</Text> : null}
                   </View>
                 ))}
               </View>
@@ -662,7 +663,7 @@ export default function WellnessScreen() {
                 return (
                   <>
                     <LineChart
-                      data={{ labels: [], datasets: [{ data: totals, color: () => '#888888', strokeWidth: 2 }] }}
+                      data={{ labels: [], datasets: [{ data: totals, color: () => T.text.secondary, strokeWidth: 2 }] }}
                       width={CARD_WIDTH - 32}
                       height={90}
                       withDots={true}
@@ -670,30 +671,30 @@ export default function WellnessScreen() {
                       withOuterLines={false}
                       withHorizontalLabels={false}
                       withVerticalLabels={false}
-                      chartConfig={{ backgroundColor: 'transparent', backgroundGradientFrom: '#1a1a1a', backgroundGradientTo: '#1a1a1a', color: () => '#888888', strokeWidth: 2, propsForBackgroundLines: { stroke: 'transparent' }, propsForDots: { r: '3', fill: '#555' } }}
+                      chartConfig={{ backgroundColor: 'transparent', backgroundGradientFrom: T.glass.card, backgroundGradientTo: T.glass.card, color: () => T.text.secondary, strokeWidth: 2, propsForBackgroundLines: { stroke: 'transparent' }, propsForDots: { r: '3', fill: T.text.muted } }}
                       bezier
                       style={{ ...styles.chart, marginBottom: 12 }}
                     />
                     <View style={{ flexDirection: 'row' }}>
                       <View style={{ flex: 1, alignItems: 'center' }}>
-                        <Text style={{ fontSize: 18, fontWeight: '700', color: '#f0f0f0' }}>
+                        <Text style={{ fontSize: 18, fontWeight: '700', color: T.text.primary }}>
                           {trends.hooper_stats.current_total ?? '--'}
                         </Text>
-                        <Text style={{ fontSize: 9, color: '#555', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>TODAY</Text>
+                        <Text style={{ fontSize: 9, color: T.text.muted, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>TODAY</Text>
                       </View>
-                      <View style={{ width: 1, height: 32, backgroundColor: '#2a2a2a' }} />
+                      <View style={{ width: 1, height: 32, backgroundColor: T.glass.border }} />
                       <View style={{ flex: 1, alignItems: 'center' }}>
-                        <Text style={{ fontSize: 18, fontWeight: '700', color: '#f0f0f0' }}>
+                        <Text style={{ fontSize: 18, fontWeight: '700', color: T.text.primary }}>
                           {trends.hooper_stats.seven_day_avg != null ? trends.hooper_stats.seven_day_avg.toFixed(1) : '--'}
                         </Text>
-                        <Text style={{ fontSize: 9, color: '#555', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>7D AVG</Text>
+                        <Text style={{ fontSize: 9, color: T.text.muted, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>7D AVG</Text>
                       </View>
                     </View>
-                    <Text style={{ fontSize: 10, color: '#444', marginTop: 8, fontStyle: 'italic' }}>Lower is better (4 = excellent, 28 = very poor)</Text>
+                    <Text style={{ fontSize: 10, color: T.text.muted, marginTop: 8, fontStyle: 'italic' }}>Lower is better (4 = excellent, 28 = very poor)</Text>
                   </>
                 );
               })() : (
-                <Text style={{ fontSize: 13, color: '#555', fontStyle: 'italic' }}>
+                <Text style={{ fontSize: 13, color: T.text.muted, fontStyle: 'italic' }}>
                   Log your wellness check-in daily to see trends here
                 </Text>
               )}
@@ -740,7 +741,7 @@ export default function WellnessScreen() {
             <TextInput
               style={styles.textArea}
               placeholder="How are you feeling today…"
-              placeholderTextColor="#555555"
+              placeholderTextColor={T.text.muted}
               multiline
               numberOfLines={3}
               value={form.notes}
@@ -754,7 +755,7 @@ export default function WellnessScreen() {
               activeOpacity={0.85}
             >
               {submitting ? (
-                <ActivityIndicator size="small" color="#0a0a0a" />
+                <ActivityIndicator size="small" color={T.bg.primary} />
               ) : (
                 <Text style={styles.saveBtnText}>Save Check-in</Text>
               )}
@@ -772,125 +773,125 @@ export default function WellnessScreen() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0a0a' },
+  container: { flex: 1, backgroundColor: T.bg.primary },
   contentContainer: { paddingHorizontal: 20, paddingBottom: 40 },
-  loadingContainer: { flex: 1, backgroundColor: '#0a0a0a', alignItems: 'center', justifyContent: 'center' },
+  loadingContainer: { flex: 1, backgroundColor: T.bg.primary, alignItems: 'center', justifyContent: 'center' },
   safeHeader: { paddingBottom: 20 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  pageTitle: { fontSize: 28, fontWeight: '700', color: '#f0f0f0', marginBottom: 4 },
-  pageSubtitle: { fontSize: 14, color: '#888888' },
+  pageTitle: { fontSize: 28, fontWeight: '700', color: T.text.primary, marginBottom: 4 },
+  pageSubtitle: { fontSize: 14, color: T.text.secondary },
   logButton: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: '#f0f0f0', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8,
+    backgroundColor: T.text.primary, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8,
   },
-  logButtonText: { fontSize: 14, fontWeight: '700', color: '#0a0a0a' },
+  logButtonText: { fontSize: 14, fontWeight: '700', color: T.bg.primary },
 
   recoveryCard: {
-    backgroundColor: '#1a1a1a', borderRadius: 16, padding: 20,
+    backgroundColor: T.glass.card, borderRadius: 16, padding: 20,
     borderWidth: 1, marginBottom: 20,
   },
   recoveryScoreRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 16 },
   recoveryScoreCircle: {
     width: 72, height: 72, borderRadius: 36,
-    backgroundColor: '#0a0a0a', borderWidth: 2, borderColor: '#1a1a1a',
+    backgroundColor: T.bg.primary, borderWidth: 2, borderColor: T.glass.card,
     alignItems: 'center', justifyContent: 'center',
   },
   recoveryScoreNum: { fontSize: 22, fontWeight: '800' },
-  recoveryScoreLabel: { fontSize: 11, color: '#555555' },
+  recoveryScoreLabel: { fontSize: 11, color: T.text.muted },
   recoveryTextBlock: { flex: 1, gap: 4 },
   recoveryStatus: { fontSize: 12, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' },
-  recoveryDesc: { fontSize: 14, color: '#888888', lineHeight: 20 },
+  recoveryDesc: { fontSize: 14, color: T.text.secondary, lineHeight: 20 },
   metricsRow: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#0a0a0a', borderRadius: 12, padding: 14,
-    borderWidth: 1, borderColor: '#1a1a1a',
+    backgroundColor: T.bg.primary, borderRadius: 12, padding: 14,
+    borderWidth: 1, borderColor: T.glass.card,
   },
   metricItem: { flex: 1, alignItems: 'center', gap: 3 },
-  metricDivider: { width: 1, height: 28, backgroundColor: '#1a1a1a' },
-  metricValue: { fontSize: 18, fontWeight: '700', color: '#f0f0f0' },
-  metricLabel: { fontSize: 10, color: '#555555', textTransform: 'uppercase', letterSpacing: 0.5 },
+  metricDivider: { width: 1, height: 28, backgroundColor: T.glass.card },
+  metricValue: { fontSize: 18, fontWeight: '700', color: T.text.primary },
+  metricLabel: { fontSize: 10, color: T.text.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
 
   sectionLabel: {
-    fontSize: 11, fontWeight: '600', color: '#555555',
+    fontSize: 11, fontWeight: '600', color: T.text.muted,
     textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10, marginTop: 4,
   },
   card: {
-    backgroundColor: '#1a1a1a', borderRadius: 16, padding: 16,
-    borderWidth: 1, borderColor: '#2a2a2a', marginBottom: 12,
+    backgroundColor: T.glass.card, borderRadius: 16, padding: 16,
+    borderWidth: 1, borderColor: T.glass.border, marginBottom: 12,
   },
   cardInnerLabel: {
-    fontSize: 11, fontWeight: '600', color: '#555555',
+    fontSize: 11, fontWeight: '600', color: T.text.muted,
     textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10,
   },
   checkinHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  editChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#1a1a1a', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  editChipText: { fontSize: 11, color: '#555555' },
+  editChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: T.glass.card, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  editChipText: { fontSize: 11, color: T.text.muted },
   checkinChipsRow: { flexDirection: 'row', gap: 10 },
   checkinChip: {
     flex: 1, alignItems: 'center', paddingVertical: 12,
-    borderRadius: 12, borderWidth: 1, backgroundColor: '#0a0a0a', gap: 3,
+    borderRadius: 12, borderWidth: 1, backgroundColor: T.bg.primary, gap: 3,
   },
   checkinChipValue: { fontSize: 16, fontWeight: '700' },
-  checkinChipLabel: { fontSize: 11, color: '#555555', textTransform: 'uppercase', letterSpacing: 0.5 },
-  checkinNotes: { fontSize: 13, color: '#555555', marginTop: 10, lineHeight: 18 },
+  checkinChipLabel: { fontSize: 11, color: T.text.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  checkinNotes: { fontSize: 13, color: T.text.muted, marginTop: 10, lineHeight: 18 },
 
   promptCard: { padding: 16 },
   promptRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   promptIcons: { flexDirection: 'row', gap: 6 },
-  promptText: { flex: 1, fontSize: 15, color: '#888888' },
+  promptText: { flex: 1, fontSize: 15, color: T.text.secondary },
 
   deviceDataGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 10 },
   deviceMetricBox: { minWidth: 60, gap: 3 },
-  deviceMetricValue: { fontSize: 20, fontWeight: '700', color: '#f0f0f0' },
-  deviceMetricLabel: { fontSize: 11, color: '#555555', textTransform: 'uppercase', letterSpacing: 0.4 },
-  deviceDate: { fontSize: 11, color: '#555555' },
+  deviceMetricValue: { fontSize: 20, fontWeight: '700', color: T.text.primary },
+  deviceMetricLabel: { fontSize: 11, color: T.text.muted, textTransform: 'uppercase', letterSpacing: 0.4 },
+  deviceDate: { fontSize: 11, color: T.text.muted },
 
   chartHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
   avgChip: { backgroundColor: 'rgba(0,196,140,0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  avgChipText: { fontSize: 12, color: '#27ae60', fontWeight: '600' },
+  avgChipText: { fontSize: 12, color: T.status.success, fontWeight: '600' },
   chart: { borderRadius: 8, marginLeft: -16, marginRight: -16 },
   moodScaleRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  moodScaleLabel: { fontSize: 11, color: '#555555' },
+  moodScaleLabel: { fontSize: 11, color: T.text.muted },
 
-  historyDivider: { height: 1, backgroundColor: '#1a1a1a', marginVertical: 10 },
+  historyDivider: { height: 1, backgroundColor: T.glass.card, marginVertical: 10 },
   historyRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  historyDate: { fontSize: 13, color: '#888888', width: 56 },
+  historyDate: { fontSize: 13, color: T.text.secondary, width: 56 },
   historyDots: { flexDirection: 'row', gap: 6 },
   historyDot: { width: 8, height: 8, borderRadius: 4 },
   historyValues: { flex: 1, alignItems: 'flex-end' },
-  historyValueText: { fontSize: 14, fontWeight: '600', color: '#f0f0f0' },
-  historyValueSub: { fontSize: 10, color: '#555555', textTransform: 'uppercase', letterSpacing: 0.5 },
+  historyValueText: { fontSize: 14, fontWeight: '600', color: T.text.primary },
+  historyValueSub: { fontSize: 10, color: T.text.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
 
   emptyState: { alignItems: 'center', paddingVertical: 60, gap: 10 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#f0f0f0', marginTop: 8 },
-  emptySubtitle: { fontSize: 14, color: '#555555', textAlign: 'center', lineHeight: 20, paddingHorizontal: 24 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: T.text.primary, marginTop: 8 },
+  emptySubtitle: { fontSize: 14, color: T.text.muted, textAlign: 'center', lineHeight: 20, paddingHorizontal: 24 },
 
   bottomPadding: { height: 24 },
 
-  modalWrapper: { flex: 1, backgroundColor: '#0a0a0a', borderTopLeftRadius: 24, borderTopRightRadius: 24 },
+  modalWrapper: { flex: 1, backgroundColor: T.bg.primary, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
   modalContent: { padding: 24, paddingBottom: 48 },
-  modalHandle: { width: 40, height: 4, backgroundColor: '#1a1a1a', borderRadius: 2, alignSelf: 'center', marginBottom: 24 },
-  modalTitle: { fontSize: 22, fontWeight: '700', color: '#f0f0f0', marginBottom: 6 },
-  modalSubtitle: { fontSize: 14, color: '#555555', marginBottom: 28 },
+  modalHandle: { width: 40, height: 4, backgroundColor: T.glass.card, borderRadius: 2, alignSelf: 'center', marginBottom: 24 },
+  modalTitle: { fontSize: 22, fontWeight: '700', color: T.text.primary, marginBottom: 6 },
+  modalSubtitle: { fontSize: 14, color: T.text.muted, marginBottom: 28 },
   fieldRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
   fieldLabelGroup: { gap: 2 },
-  fieldLabel: { fontSize: 16, color: '#f0f0f0', fontWeight: '500' },
-  fieldHint: { fontSize: 12, color: '#555555' },
+  fieldLabel: { fontSize: 16, color: T.text.primary, fontWeight: '500' },
+  fieldHint: { fontSize: 12, color: T.text.muted },
   stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  stepBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#1a1a1a', alignItems: 'center', justifyContent: 'center' },
-  stepBtnText: { fontSize: 20, color: '#f0f0f0', lineHeight: 24 },
+  stepBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: T.glass.card, alignItems: 'center', justifyContent: 'center' },
+  stepBtnText: { fontSize: 20, color: T.text.primary, lineHeight: 24 },
   stepValue: { width: 52, height: 36, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   stepValueText: { fontSize: 14, fontWeight: '700' },
-  modalFieldLabel: { fontSize: 13, color: '#888888', marginBottom: 8, fontWeight: '500' },
+  modalFieldLabel: { fontSize: 13, color: T.text.secondary, marginBottom: 8, fontWeight: '500' },
   textArea: {
-    backgroundColor: '#111111', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14,
-    fontSize: 16, color: '#f0f0f0', borderWidth: 1, borderColor: '#1a1a1a',
+    backgroundColor: T.bg.tint, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14,
+    fontSize: 16, color: T.text.primary, borderWidth: 1, borderColor: T.glass.card,
     minHeight: 80, textAlignVertical: 'top', marginBottom: 24,
   },
-  saveBtn: { backgroundColor: '#f0f0f0', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 12 },
-  saveBtnText: { color: '#0a0a0a', fontSize: 16, fontWeight: '700' },
+  saveBtn: { backgroundColor: T.text.primary, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 12 },
+  saveBtnText: { color: T.bg.primary, fontSize: 16, fontWeight: '700' },
   cancelBtn: { alignItems: 'center', paddingVertical: 12 },
-  cancelBtnText: { color: '#888888', fontSize: 15 },
+  cancelBtnText: { color: T.text.secondary, fontSize: 15 },
   btnDisabled: { opacity: 0.5 },
 
 });

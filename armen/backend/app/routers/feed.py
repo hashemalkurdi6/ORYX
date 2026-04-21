@@ -8,7 +8,7 @@ from app.models.user import User
 from app.models.social_post import SocialPost
 from app.models.social_follow import SocialFollow
 from app.routers.auth import get_current_user
-from app.routers.posts import _build_post
+from app.routers.posts import _build_posts
 from app.services.user_visibility import active_user_ids_subquery
 
 logger = logging.getLogger(__name__)
@@ -81,10 +81,9 @@ async def get_feed(
     has_more = len(posts) > limit
     posts = posts[:limit]
 
-    built = []
+    built = await _build_posts(list(posts), str(current_user.id), db)
+    # Record views (upsert — ignore conflicts)
     for p in posts:
-        built.append(await _build_post(p, str(current_user.id), db))
-        # Record view (upsert — ignore conflict)
         try:
             stmt = pg_insert(PostView).values(
                 id=__import__('uuid').uuid4(),

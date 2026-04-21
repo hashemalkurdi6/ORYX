@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import uuid as uuid_module
 from datetime import date, datetime, timedelta
@@ -8,7 +9,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
-from app.database import get_db
+from app.database import AsyncSessionLocal, get_db
 from app.models.user import User
 from app.models.social_post import SocialPost
 from app.models.social_reaction import SocialReaction
@@ -81,55 +82,17 @@ def _time_ago(dt: datetime) -> str:
     return f"{s // 86400}d"
 
 
-async def _build_post(post: SocialPost, current_user_id: str, db: AsyncSession) -> dict:
-    # Author
-    author_res = await db.execute(select(User).where(User.id == post.user_id))
-    author = author_res.scalar_one_or_none()
-
-    # Reactions summary
-    reactions_res = await db.execute(
-        select(SocialReaction.reaction_type, func.count(SocialReaction.id))
-        .where(SocialReaction.post_id == post.id)
-        .group_by(SocialReaction.reaction_type)
-    )
-    reaction_counts = {r: c for r, c in reactions_res.all()}
-
-    # My reactions
-    my_res = await db.execute(
-        select(SocialReaction.reaction_type).where(
-            SocialReaction.post_id == post.id,
-            SocialReaction.user_id == current_user_id,
-        )
-    )
-    my_reactions = set(my_res.scalars().all())
-
-    # Comment count
-    cc_res = await db.execute(
-        select(func.count(SocialComment.id)).where(SocialComment.post_id == post.id)
-    )
-    comment_count = int(cc_res.scalar() or 0)
-
-    # Like count
-    like_count_res = await db.execute(
-        select(func.count(PostLike.id)).where(PostLike.post_id == post.id)
-    )
-    like_count = int(like_count_res.scalar() or 0)
-
-    # Is liked by current user
-    is_liked_res = await db.execute(
-        select(PostLike.id).where(PostLike.post_id == post.id, PostLike.user_id == current_user_id).limit(1)
-    )
-    is_liked = is_liked_res.scalar_one_or_none() is not None
-
-    # Is saved by current user
-    is_saved_res = await db.execute(
-        select(SavedPost.id).where(SavedPost.post_id == post.id, SavedPost.user_id == current_user_id).limit(1)
-    )
-    is_saved = is_saved_res.scalar_one_or_none() is not None
-
-    # Pull extra metadata stored inside oryx_data_card_json
+def _serialize_post(
+    post: SocialPost,
+    author: Optional[User],
+    reaction_counts: dict,
+    my_reactions: set,
+    comment_count: int,
+    like_count: int,
+    is_liked: bool,
+    is_saved: bool,
+) -> dict:
     card = post.oryx_data_card_json or {}
-
     return {
         "id": str(post.id),
         "photo_url": post.photo_url,
@@ -161,7 +124,6 @@ async def _build_post(post: SocialPost, current_user_id: str, db: AsyncSession) 
         "like_count": like_count,
         "is_liked_by_current_user": is_liked,
         "is_saved": is_saved,
-        # Insight card metadata (stored inside oryx_data_card_json)
         "insight_type": card.get("insight_type"),
         "session_id": card.get("session_id"),
         "custom_title": card.get("custom_title"),
@@ -169,6 +131,110 @@ async def _build_post(post: SocialPost, current_user_id: str, db: AsyncSession) 
         "privacy_settings": card.get("privacy_settings"),
         "background_style": card.get("background_style"),
     }
+
+
+async def _build_posts(posts: list[SocialPost], current_user_id: str, db: AsyncSession) -> list[dict]:
+    """Batched counterpart to `_build_post` — one query per aggregate across all
+    posts instead of 7 queries per post. The 7 aggregates are independent, so
+    they fan out in parallel on separate sessions (a single AsyncSession does
+    not support concurrent execute() calls)."""
+    if not posts:
+        return []
+
+    post_ids = [p.id for p in posts]
+    author_ids = list({p.user_id for p in posts})
+
+    authors_q = select(User).where(User.id.in_(author_ids))
+    reactions_q = (
+        select(
+            SocialReaction.post_id,
+            SocialReaction.reaction_type,
+            func.count(SocialReaction.id),
+        )
+        .where(SocialReaction.post_id.in_(post_ids))
+        .group_by(SocialReaction.post_id, SocialReaction.reaction_type)
+    )
+    my_react_q = select(SocialReaction.post_id, SocialReaction.reaction_type).where(
+        SocialReaction.post_id.in_(post_ids),
+        SocialReaction.user_id == current_user_id,
+    )
+    cc_q = (
+        select(SocialComment.post_id, func.count(SocialComment.id))
+        .where(SocialComment.post_id.in_(post_ids))
+        .group_by(SocialComment.post_id)
+    )
+    lc_q = (
+        select(PostLike.post_id, func.count(PostLike.id))
+        .where(PostLike.post_id.in_(post_ids))
+        .group_by(PostLike.post_id)
+    )
+    my_likes_q = select(PostLike.post_id).where(
+        PostLike.post_id.in_(post_ids),
+        PostLike.user_id == current_user_id,
+    )
+    my_saves_q = select(SavedPost.post_id).where(
+        SavedPost.post_id.in_(post_ids),
+        SavedPost.user_id == current_user_id,
+    )
+
+    async def _q(query, mode: str = "rows"):
+        async with AsyncSessionLocal() as s:
+            res = await s.execute(query)
+            if mode == "scalars_all":
+                return res.scalars().all()
+            return list(res)
+
+    (
+        authors,
+        reaction_rows,
+        my_react_rows,
+        cc_rows,
+        lc_rows,
+        liked_ids_raw,
+        saved_ids_raw,
+    ) = await asyncio.gather(
+        _q(authors_q, "scalars_all"),
+        _q(reactions_q),
+        _q(my_react_q),
+        _q(cc_q),
+        _q(lc_q),
+        _q(my_likes_q, "scalars_all"),
+        _q(my_saves_q, "scalars_all"),
+    )
+
+    authors_by_id = {a.id: a for a in authors}
+
+    reactions_by_post: dict = {}
+    for post_id, rtype, cnt in reaction_rows:
+        reactions_by_post.setdefault(post_id, {})[rtype] = cnt
+
+    my_reactions_by_post: dict = {}
+    for post_id, rtype in my_react_rows:
+        my_reactions_by_post.setdefault(post_id, set()).add(rtype)
+
+    comment_counts = {pid: int(cnt) for pid, cnt in cc_rows}
+    like_counts = {pid: int(cnt) for pid, cnt in lc_rows}
+    liked_post_ids = set(liked_ids_raw)
+    saved_post_ids = set(saved_ids_raw)
+
+    return [
+        _serialize_post(
+            p,
+            authors_by_id.get(p.user_id),
+            reactions_by_post.get(p.id, {}),
+            my_reactions_by_post.get(p.id, set()),
+            comment_counts.get(p.id, 0),
+            like_counts.get(p.id, 0),
+            p.id in liked_post_ids,
+            p.id in saved_post_ids,
+        )
+        for p in posts
+    ]
+
+
+async def _build_post(post: SocialPost, current_user_id: str, db: AsyncSession) -> dict:
+    built = await _build_posts([post], current_user_id, db)
+    return built[0]
 
 
 @router.post("")
@@ -260,9 +326,7 @@ async def get_user_posts(
     has_more = len(posts) > limit
     posts = posts[:limit]
 
-    built = []
-    for p in posts:
-        built.append(await _build_post(p, str(current_user.id), db))
+    built = await _build_posts(list(posts), str(current_user.id), db)
 
     return {"posts": built, "page": page, "has_more": has_more}
 
@@ -463,9 +527,7 @@ async def search_posts(
     posts = results_res.scalars().all()
     has_more = len(posts) > limit
     posts = posts[:limit]
-    built = []
-    for p in posts:
-        built.append(await _build_post(p, str(current_user.id), db))
+    built = await _build_posts(list(posts), str(current_user.id), db)
     return {"posts": built, "page": page, "has_more": has_more, "query": q}
 
 

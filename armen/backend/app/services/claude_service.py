@@ -479,7 +479,7 @@ def _sync_generate_activity_autopsy(
     # Strip any accidental markdown
     text = re.sub(r"^```(?:json)?\s*", "", text)
     text = re.sub(r"\s*```$", "", text)
-    logger.info("activity_autopsy: result=%r", text[:200])
+    logger.debug("activity_autopsy: result length=%d", len(text))
     return text
 
 
@@ -550,7 +550,7 @@ def _sync_generate_hevy_autopsy(
     text = response.choices[0].message.content.strip()
     text = re.sub(r"^```(?:json)?\s*", "", text)
     text = re.sub(r"\s*```$", "", text)
-    logger.info("hevy_autopsy: result=%r", text[:200])
+    logger.debug("hevy_autopsy: result length=%d", len(text))
     return text
 
 
@@ -639,7 +639,7 @@ def _sync_scan_food_image(base64_image: str, media_type: str = "image/jpeg") -> 
         raise
 
     raw_text = response.choices[0].message.content.strip()
-    logger.info("scan_food_image: raw OpenAI response: %r", raw_text[:500])
+    logger.debug("scan_food_image: raw response length=%d", len(raw_text))
 
     raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
     raw_text = re.sub(r"\s*```$", "", raw_text)
@@ -653,7 +653,7 @@ def _sync_scan_food_image(base64_image: str, media_type: str = "image/jpeg") -> 
             result.get("confidence"),
         )
     except json.JSONDecodeError as exc:
-        logger.warning("scan_food_image: JSON parse failed (%s), returning fallback. raw=%r", exc, raw_text[:200])
+        logger.warning("scan_food_image: JSON parse failed (%s), returning fallback", exc)
         result = {
             "food_name": "Unknown food",
             "description": "Could not identify the food in this image.",
