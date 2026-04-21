@@ -46,6 +46,8 @@ import {
 import { useAuthStore } from '@/services/authStore';
 import WarmUpModal from '@/components/WarmUpModal';
 import OutdoorTracker, { SavedOutdoorActivity } from '@/components/OutdoorTracker';
+import PlateCalculator from '@/components/PlateCalculator';
+import MuscleMap from '@/components/MuscleMap';
 import OryxInsightCreator from '@/components/OryxInsightCreator';
 import AmbientBackdrop from '@/components/AmbientBackdrop';
 import { ThemeColors, theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
@@ -84,6 +86,9 @@ interface ExerciseEntry {
   muscles: string[];
   sets: ExerciseSet[];
   notes: string;
+  /** Superset grouping tag (e.g. 'A', 'B'). Exercises with the same tag are
+   *  rendered as a superset; untagged exercises stand alone. */
+  supersetGroup?: string | null;
 }
 
 type FeedItem =
@@ -580,10 +585,26 @@ const StrengthBuilder = ({
   sportLabel?: string;
 }) => {
   const insets = useSafeAreaInsets();
+  const [showPlateCalc, setShowPlateCalc] = useState(false);
+  const [plateCalcTarget, setPlateCalcTarget] = useState<number | undefined>(undefined);
 
   const updateExercise = (idx: number, updated: ExerciseEntry) => {
     const next = exercises.map((ex, i) => (i === idx ? updated : ex));
     onExercisesChange(next);
+  };
+
+  const cycleSupersetGroup = (idx: number) => {
+    const ex = exercises[idx];
+    const order = [null, 'A', 'B', 'C', 'D'];
+    const currentIdx = order.indexOf(ex.supersetGroup ?? null);
+    const next = order[(currentIdx + 1) % order.length];
+    updateExercise(idx, { ...ex, supersetGroup: next });
+  };
+
+  const openPlateCalc = (weight: string) => {
+    const w = parseFloat(weight);
+    setPlateCalcTarget(!isNaN(w) && w > 0 ? w : undefined);
+    setShowPlateCalc(true);
   };
 
   const removeExercise = (idx: number) => {
@@ -653,6 +674,29 @@ const StrengthBuilder = ({
             <View style={styles.exerciseCardHeader}>
               <View style={[styles.exDot, { backgroundColor: MUSCLE_COLORS[ex.muscleGroup] ?? '#F0F2F6' }]} />
               <Text style={styles.exerciseCardName}>{ex.name}</Text>
+              <TouchableOpacity
+                onPress={() => cycleSupersetGroup(exIdx)}
+                style={{
+                  paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: ex.supersetGroup ? '#DEFF47' : 'rgba(255,255,255,0.15)',
+                  backgroundColor: ex.supersetGroup ? 'rgba(222,255,71,0.14)' : 'transparent',
+                }}
+                activeOpacity={0.7}
+                hitSlop={6}
+              >
+                <Text style={{
+                  fontFamily: TY.mono.semibold,
+                  fontSize: 11,
+                  color: ex.supersetGroup ? '#DEFF47' : '#8B95A8',
+                  letterSpacing: 0.5,
+                }}>
+                  {ex.supersetGroup ? `SS·${ex.supersetGroup}` : 'SS'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => openPlateCalc(ex.sets.at(-1)?.weight ?? '')} hitSlop={6}>
+                <Ionicons name="calculator-outline" size={18} color="#8B95A8" />
+              </TouchableOpacity>
               <TouchableOpacity onPress={() => removeExercise(exIdx)}>
                 <Ionicons name="trash-outline" size={18} color="#c0392b" />
               </TouchableOpacity>
@@ -714,6 +758,12 @@ const StrengthBuilder = ({
           onAdjust={onRestAdjust}
         />
       )}
+
+      <PlateCalculator
+        visible={showPlateCalc}
+        onClose={() => setShowPlateCalc(false)}
+        initialTargetKg={plateCalcTarget}
+      />
     </View>
   );
 };
@@ -854,9 +904,9 @@ const CardioLogger = ({
 
 // ── Sport Selector ─────────────────────────────────────────────────────────────
 
-const SportSelector = ({ onSelect, onClose }: { onSelect: (s: SportType) => void; onClose: () => void }) => {
+const SportSelector = ({ onSelect, onClose, defaultCategory }: { onSelect: (s: SportType) => void; onClose: () => void; defaultCategory?: string | null }) => {
   const insets = useSafeAreaInsets();
-  const [catFilter, setCatFilter] = useState<string>('All');
+  const [catFilter, setCatFilter] = useState<string>(defaultCategory ?? 'All');
   const cats = ['All', 'strength', 'cardio', 'combat', 'sport', 'mindBody', 'other'];
   const filtered = catFilter === 'All' ? SPORT_TYPES : SPORT_TYPES.filter(s => s.category === catFilter);
 
@@ -1005,6 +1055,9 @@ const PostSessionView = ({
       {muscles.length > 0 && (
         <View style={styles.reviewSection}>
           <Text style={styles.reviewSectionTitle}>Muscles Worked</Text>
+          <View style={{ marginBottom: 16, alignItems: 'center' }}>
+            <MuscleMap muscles={muscles} size={130} />
+          </View>
           <View style={styles.muscleTagsRow}>
             {muscles.map(m => (
               <View key={m} style={[styles.muscleTag, { backgroundColor: (MUSCLE_COLORS[m] ?? '#F0F2F6') + '33', borderColor: MUSCLE_COLORS[m] ?? '#F0F2F6' }]}>
@@ -1112,6 +1165,11 @@ const FeedCard = ({ item, onPress, onShare }: { item: FeedItem; onPress: () => v
               <Text style={[styles.loadBadgeText, { color: loadColor(a.training_load) }]}>Load: {a.training_load}</Text>
             </View>
           )}
+          {a.rpe != null && a.rpe > 0 && (
+            <View style={[styles.loadBadge, { backgroundColor: 'rgba(222,255,71,0.14)', borderColor: '#DEFF47' }]}>
+              <Text style={[styles.loadBadgeText, { color: '#DEFF47' }]}>RPE {a.rpe}</Text>
+            </View>
+          )}
           {a.calories_burned != null && (
             <View style={styles.feedStatItem}>
               <Ionicons name="flame-outline" size={12} color="#FF6B35" />
@@ -1166,6 +1224,31 @@ const FeedCard = ({ item, onPress, onShare }: { item: FeedItem; onPress: () => v
             <Text style={styles.feedStatText}>{h.exercises?.length ?? 0} exercises</Text>
           </View>
         </View>
+        {h.prs && h.prs.length > 0 && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+            {h.prs.slice(0, 3).map((pr, i) => (
+              <View
+                key={i}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 4,
+                  backgroundColor: 'rgba(222,255,71,0.14)',
+                  borderWidth: 1, borderColor: '#DEFF47',
+                  borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3,
+                }}
+              >
+                <Ionicons name="trophy-outline" size={11} color="#DEFF47" />
+                <Text style={{ fontFamily: TY.mono.semibold, fontSize: 10, color: '#DEFF47', letterSpacing: 0.3 }}>
+                  {pr.kind === '1rm' ? '1RM' : pr.kind === 'max_weight' ? 'WEIGHT' : 'REPS'} PR · {pr.exercise}
+                </Text>
+              </View>
+            ))}
+            {h.prs.length > 3 && (
+              <Text style={{ fontFamily: TY.mono.semibold, fontSize: 10, color: '#DEFF47', alignSelf: 'center' }}>
+                +{h.prs.length - 3} more
+              </Text>
+            )}
+          </View>
+        )}
         {h.autopsy_text && <Text style={styles.feedAutopsy} numberOfLines={2}>{h.autopsy_text}</Text>}
       </TouchableOpacity>
     );
@@ -1314,10 +1397,30 @@ const ExpandedModal = ({ item, onClose }: { item: FeedItem | null; onClose: () =
     if (item.kind === 'manual') {
       const a = item.data;
       const muscles = a.muscle_groups ?? [];
+      // Self-tracked outdoor activities store route points in exercise_data[0].route_points.
+      const outdoorEntry = Array.isArray(a.exercise_data)
+        ? (a.exercise_data as any[]).find((ex) => ex?._outdoor && Array.isArray(ex.route_points))
+        : null;
+      const routeCoords: { latitude: number; longitude: number }[] = outdoorEntry
+        ? outdoorEntry.route_points
+            .map((p: any) => ({ latitude: Number(p.lat), longitude: Number(p.lon) }))
+            .filter((p: any) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude))
+        : [];
       return (
         <>
           <Text style={styles.expandTitle}>{a.activity_type}</Text>
           <Text style={styles.expandMeta}>{fmtDate(a.logged_at)} · {formatDuration(a.duration_minutes)} · {a.intensity}</Text>
+
+          {routeCoords.length > 1 && (
+            <View style={styles.stravaMapWrap}>
+              <WebView
+                style={styles.stravaMap}
+                source={{ html: buildMapHtml(routeCoords) }}
+                scrollEnabled={false}
+                originWhitelist={['*']}
+              />
+            </View>
+          )}
 
           <View style={styles.reviewStatsRow}>
             {a.calories_burned != null && <View style={styles.reviewStat}><Text style={styles.reviewStatVal}>{Math.round(a.calories_burned)}</Text><Text style={styles.reviewStatLabel}>Calories</Text></View>}
@@ -1670,6 +1773,7 @@ export default function ActivityScreen() {
   const [weekShowAll, setWeekShowAll] = useState<Set<string>>(new Set());
   const [stravaPage, setStravaPage] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMoreStrava, setHasMoreStrava] = useState(true);
   const [journalSearch, setJournalSearch] = useState('');
   const weekGroupsInitialized = useRef(false);
 
@@ -1743,6 +1847,9 @@ export default function ActivityScreen() {
           );
         });
         setStravaPage(nextPage);
+        if (more.length < 20) setHasMoreStrava(false);
+      } else {
+        setHasMoreStrava(false);
       }
     } catch { /* non-fatal */ } finally {
       setLoadingMore(false);
@@ -1837,9 +1944,12 @@ export default function ActivityScreen() {
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
-  const openLogModal = () => {
+  const [sportCategoryFilter, setSportCategoryFilter] = useState<string | null>(null);
+
+  const openLogModal = (categoryFilter: string | null = null) => {
     setLogStep('sport');
     setSelectedSport(null);
+    setSportCategoryFilter(categoryFilter);
     setCardioForm({ workoutName: '', duration: '', distance: '', intensity: 'Moderate', notes: '' });
     setStrengthName('');
     setExercises([]);
@@ -1914,6 +2024,7 @@ export default function ActivityScreen() {
           muscles: ex.muscles,
           sets: ex.sets,
           notes: ex.notes,
+          supersetGroup: ex.supersetGroup ?? null,
         })),
       };
       const result = await logActivity(payload);
@@ -2102,12 +2213,16 @@ export default function ActivityScreen() {
         }
       }
     });
-    // Show load-more button if there are more weeks OR if we might have more Strava data
-    if (weeklyGroups.length > MAX_WEEKS || feed.some(f => f.kind === 'strava')) {
+    // Show load-more only when older local weeks exist OR the Strava feed
+    // still has more pages to fetch. Do NOT show it after we confirmed we're
+    // at the end of Strava history.
+    const hasOlderLocalWeeks = weeklyGroups.length > MAX_WEEKS;
+    const hasStrava = feed.some(f => f.kind === 'strava');
+    if (hasOlderLocalWeeks || (hasStrava && hasMoreStrava)) {
       rows.push({ type: 'loadEarlier' });
     }
     return rows;
-  }, [journalExpanded, weeklyGroups, expandedWeeks, weekShowAll, feed]);
+  }, [journalExpanded, weeklyGroups, expandedWeeks, weekShowAll, feed, hasMoreStrava]);
 
   const renderListRow = ({ item }: { item: ListRow }) => {
     if (item.type === 'weekHeader') {
@@ -2251,6 +2366,37 @@ export default function ActivityScreen() {
 
       {showProgress && (
         <View style={styles.progressSection}>
+          {/* Weekly Volume (last 8 weeks) */}
+          <View style={styles.progressCard}>
+            <Text style={styles.progressCardTitle}>Weekly Volume</Text>
+            <BarChart
+              data={weeklyVolumeData}
+              width={SCREEN_W - 80}
+              height={160}
+              yAxisLabel=""
+              yAxisSuffix="h"
+              chartConfig={{
+                backgroundGradientFromOpacity: 0,
+                backgroundGradientToOpacity: 0,
+                decimalPlaces: 1,
+                color: (o = 1) => `rgba(222,255,71,${o})`,
+                labelColor: () => '#8B95A8',
+                propsForBackgroundLines: { stroke: 'rgba(255,255,255,0.08)' },
+              }}
+              fromZero
+              withInnerLines
+              style={{ marginLeft: -8 }}
+            />
+          </View>
+
+          {/* Heatmap (12 weeks) */}
+          {heatmap.length > 0 && (
+            <View style={styles.progressCard}>
+              <Text style={styles.progressCardTitle}>Training Heatmap</Text>
+              <ActivityHeatmap data={heatmap} />
+            </View>
+          )}
+
           {/* Sport Breakdown */}
           {sportBreakdown.length > 0 && (
             <View style={styles.progressCard}>
@@ -2449,7 +2595,7 @@ export default function ActivityScreen() {
               { icon: 'walk-outline', label: 'Log Run or Cardio', onPress: () => { setShowActionMenu(false); openCardioModal(); } },
               { icon: 'flash-outline', label: 'Start Warm-Up', onPress: () => { setShowActionMenu(false); setShowWarmUpModal(true); } },
               { icon: 'navigate-outline', label: 'Track Activity', onPress: () => { setShowActionMenu(false); setShowOutdoorTracker(true); } },
-              { icon: 'football-outline', label: 'Log Sport Session', onPress: () => { setShowActionMenu(false); openLogModal(); } },
+              { icon: 'football-outline', label: 'Log Sport Session', onPress: () => { setShowActionMenu(false); openLogModal('sport'); } },
               { icon: 'moon-outline', label: 'Log Rest Day', onPress: async () => { setShowActionMenu(false); try { await logRestDay(); loadData(); } catch { Alert.alert('Error', 'Could not log rest day.'); } } },
             ] as Array<{ icon: string; label: string; onPress: () => void }>).map((item, idx, arr) => (
               <TouchableOpacity
@@ -2473,7 +2619,7 @@ export default function ActivityScreen() {
       <Modal visible={showLogModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={closeLogModal}>
         <View style={styles.logModalContainer}>
           {logStep === 'sport' && (
-            <SportSelector onSelect={handleSportSelect} onClose={closeLogModal} />
+            <SportSelector onSelect={handleSportSelect} onClose={closeLogModal} defaultCategory={sportCategoryFilter} />
           )}
 
           {logStep === 'cardio' && selectedSport && (

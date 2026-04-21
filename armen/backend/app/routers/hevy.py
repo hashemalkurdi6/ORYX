@@ -162,13 +162,29 @@ async def list_hevy_workouts(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return all Hevy workouts for the current user ordered by started_at DESC."""
-    result = await db.execute(
+    """Return all Hevy workouts for the current user ordered by started_at DESC,
+    with PRs attached per workout. PRs are computed on the fly over the full
+    chronological history — cheap and correct, no cache to invalidate."""
+    from app.services.hevy_prs import compute_prs_by_workout
+
+    # Pull chronological (ASC) for PR walk, then reverse for the response.
+    asc_res = await db.execute(
         select(HevyWorkout)
         .where(HevyWorkout.user_id == current_user.id)
-        .order_by(HevyWorkout.started_at.desc())
+        .order_by(HevyWorkout.started_at.asc())
     )
-    return result.scalars().all()
+    asc_workouts = list(asc_res.scalars().all())
+    prs_by_wid = compute_prs_by_workout(asc_workouts)
+
+    # Attach PR list to each row (Pydantic will consume the attr via from_attributes).
+    out: list[HevyWorkoutOut] = []
+    for w in reversed(asc_workouts):
+        item = HevyWorkoutOut.model_validate(w)
+        item.prs = [  # type: ignore[assignment]
+            p for p in prs_by_wid.get(str(w.id), [])
+        ]
+        out.append(item)
+    return out
 
 
 @router.delete("/disconnect", status_code=status.HTTP_200_OK)

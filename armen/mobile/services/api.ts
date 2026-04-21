@@ -928,6 +928,15 @@ export interface DailySteps {
   created_at: string;
 }
 
+export interface HevyPR {
+  exercise: string;
+  kind: 'max_weight' | '1rm' | 'max_reps';
+  value: number;
+  unit: string;
+  reps: number | null;
+  weight: number | null;
+}
+
 export interface HevyWorkout {
   id: string;
   hevy_workout_id: string;
@@ -938,6 +947,7 @@ export interface HevyWorkout {
   volume_kg: number | null;
   autopsy_text: string | null;
   created_at: string;
+  prs: HevyPR[];
 }
 
 export async function logActivity(data: UserActivityIn): Promise<UserActivity> {
