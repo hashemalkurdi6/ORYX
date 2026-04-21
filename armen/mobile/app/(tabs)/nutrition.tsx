@@ -459,6 +459,7 @@ export default function NutritionScreen() {
   const [mealPlan, setMealPlan] = useState<MealPlan | null>(null);
   const [mealPlanLoading, setMealPlanLoading] = useState(true);
   const [surveyComplete, setSurveyComplete] = useState(false);
+  const [nutritionProfile, setNutritionProfile] = useState<any>(null);
   const [expandedMealId, setExpandedMealId] = useState<string | null>(null);
   const [mealPlanExpanded, setMealPlanExpanded] = useState(true);
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
@@ -553,6 +554,7 @@ export default function NutritionScreen() {
 
       const complete = !!profile.nutrition_survey_complete;
       setSurveyComplete(complete);
+      setNutritionProfile(profile);
       if (complete) {
         setMealPlanError(null);
         try {
@@ -1478,6 +1480,70 @@ export default function NutritionScreen() {
               </View>
             ))}
           </View>
+        )}
+
+        {/* ── My Nutrition Profile summary card ── */}
+        {surveyComplete && nutritionProfile && (
+          <TouchableOpacity
+            onPress={() => router.push('/nutrition-survey' as any)}
+            activeOpacity={0.85}
+            style={{
+              marginHorizontal: 16, marginTop: 16, marginBottom: 8,
+              padding: 14,
+              borderRadius: 16,
+              backgroundColor: theme.glass.card,
+              borderWidth: 1, borderColor: theme.border,
+              gap: 8,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontFamily: TY.mono.semibold, fontSize: TY.size.tick, color: theme.text.muted, letterSpacing: TY.tracking.label, textTransform: 'uppercase' }}>
+                MY NUTRITION PROFILE
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={{ fontFamily: TY.sans.semibold, fontSize: TY.size.small, color: theme.accent }}>Edit</Text>
+                <Ionicons name="chevron-forward" size={14} color={theme.accent} />
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+              {[
+                nutritionProfile.diet_type,
+                nutritionProfile.nutrition_goal,
+                nutritionProfile.meals_per_day ? `${nutritionProfile.meals_per_day} meals/day` : null,
+                nutritionProfile.strictness_level,
+                nutritionProfile.intermittent_fasting && nutritionProfile.intermittent_fasting !== 'none' ? `IF ${nutritionProfile.intermittent_fasting}` : null,
+                nutritionProfile.cooking_skill,
+              ].filter(Boolean).slice(0, 6).map((chip: string, i: number) => (
+                <View
+                  key={i}
+                  style={{
+                    backgroundColor: theme.glass.pill,
+                    borderRadius: 999,
+                    paddingHorizontal: 10, paddingVertical: 4,
+                    borderWidth: 1, borderColor: theme.border,
+                  }}
+                >
+                  <Text style={{ fontFamily: TY.sans.medium, fontSize: TY.size.small, color: theme.text.secondary }}>
+                    {String(chip).replace(/_/g, ' ')}
+                  </Text>
+                </View>
+              ))}
+              {(nutritionProfile.allergies ?? []).length > 0 && (
+                <View
+                  style={{
+                    backgroundColor: theme.status.danger + '22',
+                    borderRadius: 999,
+                    paddingHorizontal: 10, paddingVertical: 4,
+                    borderWidth: 1, borderColor: theme.status.danger,
+                  }}
+                >
+                  <Text style={{ fontFamily: TY.sans.medium, fontSize: TY.size.small, color: theme.status.danger }}>
+                    {(nutritionProfile.allergies as string[]).length} allergies
+                  </Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
         )}
 
         {/* ── Meal Plan Section ── */}

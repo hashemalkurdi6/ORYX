@@ -21,11 +21,13 @@ router = APIRouter(prefix="/diagnosis", tags=["diagnosis"])
 
 
 def _require_anthropic_key() -> None:
+    """Legacy name — daily diagnosis actually uses OpenAI. Gate on that key so
+    we don't 503 just because an unused Anthropic key is absent."""
     from app.config import settings
-    if not settings.ANTHROPIC_API_KEY:
+    if not settings.OPENAI_API_KEY:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="AI diagnosis is not configured. Set ANTHROPIC_API_KEY in .env",
+            detail="AI diagnosis is not configured. Set OPENAI_API_KEY in .env",
         )
 
 

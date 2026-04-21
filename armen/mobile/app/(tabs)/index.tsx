@@ -801,7 +801,11 @@ export default function HomeScreen() {
                 <VitalTile label="SLEEP" value={sleep} unit="hr"  icon="moon-outline" />
               </View>
               {allMissing ? (
-                <TouchableOpacity style={s.connectHint} activeOpacity={0.7}>
+                <TouchableOpacity
+                  style={s.connectHint}
+                  activeOpacity={0.7}
+                  onPress={() => router.push('/settings')}
+                >
                   <Text style={s.connectHintText}>Connect Apple Health</Text>
                   <Ionicons name="arrow-forward" size={12} color={T.text.primary} />
                 </TouchableOpacity>

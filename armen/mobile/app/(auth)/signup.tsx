@@ -276,6 +276,12 @@ export default function SignupFlow() {
       useAuthStore.setState({ token: tokenResp.access_token });
       const user = await getMe();
       setAuth(tokenResp.access_token, user);
+      // Auto-join default clubs matching sport_tags so the community tab isn't
+      // empty for a fresh account. Non-fatal.
+      try {
+        const { autoJoinClubs } = await import('@/services/api');
+        await autoJoinClubs();
+      } catch { /* non-fatal */ }
       router.replace('/(tabs)/');
     } catch (err: any) {
       if (!err.response) {

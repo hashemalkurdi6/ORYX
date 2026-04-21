@@ -19,6 +19,8 @@ import { router, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import {
   getActivities,
+  getActivityHeatmap,
+  HeatmapEntry,
   getFollowers,
   getFollowing,
   followUser,
@@ -220,15 +222,19 @@ const BADGES: Badge[] = [
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-function WorkoutHeatmap({ activities }: { activities: Activity[] }) {
+function WorkoutHeatmap({ activities, entries }: { activities: Activity[]; entries?: HeatmapEntry[] }) {
   const { theme } = useTheme();
 
   const dateCounts: Record<string, number> = {};
-  activities.forEach((a) => {
-    if (!a.start_date) return;
-    const d = a.start_date.split('T')[0];
-    dateCounts[d] = (dateCounts[d] ?? 0) + 1;
-  });
+  if (entries && entries.length > 0) {
+    entries.forEach((e) => { dateCounts[e.date] = e.count; });
+  } else {
+    activities.forEach((a) => {
+      if (!a.start_date) return;
+      const d = a.start_date.split('T')[0];
+      dateCounts[d] = (dateCounts[d] ?? 0) + 1;
+    });
+  }
 
   const today = new Date();
   const dayOfWeek = today.getDay();
@@ -262,7 +268,9 @@ function WorkoutHeatmap({ activities }: { activities: Activity[] }) {
     }
   });
 
-  const totalWorkouts = new Set(activities.map((a) => (a.start_date ?? '').split('T')[0]).filter(Boolean)).size;
+  const totalWorkouts = entries && entries.length > 0
+    ? entries.filter((e) => e.count > 0).length
+    : new Set(activities.map((a) => (a.start_date ?? '').split('T')[0]).filter(Boolean)).size;
 
   function cellColor(count: number): string {
     if (count === 0) return theme.border;
@@ -338,6 +346,7 @@ export default function ProfileScreen() {
   // Activities (lazy — loaded when Achievements tab is opened)
   const [activities, setActivities] = useState<Activity[]>([]);
   const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [heatmapEntries, setHeatmapEntries] = useState<HeatmapEntry[]>([]);
 
   // Posts grid
   const [userPosts, setUserPosts] = useState<Post[]>([]);
@@ -432,8 +441,15 @@ export default function ProfileScreen() {
     achievementsLoadedRef.current = true;
     setActivitiesLoading(true);
     try {
-      const result = await getActivities(1, 20);
-      setActivities(result);
+      // Streak + badges read from the activities list; heatmap uses the
+      // dedicated 365-day endpoint so the calendar is accurate regardless
+      // of how many recent activities were paged in.
+      const [list, heat] = await Promise.all([
+        getActivities(1, 20).catch(() => [] as Activity[]),
+        getActivityHeatmap(365).catch(() => [] as HeatmapEntry[]),
+      ]);
+      setActivities(list);
+      setHeatmapEntries(heat);
     } catch {
       // Non-fatal
     } finally {
@@ -945,7 +961,7 @@ export default function ProfileScreen() {
         {/* Training Activity heatmap */}
         <Text style={[s.sectionLabel, { marginTop: 8 }]}>TRAINING ACTIVITY</Text>
         <View style={s.card}>
-          <WorkoutHeatmap activities={activities} />
+          <WorkoutHeatmap activities={activities} entries={heatmapEntries} />
         </View>
       </View>
     );

@@ -1088,6 +1088,7 @@ export interface DashboardData {
   readiness_score: number;
   readiness_label: string;
   readiness_color: 'green' | 'amber' | 'red';
+  readiness_delta_7d: number | null;
   readiness_primary_factor: string;
   data_confidence: string;
   components_used: string[];

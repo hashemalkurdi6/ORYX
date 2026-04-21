@@ -58,6 +58,11 @@ class User(Base):
     current_onboarding_step: Mapped[int] = mapped_column(Integer, default=1, nullable=False, server_default="1")
     # Profile Posts tab layout preference: 'grid' (3-col) | 'portfolio' (2-col, default) | 'timeline' (1-col)
     post_grid_layout: Mapped[str] = mapped_column(String(20), default="portfolio", nullable=False, server_default="portfolio")
+    # Privacy — columns exist in DB via raw-SQL migrations; mirror on the ORM so
+    # ORM writes (e.g. privacy settings screen) persist instead of silently no-oping.
+    is_private: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
+    dm_privacy: Mapped[str] = mapped_column(String(20), default="mutuals", nullable=False, server_default="mutuals")
+    checkin_streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )
