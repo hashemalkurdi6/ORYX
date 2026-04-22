@@ -2225,29 +2225,6 @@ function createStyles(t: ThemeColors) {
       fontFamily: TY.sans.regular,
     },
 
-    // Highlight tiles (horizontal row of round count tiles)
-    highlightTile: {
-      alignItems: 'center', gap: 6, width: 72,
-    },
-    highlightCircle: {
-      width: 60, height: 60, borderRadius: 30,
-      backgroundColor: t.glass.cardHi,
-      borderWidth: 1, borderColor: t.glass.border,
-      alignItems: 'center', justifyContent: 'center',
-    },
-    highlightCircleAdd: {
-      backgroundColor: 'transparent',
-      borderStyle: 'dashed',
-    },
-    highlightNum: {
-      fontSize: 18, color: t.text.primary,
-      fontFamily: TY.sans.semibold, letterSpacing: -0.3, ...TY.tabular,
-    },
-    highlightLabel: {
-      fontSize: 10, color: t.text.secondary,
-      fontFamily: TY.mono.medium, letterSpacing: 0.8, textTransform: 'uppercase',
-    },
-
     // Highlights — circular bubbles with title + stat caption below
     highlightItem: {
       width: 78,

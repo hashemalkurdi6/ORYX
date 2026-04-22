@@ -259,8 +259,17 @@ async def get_dashboard(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.services.user_time import user_today, capture_user_timezone
+    from app.services.user_time import capture_user_timezone
     capture_user_timezone(request, current_user)
+    return await _build_dashboard(current_user, db)
+
+
+async def _build_dashboard(current_user: User, db: AsyncSession) -> dict:
+    """Pure dashboard-building logic without Request — so /diagnosis can call
+    it in-process. The /dashboard HTTP handler above wraps this with the
+    X-User-Timezone capture; internal callers skip that and inherit whatever
+    timezone was last persisted on the user."""
+    from app.services.user_time import user_today
     today = user_today(current_user)
     yesterday = today - timedelta(days=1)
     week_start = today - timedelta(days=today.weekday())
@@ -606,7 +615,8 @@ async def get_dashboard(
         readiness_delta_7d: int | None = (
             int(readiness["score"] - past_score) if past_score is not None else None
         )
-    except Exception:
+    except Exception as e:
+        logger.warning("readiness_delta_7d compute failed for user %s: %s", current_user.id, e)
         readiness_delta_7d = None
 
     last_session_out = None
@@ -724,7 +734,7 @@ async def get_diagnosis(
 
     # Fetch dashboard data to build prompt
     try:
-        dashboard_data = await get_dashboard(current_user=current_user, db=db)
+        dashboard_data = await _build_dashboard(current_user, db)
     except Exception as exc:
         logger.error("Dashboard fetch failed for diagnosis: %s", exc)
         return {

@@ -49,16 +49,16 @@ import { useCountUp } from '@/services/animations';
 // All colour values route through services/theme so the design system is the
 // single source of truth. Names kept for backward compat with the rest of the
 // file.
-// No module-level const palette here — a const would freeze the color to
-// whichever theme was live at import (dark default). All CLR_* identifiers
-// in this file read from T directly via the block below, where each property
-// is a live getter that re-reads T on every access.
-const CLR_PALETTE: Record<'GREEN' | 'AMBER' | 'RED' | 'LOAD' | 'ACCENT', string> = Object.create(null);
-Object.defineProperty(CLR_PALETTE, 'GREEN',  { get: () => T.readiness.high, enumerable: true });
-Object.defineProperty(CLR_PALETTE, 'AMBER',  { get: () => T.readiness.mid,  enumerable: true });
-Object.defineProperty(CLR_PALETTE, 'RED',    { get: () => T.readiness.low,  enumerable: true });
-Object.defineProperty(CLR_PALETTE, 'LOAD',   { get: () => T.signal.load,    enumerable: true });
-Object.defineProperty(CLR_PALETTE, 'ACCENT', { get: () => T.accent,         enumerable: true });
+// Getter-backed so the resolved color tracks the active theme — a plain
+// `const GREEN = T.readiness.high` would freeze to whichever theme was live
+// at module init (dark default).
+const CLR_PALETTE = {
+  get GREEN()  { return T.readiness.high; },
+  get AMBER()  { return T.readiness.mid; },
+  get RED()    { return T.readiness.low; },
+  get LOAD()   { return T.signal.load; },
+  get ACCENT() { return T.accent; },
+};
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 

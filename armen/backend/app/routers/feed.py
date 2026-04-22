@@ -82,7 +82,9 @@ async def get_feed(
     posts = posts[:limit]
 
     built = await _build_posts(list(posts), str(current_user.id), db)
-    # Record views (upsert — ignore conflicts)
+    # Record views (upsert — ignore conflicts). View-tracking failure must
+    # never break the feed load, so we swallow but log at warning so real
+    # DB issues surface in ops.
     for p in posts:
         try:
             stmt = pg_insert(PostView).values(
@@ -92,8 +94,8 @@ async def get_feed(
                 viewed_at=__import__('datetime').datetime.utcnow(),
             ).on_conflict_do_nothing(constraint="uq_post_view")
             await db.execute(stmt)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("post_view insert failed post=%s user=%s: %s", p.id, current_user.id, e)
 
     return {
         "posts": built,

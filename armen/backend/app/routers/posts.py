@@ -481,8 +481,8 @@ async def get_insight_data(
         nt = nt_res.scalar_one_or_none()
         if nt and nt.daily_calorie_target:
             calorie_target = nt.daily_calorie_target
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("NutritionTargets lookup failed for user %s: %s", current_user.id, e)
     if calorie_target is None:
         calorie_target = current_user.daily_calorie_target
 

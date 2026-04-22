@@ -2156,12 +2156,6 @@ function createStyles(t: ThemeColors) {
     },
     macroPillNum: { fontSize: 15, fontWeight: '700', color: t.text.primary },
     macroPillUnit: { fontSize: 10, color: t.text.muted },
-    regenBtn: {
-      flexDirection: 'row', alignItems: 'center', gap: 6,
-      borderRadius: 10, borderWidth: 1, borderColor: t.border,
-      paddingHorizontal: 14, paddingVertical: 8, alignSelf: 'flex-start',
-    },
-    regenBtnText: { fontSize: 13, color: t.text.secondary },
 
     // Meal plan cards
     mealPlanCard: {
