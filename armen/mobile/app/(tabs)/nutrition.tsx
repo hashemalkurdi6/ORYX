@@ -50,6 +50,8 @@ import {
   WeeklyNutritionSummary,
   getWeeklyCalories,
   WeeklyCalorieDay,
+  getNutritionLimits,
+  NutritionLimits,
 } from '@/services/api';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ThemeColors, theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
@@ -195,7 +197,7 @@ function ProgressBar({ value, color }: { value: number; color?: string }) {
   const { theme } = useTheme();
   const pct = Math.round(Math.min(value, 1) * 100);
   return (
-    <View style={{ flex: 1, height: 5, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
+    <View style={{ flex: 1, height: 5, backgroundColor: theme.bg.subtle, borderRadius: 3, overflow: 'hidden' }}>
       {color ? (
         // Explicit override — keep a solid fill when caller provides one.
         <View style={{ width: `${pct}%` as any, height: '100%', backgroundColor: color, borderRadius: 3 }} />
@@ -299,7 +301,7 @@ function CalorieMacroCard({
             {/* Track */}
             <Circle
               cx={cx} cy={cy} r={ringRadius}
-              stroke="rgba(255,255,255,0.06)" strokeWidth={STROKE_W} fill="none"
+              stroke={theme.bg.subtle} strokeWidth={STROKE_W} fill="none"
             />
             {/* Fill — dasharray grows as count-up progresses */}
             <Circle
@@ -375,7 +377,7 @@ function WeeklyCalorieTrend({ days }: WeeklyCalorieTrendProps) {
   const maxCal = target * 1.2;
 
   return (
-    <View style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', marginBottom: 16 }}>
+    <View style={{ backgroundColor: theme.glass.card, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: theme.glass.border, marginBottom: 16 }}>
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <Text style={{ fontSize: 10, fontWeight: '600', color: theme.text.muted, textTransform: 'uppercase', letterSpacing: 1 }}>
@@ -393,7 +395,7 @@ function WeeklyCalorieTrend({ days }: WeeklyCalorieTrendProps) {
           position: 'absolute',
           top: CHART_H * (1 - target / maxCal),
           left: 0, right: 0, height: 1,
-          borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)',
+          borderTopWidth: 1, borderTopColor: theme.divider,
           borderStyle: 'dashed',
         }} />
 
@@ -404,10 +406,10 @@ function WeeklyCalorieTrend({ days }: WeeklyCalorieTrendProps) {
               ? Math.max(3, Math.round((d.calories_logged / maxCal) * CHART_H))
               : 0;
             const ratio = target > 0 ? d.calories_logged / target : 0;
-            const barColor = d.calories_logged === 0 ? 'rgba(255,255,255,0.10)'
-              : ratio > 1 ? T.status.warn
-              : ratio >= 0.9 ? T.text.body
-              : T.text.muted;
+            const barColor = d.calories_logged === 0 ? theme.glass.border
+              : ratio > 1 ? theme.status.warn
+              : ratio >= 0.9 ? theme.text.body
+              : theme.text.muted;
             return (
               <View key={i} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: CHART_H }}>
                 <View style={{
@@ -471,6 +473,11 @@ export default function NutritionScreen() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  // Daily limits (food scan, meal-plan regen, assistant)
+  const [limits, setLimits] = useState<NutritionLimits | null>(null);
+  const refreshLimits = useCallback(() => {
+    getNutritionLimits().then(setLimits).catch(() => {});
+  }, []);
   const chatScrollRef = useRef<ScrollView>(null);
   const [mealPlanError, setMealPlanError] = useState<string | null>(null);
 
@@ -577,13 +584,14 @@ export default function NutritionScreen() {
     }
   }, []);
 
-  useEffect(() => { loadData(); loadMealPlan(); }, [loadData, loadMealPlan]);
+  useEffect(() => { loadData(); loadMealPlan(); refreshLimits(); }, [loadData, loadMealPlan, refreshLimits]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     loadData();
     loadMealPlan();
-  }, [loadData, loadMealPlan]);
+    refreshLimits();
+  }, [loadData, loadMealPlan, refreshLimits]);
 
   // ── Manual log handlers ───────────────────────────────────────────────────
 
@@ -658,8 +666,14 @@ export default function NutritionScreen() {
               setMealPlan(newPlan);
               setExpandedMealId(null);
               setGroceryChecked({});
-            } catch {
-              Alert.alert('Error', 'Could not regenerate meal plan. Try again.');
+              refreshLimits();
+            } catch (err: any) {
+              if (err?.response?.status === 429) {
+                Alert.alert('Daily limit reached', 'You\'ve used all 3 meal plan regenerations today. Try again tomorrow.');
+              } else {
+                Alert.alert('Error', 'Could not regenerate meal plan. Try again.');
+              }
+              refreshLimits();
             } finally {
               setRegenerating(false);
             }
@@ -762,11 +776,19 @@ export default function NutritionScreen() {
         // Refresh meal plan to reflect the change
         getTodayMealPlan().then(setMealPlan).catch(() => {});
       }
-    } catch {
+      refreshLimits();
+    } catch (err: any) {
+      const isRateLimited = err?.response?.status === 429;
       setChatMessages(prev => [
         ...prev.slice(-9),
-        { role: 'assistant', content: "Sorry, I couldn't reach ORYX right now. Try again in a moment." },
+        {
+          role: 'assistant',
+          content: isRateLimited
+            ? 'Daily limit reached (20 messages/day). Try again tomorrow.'
+            : "Sorry, I couldn't reach ORYX right now. Try again in a moment.",
+        },
       ]);
+      refreshLimits();
     } finally {
       setChatLoading(false);
       setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 100);
@@ -822,11 +844,17 @@ export default function NutritionScreen() {
         fibre_g: data.fibre_g > 0 ? String(data.fibre_g) : '',
       });
     } catch (err: any) {
-      const msg = err?.response?.data?.detail || err?.message || 'Unknown error';
+      const status = err?.response?.status;
+      const detail = err?.response?.data?.detail || err?.message || 'Unknown error';
+      const msg = status === 429
+        ? 'Daily scan limit reached (30/day). Try again tomorrow.'
+        : detail;
       console.error('[Scan] Failed:', msg, err);
       setScanError(msg);
+      refreshLimits();
     } finally {
       setScanLoading(false);
+      refreshLimits();
     }
   };
 
@@ -1128,9 +1156,16 @@ export default function NutritionScreen() {
           <View style={s.chatContainer}>
             <View style={s.chatHeader}>
               <Text style={s.chatHeaderTitle}>Ask ORYX</Text>
-              <TouchableOpacity onPress={() => setChatExpanded(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="chevron-down" size={18} color={theme.text.muted} />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                {limits ? (
+                  <Text style={{ fontSize: 11, color: theme.text.muted, fontFamily: TY.mono.regular, letterSpacing: 0.4 }}>
+                    {limits.assistant.remaining}/{limits.assistant.limit} left today
+                  </Text>
+                ) : null}
+                <TouchableOpacity onPress={() => setChatExpanded(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="chevron-down" size={18} color={theme.text.muted} />
+                </TouchableOpacity>
+              </View>
             </View>
             <ScrollView
               ref={chatScrollRef}
@@ -1297,7 +1332,7 @@ export default function NutritionScreen() {
           )}
 
           {/* Progress bar — multicolor gradient like the Home strain bar */}
-          <View style={{ height: 5, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden', marginBottom: 6 }}>
+          <View style={{ height: 5, backgroundColor: theme.bg.subtle, borderRadius: 3, overflow: 'hidden', marginBottom: 6 }}>
             <LinearGradient
               colors={[theme.signal.load, theme.readiness.high, theme.accent]}
               locations={[0, 0.55, 1]}
@@ -1326,7 +1361,7 @@ export default function NutritionScreen() {
           onRequestClose={() => setWaterSettingsOpen(false)}
         >
           <TouchableOpacity
-            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}
+            style={{ flex: 1, backgroundColor: theme.glass.shade }}
             activeOpacity={1}
             onPress={() => setWaterSettingsOpen(false)}
           />
@@ -1334,7 +1369,7 @@ export default function NutritionScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
           >
-            <View style={{ backgroundColor: 'rgba(28,34,46,0.72)', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.10)' }}>
+            <View style={{ backgroundColor: theme.glass.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40, borderTopWidth: 1, borderTopColor: theme.glass.border }}>
               {/* Sheet header */}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
                 <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text.primary }}>Water Settings</Text>
@@ -1367,7 +1402,7 @@ export default function NutritionScreen() {
               {/* Container size pills */}
               <Text style={{ fontSize: 11, color: theme.text.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Container Size</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 20 }}>
-                {[100, 200, 250, 330, 400, 500, 600, 750, 1000].map(ml => (
+                {[100, 200, 250, 330, 400, 500, 600, 700, 750, 800, 900, 1000].map(ml => (
                   <TouchableOpacity
                     key={ml}
                     onPress={() => setSettingsContainerSize(ml)}
@@ -1464,13 +1499,13 @@ export default function NutritionScreen() {
                       </View>
                     )}
                     {entry.carbs_g !== null && (
-                      <View style={[s.macroChip, { borderColor: 'rgba(255,184,0,0.4)' }]}>
-                        <Text style={[s.macroChipText, { color: T.text.secondary }]}>{entry.carbs_g}g C</Text>
+                      <View style={[s.macroChip, { borderColor: theme.status.warn }]}>
+                        <Text style={[s.macroChipText, { color: theme.text.secondary }]}>{entry.carbs_g}g C</Text>
                       </View>
                     )}
                     {entry.fat_g !== null && (
-                      <View style={[s.macroChip, { borderColor: 'rgba(255,107,53,0.4)' }]}>
-                        <Text style={[s.macroChipText, { color: T.status.danger }]}>{entry.fat_g}g F</Text>
+                      <View style={[s.macroChip, { borderColor: theme.status.danger }]}>
+                        <Text style={[s.macroChipText, { color: theme.status.danger }]}>{entry.fat_g}g F</Text>
                       </View>
                     )}
                   </View>
@@ -1693,7 +1728,9 @@ export default function NutritionScreen() {
                 ? <ActivityIndicator size="small" color={theme.text.secondary} />
                 : <>
                     <Ionicons name="refresh-outline" size={13} color={theme.text.secondary} />
-                    <Text style={s.regenBtnText}>Regenerate</Text>
+                    <Text style={s.regenBtnText}>
+                      Regenerate{limits ? ` · ${limits.meal_plan_regen.remaining}/${limits.meal_plan_regen.limit} left` : ''}
+                    </Text>
                   </>
               }
             </TouchableOpacity>
@@ -2112,8 +2149,8 @@ function createStyles(t: ThemeColors) {
 
     // Survey prompt card
     surveyPromptCard: {
-      backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 20, padding: 20,
-      borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', marginBottom: 20, gap: 16,
+      backgroundColor: t.glass.card, borderRadius: 20, padding: 20,
+      borderWidth: 1, borderColor: t.glass.border, marginBottom: 20, gap: 16,
     },
     surveyPromptLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
     surveyIconWrap: {
@@ -2135,18 +2172,18 @@ function createStyles(t: ThemeColors) {
 
     // Meal plan header
     mealPlanHeader: {
-      backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 20, padding: 20,
-      borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', marginBottom: 16,
+      backgroundColor: t.glass.card, borderRadius: 20, padding: 20,
+      borderWidth: 1, borderColor: t.glass.border, marginBottom: 16,
     },
     mealPlanHeaderTop: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8,
     },
     mealPlanTitle: { fontSize: 20, fontWeight: '700', color: t.text.primary },
     cheatDayBadge: {
-      backgroundColor: '#FF6B3520', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
-      borderWidth: 1, borderColor: T.status.danger,
+      backgroundColor: t.bg.subtle, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
+      borderWidth: 1, borderColor: t.status.danger,
     },
-    cheatDayText: { fontSize: 11, fontWeight: '700', color: T.status.danger, letterSpacing: 1 },
+    cheatDayText: { fontSize: 11, fontWeight: '700', color: t.status.danger, letterSpacing: 1 },
     mealPlanNote: { fontSize: 13, color: t.text.secondary, lineHeight: 18, marginBottom: 14 },
     macroPillsRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 14 },
     macroPill: {
@@ -2279,8 +2316,8 @@ function createStyles(t: ThemeColors) {
 
     // Unified calorie + macro card
     unifiedCard: {
-      backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 16, padding: 20,
-      borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', marginBottom: 16,
+      backgroundColor: t.glass.card, borderRadius: 16, padding: 20,
+      borderWidth: 1, borderColor: t.glass.border, marginBottom: 16,
     },
 
     // Weekly calorie trend card
@@ -2319,8 +2356,8 @@ function createStyles(t: ThemeColors) {
 
     // TODAY'S NUTRITION swipeable card
     nutritionSwipeCard: {
-      backgroundColor: 'rgba(28,34,46,0.72)', borderRadius: 16,
-      borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', marginBottom: 20,
+      backgroundColor: t.glass.card, borderRadius: 16,
+      borderWidth: 1, borderColor: t.glass.border, marginBottom: 20,
       overflow: 'hidden',
     },
     nutritionSwipePage: {
@@ -2331,10 +2368,10 @@ function createStyles(t: ThemeColors) {
       gap: 6, paddingBottom: 10,
     },
     swipeDot: {
-      width: 6, height: 6, borderRadius: 3, backgroundColor: T.text.muted,
+      width: 6, height: 6, borderRadius: 3, backgroundColor: t.text.muted,
     },
     swipeDotActive: {
-      backgroundColor: T.text.primary,
+      backgroundColor: t.text.primary,
     },
 
     // Fibre & Micros
@@ -2597,10 +2634,10 @@ function createStyles(t: ThemeColors) {
     // Meal modified banner
     mealModifiedBanner: {
       flexDirection: 'row', alignItems: 'center', gap: 8,
-      backgroundColor: 'rgba(39,174,96,0.12)', borderRadius: 10, padding: 12,
-      borderWidth: 1, borderColor: 'rgba(39,174,96,0.3)', marginBottom: 12,
+      backgroundColor: t.bg.subtle, borderRadius: 10, padding: 12,
+      borderWidth: 1, borderColor: t.status.success, marginBottom: 12,
     },
-    mealModifiedBannerText: { fontSize: 14, color: T.status.success, fontWeight: '600' },
+    mealModifiedBannerText: { fontSize: 14, color: t.status.success, fontWeight: '600' },
 
     // Ask ORYX chat
     chatCollapsed: {
@@ -2639,23 +2676,23 @@ function createStyles(t: ThemeColors) {
       marginVertical: 4,
     },
     chatBubbleUser: {
-      backgroundColor: 'rgba(255,255,255,0.10)', alignSelf: 'flex-end',
+      backgroundColor: t.glass.pill, alignSelf: 'flex-end',
       borderBottomRightRadius: 4,
     },
     chatBubbleAssistant: {
-      backgroundColor: 'rgba(28,34,46,0.72)', alignSelf: 'flex-start',
+      backgroundColor: t.glass.card, alignSelf: 'flex-start',
       borderBottomLeftRadius: 4, borderWidth: 1, borderColor: t.border,
     },
-    chatBubbleText: { fontSize: 14, color: T.text.primary, lineHeight: 20 },
+    chatBubbleText: { fontSize: 14, color: t.text.primary, lineHeight: 20 },
     chatInputRow: {
       flexDirection: 'row', alignItems: 'center', gap: 8,
       padding: 10, borderTopWidth: 1, borderTopColor: t.border,
     },
     chatInput: {
-      flex: 1, backgroundColor: T.bg.tint, borderRadius: 20,
+      flex: 1, backgroundColor: t.bg.tint, borderRadius: 20,
       paddingHorizontal: 14, paddingVertical: 9,
       fontSize: 14, color: t.text.primary,
-      borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
+      borderWidth: 1, borderColor: t.glass.border,
     },
     chatSendBtn: {
       width: 36, height: 36, borderRadius: 18,

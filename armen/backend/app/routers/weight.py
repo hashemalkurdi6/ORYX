@@ -35,6 +35,9 @@ class WeightLogIn(BaseModel):
 
 class WeightSettingsIn(BaseModel):
     weight_unit: Literal["kg", "lbs"] | None = None
+    weight_reminder_enabled: bool | None = None
+    # "HH:MM" 24-hour local-time string. None leaves stored value unchanged.
+    weight_reminder_time: str | None = None
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -394,6 +397,8 @@ async def get_weight_summary(
         "longest_streak": longest,
         "logged_today": logged_today,
         "total_logs": total_logs,
+        "weight_reminder_enabled": bool(getattr(current_user, "weight_reminder_enabled", False)),
+        "weight_reminder_time": getattr(current_user, "weight_reminder_time", None),
     }
 
 
@@ -403,8 +408,21 @@ async def update_weight_settings(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update weight display unit preference."""
+    """Update weight display unit and morning reminder preferences."""
     if body.weight_unit is not None:
         current_user.weight_unit = body.weight_unit
+    if body.weight_reminder_enabled is not None:
+        current_user.weight_reminder_enabled = body.weight_reminder_enabled
+    if body.weight_reminder_time is not None:
+        # Light validation — "HH:MM" 24-hour.
+        t = body.weight_reminder_time.strip()
+        if len(t) == 5 and t[2] == ":" and t[:2].isdigit() and t[3:].isdigit():
+            hh, mm = int(t[:2]), int(t[3:])
+            if 0 <= hh < 24 and 0 <= mm < 60:
+                current_user.weight_reminder_time = t
     await db.flush()
-    return {"weight_unit": getattr(current_user, "weight_unit", "kg")}
+    return {
+        "weight_unit": getattr(current_user, "weight_unit", "kg"),
+        "weight_reminder_enabled": bool(getattr(current_user, "weight_reminder_enabled", False)),
+        "weight_reminder_time": getattr(current_user, "weight_reminder_time", None),
+    }

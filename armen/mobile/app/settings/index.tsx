@@ -526,6 +526,22 @@ export default function SettingsScreen() {
               <Ionicons name="chevron-forward" size={16} color={theme.text.secondary} />
             </TouchableOpacity>
             <View style={s.rowDivider} />
+            {/* Email verification entry — only shown for unverified users so the
+                row disappears once they confirm. */}
+            {user?.email_verified === false ? (
+              <>
+                <TouchableOpacity
+                  style={s.settingsRow}
+                  onPress={() => router.push('/(auth)/verify-email')}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="mail-unread-outline" size={18} color={theme.accent} />
+                  <Text style={[s.settingsRowText, { color: theme.accent }]}>Verify Email</Text>
+                  <Ionicons name="chevron-forward" size={16} color={theme.text.secondary} />
+                </TouchableOpacity>
+                <View style={s.rowDivider} />
+              </>
+            ) : null}
             <TouchableOpacity
               style={s.settingsRow}
               onPress={() => router.push('/settings/delete-account')}

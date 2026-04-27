@@ -975,9 +975,15 @@ async def report_post(
     db: AsyncSession = Depends(get_db),
 ):
     from app.models.post_report import PostReport
+    import uuid as _uuid
+    try:
+        post_uuid = _uuid.UUID(post_id)
+    except (ValueError, TypeError):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Invalid post_id")
     report = PostReport(
-        reporter_user_id=str(current_user.id),
-        reported_post_id=post_id,
+        reporter_user_id=current_user.id,
+        reported_post_id=post_uuid,
         reason=body.reason,
     )
     db.add(report)

@@ -12,7 +12,7 @@ import json
 import re
 from typing import Optional
 
-from app.services.claude_service import _client, HAIKU_MODEL
+from app.services.claude_service import _openai_client
 from app.schemas.warmup import WarmUpProtocol, WarmUpPhase, WarmUpExercise
 
 
@@ -90,14 +90,16 @@ def _build_prompt(
 # ── Claude call ───────────────────────────────────────────────────────────────
 
 def _sync_generate(prompt: str) -> dict:
-    message = _client.messages.create(
-        model=HAIKU_MODEL,
+    response = _openai_client.chat.completions.create(
+        model="gpt-4o-mini",
         max_tokens=700,
-        system=WARMUP_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": prompt}],
+        messages=[
+            {"role": "system", "content": WARMUP_SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
     )
-    raw = message.content[0].text.strip()
-    # Strip markdown code fences if Claude adds them despite instructions
+    raw = response.choices[0].message.content.strip()
+    # Strip markdown code fences if the model adds them despite instructions
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
     return json.loads(raw)

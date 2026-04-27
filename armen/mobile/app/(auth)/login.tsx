@@ -62,7 +62,9 @@ export default function LoginScreen() {
       const user = await getMe();
       setAuth(token, user);
       if (!user.onboarding_complete) {
-        router.replace('/onboarding');
+        // Canonical signup+onboarding flow lives in (auth)/signup.tsx.
+        // Legacy /onboarding screen was removed 2026-04-26.
+        router.replace('/(auth)/signup');
       } else {
         router.replace('/(tabs)/');
       }

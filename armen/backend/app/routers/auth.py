@@ -175,8 +175,77 @@ async def signup(payload: UserCreate, request: Request, db: AsyncSession = Depen
     db.add(user)
     await db.flush()
     await db.refresh(user)
+    # Send email verification (fire-and-forget — never blocks signup)
+    try:
+        await _send_email_verification_for(user, db)
+    except Exception:
+        logger.exception("Failed to dispatch verification email for user %s", user.id)
     token = create_access_token(user.id)
     return Token(access_token=token)
+
+
+def _create_email_verify_token(user_id: UUID) -> str:
+    """24-hour JWT scoped to email verification only."""
+    expire = datetime.utcnow() + timedelta(hours=24)
+    payload = {"sub": str(user_id), "exp": expire, "iat": datetime.utcnow(), "scope": "email_verify"}
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+async def _send_email_verification_for(user: User, db: AsyncSession) -> str:
+    """Generate + dispatch a verification token. Returns the token (for dev echoing)."""
+    from app.services.email_service import send_email_verification
+    token = _create_email_verify_token(user.id)
+    verify_url = f"{settings.EMAIL_VERIFY_URL_BASE}?token={token}"
+    send_email_verification(user.email, verify_url)
+    user.email_verification_sent_at = datetime.utcnow()
+    await db.flush()
+    return token
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
+@router.post("/verify-email")
+async def verify_email(payload: VerifyEmailRequest, db: AsyncSession = Depends(get_db)):
+    """Confirm an email address from the link sent on signup."""
+    try:
+        decoded = jwt.decode(payload.token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if decoded.get("scope") != "email_verify":
+            raise HTTPException(status_code=401, detail="Invalid verification token.")
+        user_id = UUID(decoded["sub"])
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired verification token.")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None or user.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Account not found.")
+    if not user.email_verified:
+        user.email_verified = True
+        await db.flush()
+    return {"message": "Email verified."}
+
+
+@router.post("/resend-verification")
+async def resend_verification(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-issue an email verification token for the signed-in user."""
+    from app.services.rate_limit import check_rate_limit, client_ip
+    await check_rate_limit(db, f"resend-verify:{client_ip(request)}", limit=5, window_seconds=600)
+
+    if current_user.email_verified:
+        return {"message": "Email already verified."}
+    is_prod = settings.ENV.lower() in ("prod", "production")
+    token = await _send_email_verification_for(current_user, db)
+    response: dict = {"message": "Verification email sent."}
+    if not is_prod:
+        # Dev/TestFlight convenience: echo the token so testers without inbox access can verify.
+        response["debug_verification_token"] = token
+    return response
 
 
 @router.post("/login")
@@ -263,8 +332,14 @@ async def forgot_password(payload: ForgotPasswordRequest, request: Request, db: 
 
 @router.post("/reset-password", response_model=Token)
 async def reset_password(payload: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
-    if len(payload.new_password) < 8:
+    # Enforce same complexity rules as signup: 8+ chars, ≥1 letter, ≥1 digit.
+    pw = payload.new_password
+    if len(pw) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+    if not any(c.isalpha() for c in pw):
+        raise HTTPException(status_code=400, detail="Password must contain at least one letter.")
+    if not any(c.isdigit() for c in pw):
+        raise HTTPException(status_code=400, detail="Password must contain at least one number.")
     try:
         decoded = jwt.decode(payload.token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         if decoded.get("scope") != "password_reset":

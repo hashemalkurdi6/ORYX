@@ -726,34 +726,49 @@ async def get_diagnosis(
             "rate_limited": rate_limited,
         }
 
-    if cached and not force:
-        return _cached_response(cached)
-
-    if cached and force and cached.generated_at > one_hour_ago:
-        return _cached_response(cached, rate_limited=True)
-
-    # Fetch dashboard data to build prompt
+    # Always compute fresh dashboard data so we can attach the current
+    # readiness score/color to the response — wellness.tsx reads these to
+    # render its recovery card. Cached diagnosis text is still served when
+    # available, but score/color reflect "now", not when the cache was made.
     try:
         dashboard_data = await _build_dashboard(current_user, db)
     except Exception as exc:
         logger.error("Dashboard fetch failed for diagnosis: %s", exc)
-        return {
+        dashboard_data = None
+
+    def _attach_recovery(payload: dict) -> dict:
+        if dashboard_data is not None:
+            payload["recovery_score"] = dashboard_data.get("readiness_score") or 0
+            payload["recovery_color"] = dashboard_data.get("readiness_color") or "yellow"
+        else:
+            payload.setdefault("recovery_score", 0)
+            payload.setdefault("recovery_color", "yellow")
+        return payload
+
+    if cached and not force:
+        return _attach_recovery(_cached_response(cached))
+
+    if cached and force and cached.generated_at > one_hour_ago:
+        return _attach_recovery(_cached_response(cached, rate_limited=True))
+
+    if dashboard_data is None:
+        return _attach_recovery({
             "diagnosis_text": "Could not generate diagnosis — data unavailable.",
             "contributing_factors": [],
             "recommendation": "",
             "tone": "cautionary",
             "cached": False,
-        }
+        })
 
     openai_key = settings.OPENAI_API_KEY
     if not openai_key:
-        return {
+        return _attach_recovery({
             "diagnosis_text": "AI diagnosis unavailable — OPENAI_API_KEY not configured.",
             "contributing_factors": [],
             "recommendation": "",
             "tone": "cautionary",
             "cached": False,
-        }
+        })
 
     system_prompt = (
         "You are ORYX, an elite performance coach. Your job is to give the athlete one sharp, "
@@ -781,13 +796,13 @@ async def get_diagnosis(
         result_text = response.choices[0].message.content or ""
     except Exception as exc:
         logger.error("OpenAI diagnosis failed: %s", exc)
-        return {
+        return _attach_recovery({
             "diagnosis_text": "AI diagnosis temporarily unavailable. Try again shortly.",
             "contributing_factors": [],
             "recommendation": "",
             "tone": "cautionary",
             "cached": False,
-        }
+        })
 
     parsed = _parse_diagnosis_response(result_text)
 
@@ -811,11 +826,11 @@ async def get_diagnosis(
         )
     await db.flush()
 
-    return {
+    return _attach_recovery({
         "diagnosis_text": parsed["diagnosis_text"],
         "contributing_factors": parsed["contributing_factors"],
         "recommendation": parsed["recommendation"],
         "tone": parsed["tone"],
         "generated_at": now.isoformat(),
         "cached": False,
-    }
+    })

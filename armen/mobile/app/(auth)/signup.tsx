@@ -237,6 +237,8 @@ export default function SignupFlow() {
     if (!EMAIL_RE.test(email.trim())) return 'Enter a valid email address.';
     if (!password) return 'Password is required.';
     if (password.length < 8) return 'Password must be at least 8 characters.';
+    if (!/[A-Za-z]/.test(password)) return 'Password must contain at least one letter.';
+    if (!/[0-9]/.test(password)) return 'Password must contain at least one number.';
     if (password !== confirmPassword) return 'Passwords do not match.';
     if (username && !USERNAME_RE.test(username)) return 'Username must be 3–20 characters: letters, numbers, underscores.';
     if (username && usernameStatus === 'taken') return 'That username is already taken.';
@@ -460,7 +462,7 @@ function S2Account({
         <Text style={s.label}>Password</Text>
         <TextInput
           style={s.input} value={password} onChangeText={setPassword}
-          placeholder="Minimum 8 characters" placeholderTextColor={theme.text.muted}
+          placeholder="8+ chars, with a letter and a number" placeholderTextColor={theme.text.muted}
           secureTextEntry autoComplete="new-password" returnKeyType="next"
         />
 

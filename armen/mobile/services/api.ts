@@ -36,6 +36,7 @@ export interface User {
   current_onboarding_step?: number;
   // Posts tab layout preference — persisted across sessions
   post_grid_layout?: 'grid' | 'portfolio' | 'timeline';
+  email_verified?: boolean;
 }
 
 export interface OnboardingData {
@@ -566,6 +567,50 @@ export async function login(
   return response.data;
 }
 
+export interface UserPreferences {
+  is_private: boolean;
+  dm_privacy: 'everyone' | 'mutuals' | 'following';
+  show_activity_heatmap: boolean;
+  show_personal_bests: boolean;
+  notifications_enabled: boolean;
+  notif_workouts: boolean;
+  notif_moments: boolean;
+  notif_messages: boolean;
+  notif_social: boolean;
+  notif_ai_insights: boolean;
+}
+
+export async function getMyPreferences(): Promise<UserPreferences> {
+  const response = await apiClient.get<UserPreferences>('/users/me/preferences');
+  return response.data;
+}
+
+export async function updateMyPreferences(
+  patch: Partial<UserPreferences>,
+): Promise<UserPreferences> {
+  const response = await apiClient.patch<UserPreferences>('/users/me/preferences', patch);
+  return response.data;
+}
+
+export async function verifyEmail(token: string): Promise<{ message: string }> {
+  // Public endpoint — bypass the Bearer interceptor since the user may not be
+  // signed in yet when tapping the verification link.
+  const baseURL = apiClient.defaults.baseURL ?? '';
+  const response = await axios.post<{ message: string }>(
+    `${baseURL}/auth/verify-email`,
+    { token },
+    { headers: { 'Content-Type': 'application/json' }, timeout: 30000 },
+  );
+  return response.data;
+}
+
+export async function resendVerificationEmail(): Promise<{ message: string; debug_verification_token?: string }> {
+  const response = await apiClient.post<{ message: string; debug_verification_token?: string }>(
+    '/auth/resend-verification',
+  );
+  return response.data;
+}
+
 export async function deleteMyAccount(): Promise<void> {
   const response = await apiClient.delete('/users/me', {
     validateStatus: (status) => status === 204,
@@ -813,6 +858,23 @@ export async function getNutritionTargets(): Promise<NutritionTargets> {
 
 export async function recalculateNutritionTargets(): Promise<NutritionTargets> {
   const response = await apiClient.post<NutritionTargets>('/nutrition/targets/recalculate');
+  return response.data;
+}
+
+export interface NutritionLimitBucket {
+  limit: number;
+  used: number;
+  remaining: number;
+}
+
+export interface NutritionLimits {
+  food_scan: NutritionLimitBucket;
+  meal_plan_regen: NutritionLimitBucket;
+  assistant: NutritionLimitBucket;
+}
+
+export async function getNutritionLimits(): Promise<NutritionLimits> {
+  const response = await apiClient.get<NutritionLimits>('/nutrition/limits');
   return response.data;
 }
 
@@ -1421,6 +1483,20 @@ export interface WeightSummary {
   longest_streak: number;
   logged_today: boolean;
   total_logs: number;
+  weight_reminder_enabled?: boolean;
+  weight_reminder_time?: string | null;
+}
+
+export interface WeightSettingsPatch {
+  weight_unit?: 'kg' | 'lbs';
+  weight_reminder_enabled?: boolean;
+  weight_reminder_time?: string;
+}
+
+export interface WeightSettingsResponse {
+  weight_unit: string;
+  weight_reminder_enabled?: boolean;
+  weight_reminder_time?: string | null;
 }
 
 export interface WeightLogResult {
@@ -1449,8 +1525,12 @@ export async function getWeightSummary(): Promise<WeightSummary> {
   return response.data;
 }
 
-export async function updateWeightSettings(weight_unit: 'kg' | 'lbs'): Promise<{ weight_unit: string }> {
-  const response = await apiClient.post<{ weight_unit: string }>('/weight/settings', { weight_unit });
+export async function updateWeightSettings(
+  arg: ('kg' | 'lbs') | WeightSettingsPatch,
+): Promise<WeightSettingsResponse> {
+  const body: WeightSettingsPatch =
+    typeof arg === 'string' ? { weight_unit: arg } : arg;
+  const response = await apiClient.post<WeightSettingsResponse>('/weight/settings', body);
   return response.data;
 }
 

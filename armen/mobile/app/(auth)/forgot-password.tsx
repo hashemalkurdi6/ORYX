@@ -62,6 +62,14 @@ export default function ForgotPasswordScreen() {
       setError('Password must be at least 8 characters.');
       return;
     }
+    if (!/[A-Za-z]/.test(newPassword)) {
+      setError('Password must contain at least one letter.');
+      return;
+    }
+    if (!/[0-9]/.test(newPassword)) {
+      setError('Password must contain at least one number.');
+      return;
+    }
     setError(null);
     setLoading(true);
     try {
@@ -137,7 +145,7 @@ export default function ForgotPasswordScreen() {
               style={s.input}
               value={newPassword}
               onChangeText={setNewPassword}
-              placeholder="At least 8 characters"
+              placeholder="8+ chars, with a letter and a number"
               placeholderTextColor={theme.text.muted}
               secureTextEntry
               autoComplete="password-new"

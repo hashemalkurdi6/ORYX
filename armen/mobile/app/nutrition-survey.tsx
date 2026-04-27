@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import apiClient, { getNutritionProfile, NutritionProfile } from '@/services/api';
-import { ThemeColors, theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
+import { ThemeColors, type as TY, radius as R, space as SP } from '@/services/theme';
 
 import { useTheme } from '@/contexts/ThemeContext';
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -251,17 +251,12 @@ interface PillProps {
   onPress: () => void;
 }
 
-// Module-level styles so sub-components defined outside the main component
-// (Pill, etc.) can reference `styles` without hitting a ReferenceError.
-let _moduleStyles: ReturnType<typeof createStyles> | null = null;
-const styles = new Proxy({} as ReturnType<typeof createStyles>, {
-  get(_, prop: string) {
-    if (!_moduleStyles) _moduleStyles = createStyles(T);
-    return (_moduleStyles as any)[prop];
-  },
-});
+// Sub-components use the live theme via useTheme() so they react to
+// light/dark mode changes alongside the main screen.
 
 function Pill({ label, selected, onPress }: PillProps) {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   return (
     <TouchableOpacity
       style={[styles.pill, selected && styles.pillSelected]}
@@ -283,6 +278,8 @@ interface LargeTileProps {
 }
 
 function LargeTile({ label, sub, selected, onPress }: LargeTileProps) {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   return (
     <TouchableOpacity
       style={[styles.tile, selected && styles.tileSelected]}
@@ -300,7 +297,7 @@ function LargeTile({ label, sub, selected, onPress }: LargeTileProps) {
         ) : null}
       </View>
       {selected && (
-        <Ionicons name="checkmark-circle" size={22} color={T.accentInk} />
+        <Ionicons name="checkmark-circle" size={22} color={theme.accentInk} />
       )}
     </TouchableOpacity>
   );
@@ -308,6 +305,8 @@ function LargeTile({ label, sub, selected, onPress }: LargeTileProps) {
 
 interface FoodChipProps { food: string; loved: string[]; disliked: string[]; onPress: () => void; }
 function FoodChip({ food, loved, disliked, onPress }: FoodChipProps) {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const isLoved = loved.includes(food);
   const isDisliked = disliked.includes(food);
   return (
@@ -653,7 +652,7 @@ export default function NutritionSurveyScreen() {
               <TextInput
                 style={styles.textInputSmall}
                 placeholder="e.g. 20:00"
-                placeholderTextColor={T.text.muted}
+                placeholderTextColor={theme.text.muted}
                 value={surveyData.fasting_start_time}
                 onChangeText={(v) => update('fasting_start_time', v)}
                 keyboardType="numbers-and-punctuation"
@@ -664,7 +663,7 @@ export default function NutritionSurveyScreen() {
               <TextInput
                 style={styles.textInputSmall}
                 placeholder="e.g. 12:00"
-                placeholderTextColor={T.text.muted}
+                placeholderTextColor={theme.text.muted}
                 value={surveyData.fasting_end_time}
                 onChangeText={(v) => update('fasting_end_time', v)}
                 keyboardType="numbers-and-punctuation"
@@ -720,7 +719,7 @@ export default function NutritionSurveyScreen() {
             <TextInput
               style={styles.mealTimeInput}
               placeholder="HH:MM"
-              placeholderTextColor={T.text.muted}
+              placeholderTextColor={theme.text.muted}
               value={surveyData.meal_times[i] ?? ''}
               onChangeText={(v) => updateMealTime(i, v)}
               keyboardType="numbers-and-punctuation"
@@ -847,7 +846,7 @@ export default function NutritionSurveyScreen() {
             <TextInput
               style={styles.countrySearchInput}
               placeholder="Search country..."
-              placeholderTextColor={T.text.muted}
+              placeholderTextColor={theme.text.muted}
               value={countrySearch}
               onChangeText={setCountrySearch}
               autoFocus
@@ -914,7 +913,7 @@ export default function NutritionSurveyScreen() {
     return (
       <ScrollView style={styles.stepContainer} showsVerticalScrollIndicator={false}>
         <View style={styles.doneIconWrap}>
-          <Ionicons name="checkmark-circle" size={64} color={T.signal.load} />
+          <Ionicons name="checkmark-circle" size={64} color={theme.signal.load} />
         </View>
         <Text style={styles.stepTitle}>Your Nutrition Profile</Text>
         <Text style={styles.doneSubtitle}>
@@ -966,7 +965,7 @@ export default function NutritionSurveyScreen() {
           activeOpacity={0.85}
         >
           {saving ? (
-            <ActivityIndicator color={T.text.primary} />
+            <ActivityIndicator color={theme.text.primary} />
           ) : (
             <Text style={styles.submitButtonText}>Start My Meal Plan</Text>
           )}
@@ -996,7 +995,7 @@ export default function NutritionSurveyScreen() {
       {/* Header row */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack} style={styles.headerButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="chevron-back" size={24} color={T.text.primary} />
+          <Ionicons name="chevron-back" size={24} color={theme.text.primary} />
         </TouchableOpacity>
         <Text style={styles.headerStepText}>{step} / {TOTAL_STEPS}</Text>
         {step < TOTAL_STEPS ? (

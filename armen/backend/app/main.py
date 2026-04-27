@@ -75,6 +75,19 @@ from app.routers import users as users_router
 from app.routers import messages as messages_router
 
 
+# NOTE on schema source-of-truth (audit 2026-04-26):
+#   Two systems currently maintain the schema:
+#     1. `_USER_COLUMN_MIGRATIONS` (this list) runs idempotent raw SQL on every
+#        startup alongside `Base.metadata.create_all`.
+#     2. Alembic (`armen/backend/alembic/versions/`) is configured but does NOT
+#        run automatically.
+#   Decision: `_USER_COLUMN_MIGRATIONS` + `create_all` remain authoritative for
+#   day-to-day development (matches the workflow in CLAUDE.md). Alembic is
+#   retained for production-grade migrations that need ordering, rollback, or
+#   data backfill — when adding such a migration, also append the equivalent
+#   `ALTER`/`CREATE IF NOT EXISTS` here so dev environments stay in sync.
+#   Any new ORM column MUST be reflected in BOTH the SQLAlchemy model and this
+#   list (see CLAUDE.md "DB migrations" section).
 _USER_COLUMN_MIGRATIONS = [
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(100)",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS sport_tags JSON",
@@ -218,6 +231,9 @@ _USER_COLUMN_MIGRATIONS = [
     "CREATE INDEX IF NOT EXISTS idx_weight_logs_user_logged_at ON weight_logs (user_id, logged_at DESC)",
     # User weight_unit column
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS weight_unit VARCHAR(10) DEFAULT 'kg'",
+    # Weight morning reminder preferences
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS weight_reminder_enabled BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS weight_reminder_time VARCHAR(5)",
     # Seed weight_logs from onboarding weight_kg for users who have it set but no log yet
     """
     INSERT INTO weight_logs (id, user_id, weight_kg, logged_at, source)
@@ -435,8 +451,18 @@ _USER_COLUMN_MIGRATIONS = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_user_reports_reporter ON user_reports (reporter_id)",
     "CREATE INDEX IF NOT EXISTS idx_user_reports_reported ON user_reports (reported_id)",
-    # Post reports
-    "CREATE TABLE IF NOT EXISTS post_reports (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), reporter_user_id TEXT NOT NULL, reported_post_id TEXT NOT NULL, reason TEXT, created_at TIMESTAMP DEFAULT NOW())",
+    # Post reports — UUID FKs to users / social_posts (matches PostReport ORM model).
+    """
+    CREATE TABLE IF NOT EXISTS post_reports (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        reporter_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        reported_post_id UUID NOT NULL REFERENCES social_posts(id) ON DELETE CASCADE,
+        reason TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_post_reports_reporter ON post_reports (reporter_user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_post_reports_post ON post_reports (reported_post_id)",
     # Social posts — is_pinned, is_archived columns
     "ALTER TABLE social_posts ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE",
     "ALTER TABLE social_posts ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE",
@@ -557,8 +583,23 @@ CREATE TABLE IF NOT EXISTS rate_limit_events (
     "ALTER TABLE users ALTER COLUMN whoop_refresh_token TYPE VARCHAR(1024)",
     "ALTER TABLE users ALTER COLUMN oura_access_token TYPE VARCHAR(1024)",
     "ALTER TABLE users ALTER COLUMN oura_refresh_token TYPE VARCHAR(1024)",
+    # Widen hevy_api_key to hold Fernet ciphertext alongside the other tokens.
+    "ALTER TABLE users ALTER COLUMN hevy_api_key TYPE VARCHAR(1024)",
     # Per-user timezone (IANA name) for day-boundary queries.
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(64) NOT NULL DEFAULT 'UTC'",
+    # Privacy visibility toggles (persisted across reinstalls — settings/privacy.tsx)
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS show_activity_heatmap BOOLEAN NOT NULL DEFAULT TRUE",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS show_personal_bests BOOLEAN NOT NULL DEFAULT TRUE",
+    # Notification preferences (master + per-category) — settings/notifications.tsx
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_workouts BOOLEAN NOT NULL DEFAULT TRUE",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_moments BOOLEAN NOT NULL DEFAULT TRUE",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_messages BOOLEAN NOT NULL DEFAULT TRUE",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_social BOOLEAN NOT NULL DEFAULT TRUE",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_ai_insights BOOLEAN NOT NULL DEFAULT TRUE",
+    # Email verification
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_sent_at TIMESTAMP",
 ]
 
 

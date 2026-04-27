@@ -21,6 +21,8 @@ import {
   ActivityIndicator,
   RefreshControl,
   Dimensions,
+  Switch,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -128,6 +130,62 @@ export default function WeightScreen() {
       // non-fatal
     }
   }, [unit, range, load]);
+
+  // Morning reminder — local UI state mirrors backend, optimistic toggling.
+  const [reminderEnabled, setReminderEnabled] = useState(false);
+  const [reminderTime, setReminderTime] = useState('07:30');
+  useEffect(() => {
+    if (summary == null) return;
+    if (typeof summary.weight_reminder_enabled === 'boolean') {
+      setReminderEnabled(summary.weight_reminder_enabled);
+    }
+    if (summary.weight_reminder_time) {
+      setReminderTime(summary.weight_reminder_time);
+    }
+  }, [summary]);
+
+  const persistReminder = useCallback(
+    async (enabled: boolean, time: string) => {
+      try {
+        await updateWeightSettings({
+          weight_reminder_enabled: enabled,
+          weight_reminder_time: time,
+        });
+      } catch {
+        // non-fatal
+      }
+    },
+    [],
+  );
+
+  const onToggleReminder = useCallback(
+    (next: boolean) => {
+      setReminderEnabled(next);
+      persistReminder(next, reminderTime);
+    },
+    [reminderTime, persistReminder],
+  );
+
+  const onChangeReminderTime = useCallback((raw: string) => {
+    // Accept partial input; normalize on commit.
+    const cleaned = raw.replace(/[^0-9:]/g, '').slice(0, 5);
+    setReminderTime(cleaned);
+  }, []);
+
+  const onCommitReminderTime = useCallback(() => {
+    // Normalize to HH:MM, clamp ranges, then persist.
+    const m = /^(\d{1,2}):?(\d{0,2})$/.exec(reminderTime || '');
+    if (!m) {
+      setReminderTime('07:30');
+      persistReminder(reminderEnabled, '07:30');
+      return;
+    }
+    const hh = Math.min(23, parseInt(m[1] || '0', 10) || 0);
+    const mm = Math.min(59, parseInt(m[2] || '0', 10) || 0);
+    const next = `${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}`;
+    setReminderTime(next);
+    if (reminderEnabled) persistReminder(reminderEnabled, next);
+  }, [reminderTime, reminderEnabled, persistReminder]);
 
   const hasEntries = (history?.entries.length ?? 0) > 0;
 
@@ -347,6 +405,41 @@ export default function WeightScreen() {
             <Text style={s.streakSub}>
               {summary?.days_logged_this_month ?? 0} days logged this month
             </Text>
+          </View>
+
+          {/* Morning reminder */}
+          <View style={s.card}>
+            <View style={s.reminderHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.cardLabel}>MORNING REMINDER</Text>
+                <Text style={s.reminderHint}>
+                  We&apos;ll nudge you to weigh in around the same time daily.
+                </Text>
+              </View>
+              <Switch
+                value={reminderEnabled}
+                onValueChange={onToggleReminder}
+                trackColor={{ false: theme.glass.border, true: theme.accent }}
+                thumbColor={theme.accentInk}
+              />
+            </View>
+            {reminderEnabled && (
+              <View style={s.reminderTimeRow}>
+                <Ionicons name="alarm-outline" size={16} color={theme.text.secondary} />
+                <Text style={s.reminderTimeLabel}>Time</Text>
+                <TextInput
+                  value={reminderTime}
+                  onChangeText={onChangeReminderTime}
+                  onBlur={onCommitReminderTime}
+                  onSubmitEditing={onCommitReminderTime}
+                  placeholder="07:30"
+                  placeholderTextColor={theme.text.muted}
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={5}
+                  style={s.reminderTimeInput}
+                />
+              </View>
+            )}
           </View>
 
           <View style={{ height: SP[9] }} />
@@ -655,6 +748,40 @@ function createStyles(t: ThemeColors) {
       fontSize: TY.size.small,
       color: t.text.muted,
       marginTop: SP[3],
+    },
+
+    reminderHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: SP[3],
+    },
+    reminderHint: {
+      fontFamily: TY.sans.regular,
+      fontSize: TY.size.small,
+      color: t.text.muted,
+      marginTop: SP[2],
+    },
+    reminderTimeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: SP[3],
+      marginTop: SP[4],
+      paddingTop: SP[3],
+      borderTopWidth: 1,
+      borderTopColor: t.hairline,
+    },
+    reminderTimeLabel: {
+      fontFamily: TY.sans.regular,
+      fontSize: TY.size.small,
+      color: t.text.secondary,
+    },
+    reminderTimeInput: {
+      flex: 1,
+      textAlign: 'right',
+      fontFamily: TY.mono.regular,
+      fontSize: TY.size.body,
+      color: t.text.primary,
+      paddingVertical: SP[2],
     },
 
     ctaWrap: {

@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '@/services/authStore';
-import { getTodayCheckin, generateCheckinCaption, saveCheckin, getDashboard, CheckinStatus } from '@/services/api';
+import { getTodayCheckin, generateCheckinCaption, saveCheckin, getDashboard, CheckinStatus, uploadMedia } from '@/services/api';
 import { ThemeColors, theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
 
 import { useTheme } from '@/contexts/ThemeContext';
@@ -48,7 +48,8 @@ export default function CheckinScreen() {
   // Screen flow
   const [screen, setScreen] = useState<Screen>('window');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [photoBase64, setPhotoBase64] = useState<string | null>(null);
+  // photoBase64 retained as placeholder — multipart upload now handled at post time.
+  const [, setPhotoBase64] = useState<string | null>(null);
 
   // Caption
   const [caption, setCaption] = useState('');
@@ -135,14 +136,14 @@ export default function CheckinScreen() {
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ['images'],
         quality: 0.7,
-        base64: true,
+        // base64 no longer needed: we upload via multipart from the file URI.
       });
       if (!result.canceled && result.assets.length > 0) {
         const asset = result.assets[0];
         setPhotoUri(asset.uri);
-        setPhotoBase64(asset.base64 ?? null);
+        setPhotoBase64(null);
         setScreen('preview');
-        generateCaption(asset.base64);
+        generateCaption(null);
       }
     } catch {
       Alert.alert('Error', 'Could not open camera. Please try again.');
@@ -197,9 +198,19 @@ export default function CheckinScreen() {
   const handlePost = async () => {
     setPosting(true);
     try {
-      const photoUrl = photoBase64
-        ? `data:image/jpeg;base64,${photoBase64}`
-        : undefined;
+      // Upload via multipart to /media/upload — avoids posting a 1MB+ base64
+      // string inside the JSON body (which can exceed FastAPI's default cap).
+      let photoUrl: string | undefined;
+      if (photoUri) {
+        try {
+          const { url } = await uploadMedia(photoUri);
+          photoUrl = url;
+        } catch {
+          Alert.alert('Upload failed', 'Could not upload photo. Please try again.');
+          setPosting(false);
+          return;
+        }
+      }
 
       await saveCheckin({
         photo_url: photoUrl,

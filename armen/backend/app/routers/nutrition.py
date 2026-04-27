@@ -95,9 +95,10 @@ async def get_nutrition_today(
     """Return today's logs, daily summary, and nutrition targets."""
     from app.models.daily_nutrition_summary import DailyNutritionSummary
     from app.services.nutrition_service import get_cached_targets
-    from app.services.user_time import user_day_bounds
+    from app.services.user_time import user_day_bounds, user_today
 
     start_of_day, end_of_day = user_day_bounds(current_user)
+    today = user_today(current_user)
 
     result = await db.execute(
         select(NutritionLog)
@@ -112,7 +113,6 @@ async def get_nutrition_today(
     logs = [NutritionLogOut.model_validate(e) for e in entries]
 
     # Daily summary
-    today = now.date()
     summary_res = await db.execute(
         select(DailyNutritionSummary).where(
             DailyNutritionSummary.user_id == current_user.id,
@@ -153,7 +153,9 @@ async def get_nutrition_logs(
     db: AsyncSession = Depends(get_db),
 ):
     """Return nutrition log entries for the last N days for the current user."""
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    from app.services.user_time import user_day_bounds, user_today
+    start_today, _ = user_day_bounds(current_user, user_today(current_user))
+    cutoff = start_today - timedelta(days=days - 1)
 
     result = await db.execute(
         select(NutritionLog)
@@ -204,6 +206,49 @@ async def get_nutrition_targets(
     if targets is None:
         targets = await calculate_macro_targets(current_user.id, db)
     return targets
+
+
+@router.get("/limits")
+async def get_nutrition_limits(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return remaining daily allowances for rate-limited nutrition actions.
+
+    Used by mobile clients to surface "X messages left today" counters and
+    pre-empt 429s for food scan, meal-plan regen, and Ask ORYX assistant.
+    """
+    from app.models.rate_limit_event import RateLimitEvent
+    from sqlalchemy import func as _func
+
+    now = datetime.utcnow()
+    cutoff = now - timedelta(seconds=86400)
+
+    async def _used(prefix: str) -> int:
+        res = await db.execute(
+            select(_func.count(RateLimitEvent.id)).where(
+                RateLimitEvent.key == f"{prefix}:{current_user.id}",
+                RateLimitEvent.created_at >= cutoff,
+            )
+        )
+        return int(res.scalar() or 0)
+
+    scan_used = await _used("food-scan")
+    regen_used = await _used("meal-plan-regen")
+    assistant_used = await _used("nutrition-assistant")
+
+    def _bucket(used: int, limit: int) -> dict:
+        return {
+            "limit": limit,
+            "used": min(used, limit),
+            "remaining": max(0, limit - used),
+        }
+
+    return {
+        "food_scan": _bucket(scan_used, 30),
+        "meal_plan_regen": _bucket(regen_used, 3),
+        "assistant": _bucket(assistant_used, 20),
+    }
 
 
 @router.post("/targets/recalculate")

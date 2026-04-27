@@ -4,19 +4,16 @@ import json
 import logging
 import re
 
-import anthropic
 from openai import OpenAI
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+# All AI calls in this module run through OpenAI gpt-4o-mini. The file kept its
+# legacy `claude_service` name; the Anthropic SDK is no longer used here.
+# (`/nutrition/scan` Claude vision lives in its own router.)
 _openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
-
-MODEL = "claude-sonnet-4-20250514"
-HAIKU_MODEL = "claude-haiku-4-5-20251001"
-
-_client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
 
 # ---------------------------------------------------------------------------
@@ -109,14 +106,40 @@ def _format_oura_table(oura_data: list) -> str:
 
 
 def _format_wellness(checkin: dict) -> str:
-    """Format a wellness check-in into a readable one-liner."""
+    """Format a wellness check-in into a readable one-liner.
+
+    Prefers the current Hooper Index fields (sleep_quality, fatigue, stress,
+    muscle_soreness — each 1=best, 7=worst). Falls back to the legacy
+    mood/energy/soreness 1–5 fields when Hooper data is absent so older
+    checkins still render meaningful text.
+    """
     if not checkin:
         return "No wellness check-in recorded today."
 
-    mood = checkin.get("mood", "N/A")
-    energy = checkin.get("energy", "N/A")
-    soreness = checkin.get("soreness", "N/A")
-    result = f"Mood: {mood}/5 | Energy: {energy}/5 | Soreness: {soreness}/5"
+    hooper_keys = ("sleep_quality", "fatigue", "stress", "muscle_soreness")
+    has_hooper = any(checkin.get(k) is not None for k in hooper_keys)
+
+    if has_hooper:
+        def _fmt(key: str) -> str:
+            val = checkin.get(key)
+            return f"{val}/7" if val is not None else "N/A"
+        result = (
+            f"Hooper Index (1=best, 7=worst) — "
+            f"Sleep quality: {_fmt('sleep_quality')} | "
+            f"Fatigue: {_fmt('fatigue')} | "
+            f"Stress: {_fmt('stress')} | "
+            f"Muscle soreness: {_fmt('muscle_soreness')}"
+        )
+        # Hooper sum = total wellness score (lower is better, 4 best, 28 worst)
+        vals = [checkin.get(k) for k in hooper_keys if checkin.get(k) is not None]
+        if len(vals) == 4:
+            result += f" | Total: {sum(vals)}/28"
+    else:
+        mood = checkin.get("mood", "N/A")
+        energy = checkin.get("energy", "N/A")
+        soreness = checkin.get("soreness", "N/A")
+        result = f"Mood: {mood}/5 | Energy: {energy}/5 | Soreness: {soreness}/5"
+
     notes = checkin.get("notes")
     if notes:
         result += f"\nNotes: {notes}"
@@ -683,5 +706,5 @@ def _sync_scan_food_image(base64_image: str, media_type: str = "image/jpeg") -> 
 
 
 async def scan_food_image(base64_image: str, media_type: str = "image/jpeg") -> dict:
-    """Async wrapper for food photo scanning using Claude Haiku vision."""
+    """Async wrapper for food photo scanning using OpenAI gpt-4o-mini vision."""
     return await asyncio.to_thread(_sync_scan_food_image, base64_image, media_type)

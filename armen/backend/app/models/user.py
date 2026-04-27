@@ -41,8 +41,12 @@ class User(Base):
     oura_refresh_token: Mapped[str | None] = mapped_column(EncryptedString(1024), nullable=True)
     oura_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
-    hevy_api_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    hevy_api_key: Mapped[str | None] = mapped_column(EncryptedString(1024), nullable=True)
     weight_unit: Mapped[str | None] = mapped_column(String(10), nullable=True, default="kg")
+    weight_reminder_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
+    # Stored as "HH:MM" 24-hour string (e.g. "07:30"). Local-time string only;
+    # the mobile client schedules the actual notification.
+    weight_reminder_time: Mapped[str | None] = mapped_column(String(5), nullable=True)
     # Onboarding fields
     display_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     sport_tags: Mapped[list | None] = mapped_column(JSON, nullable=True)
@@ -63,6 +67,20 @@ class User(Base):
     # ORM writes (e.g. privacy settings screen) persist instead of silently no-oping.
     is_private: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
     dm_privacy: Mapped[str] = mapped_column(String(20), default="mutuals", nullable=False, server_default="mutuals")
+    # Privacy visibility toggles — persisted across reinstalls so users don't have
+    # to redo their settings. See settings/privacy.tsx for the UI contract.
+    show_activity_heatmap: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default="true")
+    show_personal_bests: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default="true")
+    # Notification preferences — master switch + per-category. See settings/notifications.tsx.
+    notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default="true")
+    notif_workouts: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default="true")
+    notif_moments: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default="true")
+    notif_messages: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default="true")
+    notif_social: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default="true")
+    notif_ai_insights: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default="true")
+    # Email verification (sent on signup; verified via token in email)
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
+    email_verification_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     checkin_streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0")
     # IANA timezone name (e.g. "America/Los_Angeles"). Defaults to UTC if the
     # client doesn't send one; updated on login via `X-User-Timezone` header.

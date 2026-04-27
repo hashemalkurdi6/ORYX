@@ -18,6 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { Pedometer } from 'expo-sensors';
 import { BarChart } from 'react-native-chart-kit';
+import Svg, { Circle as SvgCircle, G as SvgG } from 'react-native-svg';
 import { WebView } from 'react-native-webview';
 import {
   logActivity,
@@ -496,6 +497,23 @@ const SetRow = ({
   );
 };
 
+// Convert a theme hex/rgb token to rgba with the supplied alpha — used so
+// react-native-chart-kit color closures can theme-shift instead of hardcoding
+// rgba literals.
+const toRgba = (color: string, opacity: number): string => {
+  if (color.startsWith('rgba')) return color;
+  if (color.startsWith('rgb(')) return color.replace('rgb(', 'rgba(').replace(')', `,${opacity})`);
+  if (color.startsWith('#')) {
+    const h = color.replace('#', '');
+    const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+    const r = parseInt(full.slice(0, 2), 16);
+    const g = parseInt(full.slice(2, 4), 16);
+    const b = parseInt(full.slice(4, 6), 16);
+    return `rgba(${r},${g},${b},${opacity})`;
+  }
+  return color;
+};
+
 // ── RPE Prompt ─────────────────────────────────────────────────────────────────
 // Evaluated at call time so light mode actually picks up — a module-level
 // object literal would freeze to whichever theme was live at import.
@@ -674,8 +692,32 @@ const StrengthBuilder = ({
       />
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.strengthScrollContent} keyboardShouldPersistTaps="handled">
-        {exercises.map((ex, exIdx) => (
-          <View key={ex.id} style={styles.exerciseCard}>
+        {exercises.map((ex, exIdx) => {
+          // Superset visual grouping: when this exercise shares its
+          // supersetGroup with a contiguous neighbor, render a bracketing
+          // "SUPERSET X" header above the first member, indent the card,
+          // and draw a connecting left bar to make the run read as one unit.
+          const grp = ex.supersetGroup ?? null;
+          const prevGrp = exIdx > 0 ? exercises[exIdx - 1].supersetGroup ?? null : null;
+          const nextGrp = exIdx < exercises.length - 1 ? exercises[exIdx + 1].supersetGroup ?? null : null;
+          const inGroup = grp != null && (prevGrp === grp || nextGrp === grp);
+          const isGroupStart = inGroup && prevGrp !== grp;
+          const isGroupEnd = inGroup && nextGrp !== grp;
+          return (
+          <View key={ex.id}>
+            {isGroupStart && (
+              <View style={styles.supersetHeader}>
+                <View style={styles.supersetHeaderBar} />
+                <Text style={styles.supersetHeaderText}>SUPERSET {grp}</Text>
+              </View>
+            )}
+            <View
+              style={[
+                styles.exerciseCard,
+                inGroup && styles.exerciseCardInSuperset,
+                inGroup && !isGroupEnd && { marginBottom: 4 },
+              ]}
+            >
             <View style={styles.exerciseCardHeader}>
               <View style={[styles.exDot, { backgroundColor: MUSCLE_COLORS[ex.muscleGroup] ?? T.text.primary }]} />
               <Text style={styles.exerciseCardName}>{ex.name}</Text>
@@ -745,8 +787,10 @@ const StrengthBuilder = ({
               value={ex.notes}
               onChangeText={v => updateExercise(exIdx, { ...ex, notes: v })}
             />
+            </View>
           </View>
-        ))}
+          );
+        })}
 
         <TouchableOpacity style={styles.addExerciseBtn} onPress={onAddExercise}>
           <Ionicons name="add-circle-outline" size={20} color={T.text.primary} />
@@ -1779,6 +1823,9 @@ export default function ActivityScreen() {
   const [stravaPage, setStravaPage] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMoreStrava, setHasMoreStrava] = useState(true);
+  // How many extra older weeks the user has revealed via "Load Earlier".
+  // Capped at the count of weeks actually present in `weeklyGroups`.
+  const [extraWeeks, setExtraWeeks] = useState(0);
   const [journalSearch, setJournalSearch] = useState('');
   const weekGroupsInitialized = useRef(false);
 
@@ -1837,9 +1884,19 @@ export default function ActivityScreen() {
   const handleLoadEarlier = useCallback(async () => {
     setLoadingMore(true);
     try {
+      // Prefer revealing already-loaded older local weeks before paginating Strava.
+      const totalWeeks = weeklyGroups.length;
+      const visibleWeeks = 8 + extraWeeks;
+      if (totalWeeks > visibleWeeks) {
+        setExtraWeeks(prev => prev + 4);
+        return;
+      }
+      // No more local weeks to reveal — page Strava if possible.
+      if (!hasMoreStrava) return;
       const nextPage = stravaPage + 1;
       const more = await getActivities(nextPage, 20);
       if (more.length > 0) {
+        let added = 0;
         setFeed(prev => {
           const existingIds = new Set(
             prev.filter(f => f.kind === 'strava').map(f => (f.data as Activity).id)
@@ -1847,19 +1904,22 @@ export default function ActivityScreen() {
           const newItems: FeedItem[] = more
             .filter(s => !existingIds.has(s.id))
             .map(s => ({ kind: 'strava' as const, sortKey: s.start_date, data: s }));
+          added = newItems.length;
           return [...prev, ...newItems].sort(
             (a, b) => new Date(b.sortKey).getTime() - new Date(a.sortKey).getTime()
           );
         });
         setStravaPage(nextPage);
-        if (more.length < 20) setHasMoreStrava(false);
+        // End-of-list when the page returned a partial fill OR yielded zero
+        // new (deduped) items — protects against an endless retry of empty pages.
+        if (more.length < 20 || added === 0) setHasMoreStrava(false);
       } else {
         setHasMoreStrava(false);
       }
     } catch { /* non-fatal */ } finally {
       setLoadingMore(false);
     }
-  }, [stravaPage]);
+  }, [stravaPage, hasMoreStrava, weeklyGroups.length, extraWeeks]);
 
   const handleOutdoorSave = useCallback(async (activity: SavedOutdoorActivity) => {
     setShowOutdoorTracker(false);
@@ -2011,16 +2071,29 @@ export default function ActivityScreen() {
     setExercises(prev => [...prev, entry]);
   };
 
-  const handleStrengthComplete = async () => {
+  // Derive coarse intensity bucket from RPE (1–10) for downstream calorie heuristics.
+  // Backend prefers the explicit `rpe` field for training-load calc, but
+  // intensity is still required by the schema and fed into _compute_calories.
+  const intensityFromRpe = (rpe: number | null): IntensityType => {
+    if (rpe == null) return 'Moderate';
+    if (rpe <= 3) return 'Easy';
+    if (rpe <= 6) return 'Moderate';
+    if (rpe <= 8) return 'Hard';
+    return 'Max';
+  };
+
+  // Save the strength workout. Called from the RPE step (with or without RPE)
+  // rather than at session-end, so that `intensity` reflects actual effort
+  // instead of a hardcoded 'Moderate' default.
+  const saveStrengthWorkout = useCallback(async (rpe: number | null) => {
     const durationMin = Math.max(1, Math.round(elapsedSeconds / 60));
     const muscles = uniqueMuscles(exercises);
-    setLogStep('rpe');
     setSubmitting(true);
     try {
-      const payload = {
+      const payload: any = {
         activity_type: strengthName.trim() || (selectedSport?.label ?? 'Strength Training'),
         duration_minutes: durationMin,
-        intensity: 'Moderate' as IntensityType,
+        intensity: intensityFromRpe(rpe),
         sport_category: 'strength',
         muscle_groups: muscles,
         exercise_data: exercises.map(ex => ({
@@ -2032,15 +2105,21 @@ export default function ActivityScreen() {
           supersetGroup: ex.supersetGroup ?? null,
         })),
       };
+      if (rpe != null) payload.rpe = rpe;
       const result = await logActivity(payload);
       setCompletedActivity(result);
       setPendingRpeActivityId(result.id);
     } catch {
       Alert.alert('Error', 'Failed to save workout. Please try again.');
-      setLogStep('strength');
     } finally {
       setSubmitting(false);
     }
+  }, [elapsedSeconds, exercises, strengthName, selectedSport]);
+
+  const handleStrengthComplete = async () => {
+    // Defer the actual save to the RPE step so we don't persist a hardcoded
+    // 'Moderate' intensity before the user tells us how hard it was.
+    setLogStep('rpe');
   };
 
   const handleCardioSubmit = async () => {
@@ -2070,13 +2149,25 @@ export default function ActivityScreen() {
   };
 
   const handleRpeSubmit = async (rpe: number) => {
+    // Strength flow: save deferred — payload includes rpe + derived intensity.
+    if (selectedSport?.category === 'strength' && !pendingRpeActivityId) {
+      await saveStrengthWorkout(rpe);
+      setLogStep('review');
+      return;
+    }
     if (pendingRpeActivityId) {
       try { await updateActivityRPE(pendingRpeActivityId, rpe); } catch {}
     }
     setLogStep('review');
   };
 
-  const handleRpeSkip = () => setLogStep('review');
+  const handleRpeSkip = async () => {
+    // Strength flow: still need to save, just without RPE.
+    if (selectedSport?.category === 'strength' && !pendingRpeActivityId) {
+      await saveStrengthWorkout(null);
+    }
+    setLogStep('review');
+  };
 
   // ── Filtered Feed ─────────────────────────────────────────────────────────────
 
@@ -2205,7 +2296,8 @@ export default function ActivityScreen() {
   const flatListData = useMemo((): ListRow[] => {
     if (!journalExpanded) return [];
     const rows: ListRow[] = [];
-    const MAX_WEEKS = 8;
+    const baseMax = 8;
+    const MAX_WEEKS = baseMax + extraWeeks;
     weeklyGroups.slice(0, MAX_WEEKS).forEach(([weekKey, items]) => {
       const isExpanded = expandedWeeks.has(weekKey);
       const showAll = weekShowAll.has(weekKey);
@@ -2227,7 +2319,7 @@ export default function ActivityScreen() {
       rows.push({ type: 'loadEarlier' });
     }
     return rows;
-  }, [journalExpanded, weeklyGroups, expandedWeeks, weekShowAll, feed, hasMoreStrava]);
+  }, [journalExpanded, weeklyGroups, expandedWeeks, weekShowAll, feed, hasMoreStrava, extraWeeks]);
 
   const renderListRow = ({ item }: { item: ListRow }) => {
     if (item.type === 'weekHeader') {
@@ -2384,7 +2476,7 @@ export default function ActivityScreen() {
                 backgroundGradientFromOpacity: 0,
                 backgroundGradientToOpacity: 0,
                 decimalPlaces: 1,
-                color: (o = 1) => `rgba(222,255,71,${o})`,
+                color: (o = 1) => toRgba(T.accent, o),
                 labelColor: () => T.text.secondary,
                 propsForBackgroundLines: { stroke: T.hairline },
               }}
@@ -2402,25 +2494,63 @@ export default function ActivityScreen() {
             </View>
           )}
 
-          {/* Sport Breakdown */}
+          {/* Sport Breakdown — donut */}
           {sportBreakdown.length > 0 && (
             <View style={styles.progressCard}>
               <Text style={styles.progressCardTitle}>Sport Breakdown</Text>
-              {sportBreakdown.map(s => (
-                <View key={s.label} style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>{s.label}</Text>
-                  <View style={styles.breakdownBarBg}>
-                    <LinearGradient
-                      colors={[T.signal.load, T.readiness.high, T.accent]}
-                      locations={[0, 0.55, 1]}
-                      start={{ x: 0, y: 0.5 }}
-                      end={{ x: 1, y: 0.5 }}
-                      style={[styles.breakdownBarFill, { width: `${s.pct}%` as any }]}
-                    />
+              {(() => {
+                const SIZE = 160;
+                const STROKE = 22;
+                const R_OUT = (SIZE - STROKE) / 2;
+                const CIRC = 2 * Math.PI * R_OUT;
+                let acc = 0;
+                const totalPct = sportBreakdown.reduce((s, x) => s + x.pct, 0) || 1;
+                return (
+                  <View style={styles.donutRow}>
+                    <Svg width={SIZE} height={SIZE}>
+                      <SvgG rotation={-90} origin={`${SIZE / 2},${SIZE / 2}`}>
+                        <SvgCircle
+                          cx={SIZE / 2}
+                          cy={SIZE / 2}
+                          r={R_OUT}
+                          stroke={T.hairline}
+                          strokeWidth={STROKE}
+                          fill="none"
+                        />
+                        {sportBreakdown.map(s => {
+                          const frac = s.pct / totalPct;
+                          const len = CIRC * frac;
+                          const offset = CIRC * (1 - acc);
+                          acc += frac;
+                          return (
+                            <SvgCircle
+                              key={s.label}
+                              cx={SIZE / 2}
+                              cy={SIZE / 2}
+                              r={R_OUT}
+                              stroke={s.color}
+                              strokeWidth={STROKE}
+                              fill="none"
+                              strokeDasharray={`${len} ${CIRC - len}`}
+                              strokeDashoffset={offset}
+                              strokeLinecap="butt"
+                            />
+                          );
+                        })}
+                      </SvgG>
+                    </Svg>
+                    <View style={styles.donutLegend}>
+                      {sportBreakdown.map(s => (
+                        <View key={s.label} style={styles.donutLegendRow}>
+                          <View style={[styles.donutSwatch, { backgroundColor: s.color }]} />
+                          <Text style={styles.donutLegendLabel}>{s.label}</Text>
+                          <Text style={styles.donutLegendPct}>{s.pct}%</Text>
+                        </View>
+                      ))}
+                    </View>
                   </View>
-                  <Text style={styles.breakdownPct}>{s.pct}%</Text>
-                </View>
-              ))}
+                );
+              })()}
             </View>
           )}
 
@@ -2728,7 +2858,7 @@ const chartConfig = {
   backgroundGradientFrom: T.glass.card,
   backgroundGradientTo: T.glass.card,
   decimalPlaces: 1,
-  color: (opacity = 1) => `rgba(224,224,224,${opacity})`,
+  color: (opacity = 1) => toRgba(T.text.secondary, opacity),
   labelColor: () => T.text.muted,
   style: { borderRadius: 8 },
   propsForBackgroundLines: { stroke: T.glass.card },
@@ -2823,6 +2953,17 @@ function createStyles(t: ThemeColors) {
   breakdownPct: {
     width: 40, fontSize: 11, color: t.text.secondary, textAlign: 'right',
     fontFamily: TY.mono.regular, letterSpacing: 0.3,
+  },
+  donutRow: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 4 },
+  donutLegend: { flex: 1, gap: 8 },
+  donutLegendRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  donutSwatch: { width: 10, height: 10, borderRadius: R.pill },
+  donutLegendLabel: {
+    flex: 1, fontSize: 12, color: t.text.secondary,
+    fontFamily: TY.sans.regular,
+  },
+  donutLegendPct: {
+    fontSize: 11, color: t.text.primary, fontFamily: TY.mono.regular, letterSpacing: 0.3,
   },
 
   // Badges
@@ -3019,6 +3160,33 @@ function createStyles(t: ThemeColors) {
 
   // Exercise card
   exerciseCard: { backgroundColor: T.glass.card, borderRadius: 12, padding: 12, marginBottom: 12 },
+  exerciseCardInSuperset: {
+    marginLeft: 12,
+    borderLeftWidth: 2,
+    borderLeftColor: T.accent,
+    borderTopLeftRadius: 4,
+    borderBottomLeftRadius: 4,
+  },
+  supersetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 6,
+    marginLeft: 4,
+  },
+  supersetHeaderBar: {
+    width: 18,
+    height: 2,
+    backgroundColor: T.accent,
+    borderRadius: 1,
+  },
+  supersetHeaderText: {
+    fontFamily: TY.mono.semibold,
+    fontSize: 10,
+    color: T.accent,
+    letterSpacing: 1.2,
+  },
   exerciseCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   exerciseCardName: { flex: 1, fontSize: 15, fontWeight: '600', color: T.text.primary },
   exDot: { width: 10, height: 10, borderRadius: 5 },

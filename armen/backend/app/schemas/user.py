@@ -6,6 +6,21 @@ from typing import Literal
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
 
 
+def _validate_password_complexity(password: str) -> str:
+    """Enforce min length 8, at least one letter and one digit.
+
+    Used by both signup (UserCreate) and password reset endpoints so the rules
+    stay consistent. Raises ValueError on failure (becomes 422 in pydantic flow).
+    """
+    if len(password) < 8:
+        raise ValueError("Password must be at least 8 characters.")
+    if not any(c.isalpha() for c in password):
+        raise ValueError("Password must contain at least one letter.")
+    if not any(c.isdigit() for c in password):
+        raise ValueError("Password must contain at least one number.")
+    return password
+
+
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
@@ -25,6 +40,11 @@ class UserCreate(BaseModel):
     biological_sex: str | None = None
     daily_calorie_target: int | None = None
     preferred_training_time: str | None = None
+
+    @field_validator("password")
+    @classmethod
+    def _check_password(cls, v: str) -> str:
+        return _validate_password_complexity(v)
 
 
 class UserLogin(BaseModel):
@@ -63,6 +83,7 @@ class UserOut(BaseModel):
     onboarding_complete: bool = False
     current_onboarding_step: int = 1
     post_grid_layout: str = "portfolio"
+    email_verified: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -124,6 +145,7 @@ class UserOutInternal(BaseModel):
     onboarding_complete: bool = False
     current_onboarding_step: int = 1
     post_grid_layout: str = "portfolio"
+    email_verified: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -158,6 +180,7 @@ class UserOutInternal(BaseModel):
             onboarding_complete=self.onboarding_complete,
             current_onboarding_step=self.current_onboarding_step,
             post_grid_layout=self.post_grid_layout,
+            email_verified=self.email_verified,
         )
 
 

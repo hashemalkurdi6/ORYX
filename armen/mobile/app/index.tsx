@@ -23,7 +23,7 @@ export default function Index() {
 
   if (token) {
     if (!user?.onboarding_complete) {
-      return <Redirect href="/onboarding" />;
+      return <Redirect href="/(auth)/signup" />;
     }
     return <Redirect href="/(tabs)/" />;
   }

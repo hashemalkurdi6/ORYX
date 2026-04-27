@@ -94,6 +94,59 @@ class ProfilePatchIn(BaseModel):
     post_grid_layout: Optional[Literal['grid', 'portfolio', 'timeline']] = None
 
 
+class PreferencesPatchIn(BaseModel):
+    """Privacy + notification preferences. All fields optional (partial PATCH)."""
+    is_private: Optional[bool] = None
+    dm_privacy: Optional[Literal['everyone', 'mutuals', 'following']] = None
+    show_activity_heatmap: Optional[bool] = None
+    show_personal_bests: Optional[bool] = None
+    notifications_enabled: Optional[bool] = None
+    notif_workouts: Optional[bool] = None
+    notif_moments: Optional[bool] = None
+    notif_messages: Optional[bool] = None
+    notif_social: Optional[bool] = None
+    notif_ai_insights: Optional[bool] = None
+
+
+def _serialize_preferences(u: User) -> dict:
+    return {
+        "is_private": bool(getattr(u, "is_private", False)),
+        "dm_privacy": getattr(u, "dm_privacy", "mutuals") or "mutuals",
+        "show_activity_heatmap": bool(getattr(u, "show_activity_heatmap", True)),
+        "show_personal_bests": bool(getattr(u, "show_personal_bests", True)),
+        "notifications_enabled": bool(getattr(u, "notifications_enabled", True)),
+        "notif_workouts": bool(getattr(u, "notif_workouts", True)),
+        "notif_moments": bool(getattr(u, "notif_moments", True)),
+        "notif_messages": bool(getattr(u, "notif_messages", True)),
+        "notif_social": bool(getattr(u, "notif_social", True)),
+        "notif_ai_insights": bool(getattr(u, "notif_ai_insights", True)),
+    }
+
+
+@router.get("/me/preferences")
+async def get_my_preferences(current_user: User = Depends(get_current_user)):
+    """Return privacy + notification prefs for the current user.
+
+    Single endpoint so the mobile Privacy + Notifications screens can hydrate
+    from the same source of truth. Persisted in `users` columns so settings
+    survive reinstalls (was the audit's STILL BROKEN #6).
+    """
+    return _serialize_preferences(current_user)
+
+
+@router.patch("/me/preferences")
+async def update_my_preferences(
+    body: PreferencesPatchIn,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    fields = body.model_dump(exclude_none=True)
+    for k, v in fields.items():
+        setattr(current_user, k, v)
+    await db.flush()
+    return _serialize_preferences(current_user)
+
+
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_my_account(
     request: Request,

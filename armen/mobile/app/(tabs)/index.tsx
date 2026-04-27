@@ -114,6 +114,14 @@ function getTrainingIcon(sportType: string): string {
   return map[sportType?.toLowerCase()] ?? 'fitness-outline';
 }
 
+// Per-day training-load target used for the strain gauge and weekly load ring.
+// `weekly_load` is summed `training_load` from sessions; per-session load
+// typically lands in 200–400 for a moderate effort. 300 represents a "normal
+// day" of training for the median user. Backend does not yet return a
+// personalised target — when it does, replace this constant with the
+// dashboard-supplied value (see audits/home-wellness-audit-2026-04-26.md).
+const DEFAULT_DAILY_LOAD_TARGET = 300;
+
 function getTrainingRecommendation(
   readiness: number,
   acwr: number | null,
@@ -405,8 +413,19 @@ function VitalTile({
 // ── Scan sweep ────────────────────────────────────────────────────────────────
 // Thin 60-wide bright column that translates left→right across the parent
 // every ~4 seconds, mirroring the design's `oryx-scan` keyframe on the
+// Convert a #RRGGBB hex to an rgba(r,g,b,a) string. Used for theme-driven
+// translucent overlays (ScanSweep) so light/dark accents both render.
+function hexToRgba(hex: string, alpha: number): string {
+  const m = hex.replace('#', '');
+  const r = parseInt(m.slice(0, 2), 16);
+  const g = parseInt(m.slice(2, 4), 16);
+  const b = parseInt(m.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 // ORYX Intelligence card.
 function ScanSweep() {
+  const { theme } = useTheme();
   const x = useRef(new Animated.Value(-0.6)).current;
   const [w, setW] = useState(0);
   useEffect(() => {
@@ -436,7 +455,7 @@ function ScanSweep() {
         transform: [{ translateX }],
       }}>
         <LinearGradient
-          colors={['transparent', 'rgba(222,255,71,0.15)', 'transparent']}
+          colors={['transparent', hexToRgba(theme.accent, 0.15), 'transparent']}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
           style={{ flex: 1 }}
@@ -645,7 +664,7 @@ export default function HomeScreen() {
   const caloriePct     = calorieTarget ? Math.min(1.1, caloriesToday / calorieTarget) : 0;
 
   const weeklyTrainingDays = Math.max(1, dashboard?.weekly_training_goal ?? 4);
-  const weeklyLoadTarget   = weeklyTrainingDays * 300;
+  const weeklyLoadTarget   = weeklyTrainingDays * DEFAULT_DAILY_LOAD_TARGET;
   const weeklyLoadPct      = Math.min(1, (dashboard?.weekly_load ?? 0) / weeklyLoadTarget);
   const dailyRecLoad       = Math.round((weeklyLoadTarget / weeklyTrainingDays) * (rScore >= 70 ? 1.0 : 0.8));
   // Use startsWith instead of === because last_session.date may be a full ISO

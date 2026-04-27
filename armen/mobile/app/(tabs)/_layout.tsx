@@ -177,7 +177,6 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen name="wellness" options={{ href: null }} />
-      <Tabs.Screen name="dashboard" options={{ href: null }} />
     </Tabs>
   );
 }

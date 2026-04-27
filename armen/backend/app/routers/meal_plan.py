@@ -22,10 +22,6 @@ from app.routers.auth import get_current_user
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nutrition", tags=["meal-plan"])
 
-# In-memory rate limit: {str(user_id) + "_" + date_str: count}
-_assistant_rate: dict[str, int] = {}
-
-
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 async def _get_macro_targets_for_prompt(user_id, db) -> dict:
@@ -571,13 +567,6 @@ async def regenerate_today_meal_plan(
         ).order_by(MealPlan.generated_at.desc())
     )
     existing = existing_res.scalars().first()
-
-    # Regeneration limit disabled for development
-    # if existing is not None and existing.regeneration_count >= 3:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-    #         detail="Daily regeneration limit reached (3/day)",
-    #     )
 
     plan_data = await _generate_meal_plan(current_user=current_user, db=db)
     now = datetime.utcnow()
