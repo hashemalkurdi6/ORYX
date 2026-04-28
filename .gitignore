@@ -33,3 +33,6 @@ expo-env.d.ts
 # Logs
 *.log
 npm-debug.log*
+
+# Obsidian (docs vault local UI state)
+docs/.obsidian/
