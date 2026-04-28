@@ -554,7 +554,7 @@ function S5Goal({ primaryGoal, setPrimaryGoal, fatLossRate, setFatLossRate, onNe
             >
               <Ionicons name={icon as any} size={20} color={sel ? theme.accent : theme.text.secondary} style={{ marginRight: 12 }} />
               <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
-              {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} style={{ marginLeft: 'auto' }} />}
+              {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} style={{ marginLeft: 'auto' as any }} />}
             </TouchableOpacity>
           );
         })}
@@ -570,7 +570,7 @@ function S5Goal({ primaryGoal, setPrimaryGoal, fatLossRate, setFatLossRate, onNe
                 <TouchableOpacity key={label} style={[s.row, sel && s.rowOn]} onPress={() => setFatLossRate(label)} activeOpacity={0.8}>
                   <View style={{ flex: 1 }}>
                     <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
-                    <Text style={[s.rowSub, sel && { color: 'rgba(255,255,255,0.6)' }]}>
+                    <Text style={[s.rowSub, sel && s.rowSubOn]}>
                       {sub}  ·  {adj} kcal/day
                     </Text>
                   </View>
@@ -604,7 +604,7 @@ function S6Level({ fitnessLevel, setFitnessLevel, onNext, s, theme }: any) {
             <TouchableOpacity key={label} style={[s.row, sel && s.rowOn]} onPress={() => setFitnessLevel(label)} activeOpacity={0.8}>
               <View style={{ flex: 1 }}>
                 <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
-                <Text style={[s.rowSub, sel && { color: 'rgba(255,255,255,0.6)' }]}>{sub}</Text>
+                <Text style={[s.rowSub, sel && s.rowSubOn]}>{sub}</Text>
               </View>
               {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
             </TouchableOpacity>
@@ -633,7 +633,7 @@ function S7Frequency({ weeklyDays, setWeeklyDays, onNext, s, theme }: any) {
             <TouchableOpacity key={label} style={[s.row, sel && s.rowOn]} onPress={() => setWeeklyDays(label)} activeOpacity={0.8}>
               <View style={{ flex: 1 }}>
                 <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
-                <Text style={[s.rowSub, sel && { color: 'rgba(255,255,255,0.6)' }]}>{sub}</Text>
+                <Text style={[s.rowSub, sel && s.rowSubOn]}>{sub}</Text>
               </View>
               {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
             </TouchableOpacity>
@@ -848,7 +848,7 @@ function S11Time({ trainingTime, setTrainingTime, onNext, s, theme }: any) {
             <TouchableOpacity key={label} style={[s.row, sel && s.rowOn]} onPress={() => setTrainingTime(label)} activeOpacity={0.8}>
               <View style={{ flex: 1 }}>
                 <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
-                <Text style={[s.rowSub, sel && { color: 'rgba(255,255,255,0.6)' }]}>{sub}</Text>
+                <Text style={[s.rowSub, sel && s.rowSubOn]}>{sub}</Text>
               </View>
               {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
             </TouchableOpacity>
@@ -996,6 +996,7 @@ function styles(t: ThemeColors) {
     rowText: { fontSize: 15, fontFamily: TY.sans.semibold, color: t.text.primary },
     rowTextOn: { color: t.accent },
     rowSub: { fontSize: 12, color: t.text.muted, marginTop: 2 },
+    rowSubOn: { color: t.text.secondary },
 
     // CTA
     cta: { backgroundColor: t.accent, borderRadius: R.sm, paddingVertical: SP[4], alignItems: 'center' },

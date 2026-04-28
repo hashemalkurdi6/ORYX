@@ -97,7 +97,11 @@ async def get_nutrition_today(
     from app.services.nutrition_service import get_cached_targets
     from app.services.user_time import user_day_bounds, user_today
 
-    start_of_day, end_of_day = user_day_bounds(current_user)
+    _start, _end = user_day_bounds(current_user)
+    # Strip tzinfo: nutrition_logs.logged_at is TIMESTAMP WITHOUT TIME ZONE;
+    # asyncpg rejects tz-aware datetimes against tz-naive columns.
+    start_of_day = _start.replace(tzinfo=None)
+    end_of_day = _end.replace(tzinfo=None)
     today = user_today(current_user)
 
     result = await db.execute(
@@ -154,8 +158,9 @@ async def get_nutrition_logs(
 ):
     """Return nutrition log entries for the last N days for the current user."""
     from app.services.user_time import user_day_bounds, user_today
-    start_today, _ = user_day_bounds(current_user, user_today(current_user))
-    cutoff = start_today - timedelta(days=days - 1)
+    _start_today, _ = user_day_bounds(current_user, user_today(current_user))
+    # Strip tzinfo: logged_at is TIMESTAMP WITHOUT TIME ZONE.
+    cutoff = (_start_today - timedelta(days=days - 1)).replace(tzinfo=None)
 
     result = await db.execute(
         select(NutritionLog)

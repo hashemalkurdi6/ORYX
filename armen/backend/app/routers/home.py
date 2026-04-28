@@ -470,10 +470,6 @@ async def _build_dashboard(current_user: User, db: AsyncSession) -> dict:
     wt_date_col = cast(WeightLog.logged_at, Date)
     since_28 = today - timedelta(days=28)
 
-    from datetime import timedelta as _td
-    from app.models.diagnosis import Diagnosis as _DiagModel
-    past_cutoff = (datetime.utcnow() - _td(days=7)).date()
-
     meals_q = select(NutritionLog).where(
         NutritionLog.user_id == current_user.id,
         NutritionLog.logged_at >= start_today,
@@ -510,17 +506,6 @@ async def _build_dashboard(current_user: User, db: AsyncSession) -> dict:
         WeightLog.user_id == current_user.id,
         wt_date_col == today,
     )
-    past_diag_q = (
-        select(_DiagModel.readiness_score)
-        .where(
-            _DiagModel.user_id == current_user.id,
-            cast(_DiagModel.generated_at, Date) <= past_cutoff,
-            _DiagModel.readiness_score.is_not(None),
-        )
-        .order_by(_DiagModel.generated_at.desc())
-        .limit(1)
-    )
-
     (
         meals_today,
         calories_this_week_raw,
@@ -530,7 +515,6 @@ async def _build_dashboard(current_user: User, db: AsyncSession) -> dict:
         latest_weight_row,
         wt_logs,
         weight_today_row,
-        past_score_or_exc,
         readiness,
     ) = await asyncio.gather(
         _run_query(meals_q, mode="scalars_all"),
@@ -541,7 +525,6 @@ async def _build_dashboard(current_user: User, db: AsyncSession) -> dict:
         _run_query(latest_weight_q, mode="scalar_one_or_none"),
         _run_query(wt_logs_q, mode="scalars_all"),
         _run_query(weight_today_q, mode="scalar_one_or_none"),
-        _run_query(past_diag_q, mode="scalar_one_or_none"),
         calculate_readiness(current_user.id, db),
         return_exceptions=False,
     )
@@ -609,15 +592,10 @@ async def _build_dashboard(current_user: User, db: AsyncSession) -> dict:
 
     weight_logged_today = weight_today_row is not None
 
-    # 7-day readiness delta: today's score vs this user's score 7 days ago.
-    try:
-        past_score = past_score_or_exc
-        readiness_delta_7d: int | None = (
-            int(readiness["score"] - past_score) if past_score is not None else None
-        )
-    except Exception as e:
-        logger.warning("readiness_delta_7d compute failed for user %s: %s", current_user.id, e)
-        readiness_delta_7d = None
+    # Readiness delta vs 7 days ago is not available (Diagnosis model does not
+    # store a readiness_score column).  Always None until a dedicated column is
+    # added to the diagnoses table.
+    readiness_delta_7d: int | None = None
 
     last_session_out = None
     if last_session:

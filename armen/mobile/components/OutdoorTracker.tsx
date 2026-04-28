@@ -1108,7 +1108,7 @@ function createStyles(t: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: t.glass.rim,
   },
   finishBtn: {
     width: 48,

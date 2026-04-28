@@ -58,7 +58,7 @@ const CARD_TYPES = [
   { key: 'generic', label: 'Text Card', icon: 'document-text-outline' as const, subtitle: 'Custom message' },
 ];
 
-function OryxDataCardPreview({ data, currentStats, dashboard }: { data: any; currentStats?: any; dashboard?: any }) {
+function OryxDataCardPreview({ data, currentStats, dashboard, styles }: { data: any; currentStats?: any; dashboard?: any; styles: ReturnType<typeof createStyles> }) {
   if (!data) return null;
   const ptype = data.post_type;
 
@@ -134,7 +134,7 @@ function OryxDataCardPreview({ data, currentStats, dashboard }: { data: any; cur
       )}
       {ptype === 'milestone' && (
         <View style={{ alignItems: 'center', gap: 8 }}>
-          <Ionicons name="trophy" size={36} color="#e0e0e0" />
+          <Ionicons name="trophy" size={36} color={T.text.body} />
           <Text style={styles.oryxCardTitle}>{data.badge_name || 'Milestone'}</Text>
           {data.description ? <Text style={styles.oryxCardBody}>{data.description}</Text> : null}
         </View>
@@ -422,8 +422,8 @@ export default function PostCreator({ visible, onClose, onPostCreated, currentSt
             )
           ) : (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 20 }}>
-              <Ionicons name="camera" size={64} color="#555555" />
-              <Text style={{ color: '#888888', fontSize: 15 }}>Choose a photo</Text>
+              <Ionicons name="camera" size={64} color={theme.text.muted} />
+              <Text style={{ color: theme.text.muted, fontSize: 15, fontFamily: TY.sans.regular }}>Choose a photo</Text>
             </View>
           )}
 
@@ -471,7 +471,7 @@ export default function PostCreator({ visible, onClose, onPostCreated, currentSt
                   onPress={() => wantsPhoto && photoUri ? setStep('camera') : setStep('type-select')}
                   style={{ marginRight: 12 }}
                 >
-                  <Ionicons name="arrow-back" size={22} color="#888888" />
+                  <Ionicons name="arrow-back" size={22} color={theme.text.primary} />
                 </TouchableOpacity>
                 <Text style={styles.sheetTitle}>Select ORYX Card</Text>
               </View>
@@ -486,8 +486,8 @@ export default function PostCreator({ visible, onClose, onPostCreated, currentSt
                     }}
                     style={[styles.cardTypeTile, selectedCardType === ct.key && styles.cardTypeTileSelected]}
                   >
-                    <Ionicons name={ct.icon} size={28} color={selectedCardType === ct.key ? '#f0f0f0' : '#888888'} />
-                    <Text style={[styles.cardTypeName, selectedCardType === ct.key && { color: '#f0f0f0' }]}>{ct.label}</Text>
+                    <Ionicons name={ct.icon} size={28} color={selectedCardType === ct.key ? theme.text.primary : theme.text.secondary} />
+                    <Text style={[styles.cardTypeName, selectedCardType === ct.key && { color: theme.text.primary }]}>{ct.label}</Text>
                     <Text style={styles.cardTypeSubtitle}>{ct.subtitle}</Text>
                   </TouchableOpacity>
                 ))}
@@ -495,7 +495,7 @@ export default function PostCreator({ visible, onClose, onPostCreated, currentSt
 
               {/* Preview */}
               {oryxCardData && (
-                <OryxDataCardPreview data={oryxCardData} currentStats={currentStats} dashboard={dashboard} />
+                <OryxDataCardPreview data={oryxCardData} currentStats={currentStats} dashboard={dashboard} styles={styles} />
               )}
 
               <TouchableOpacity
@@ -503,7 +503,7 @@ export default function PostCreator({ visible, onClose, onPostCreated, currentSt
                 disabled={!selectedCardType}
                 style={[styles.continueBtn, !selectedCardType && styles.continueBtnDisabled]}
               >
-                <Text style={{ color: '#000000', fontWeight: '700', fontSize: 16 }}>Done</Text>
+                <Text style={styles.continueBtnText}>Done</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -515,7 +515,7 @@ export default function PostCreator({ visible, onClose, onPostCreated, currentSt
   // ── Step: Caption + sharing ───────────────────────────────────────────────────
   if (step === 'caption') {
     const captionLen = caption.length;
-    const captionColor = captionLen >= 2200 ? '#c0392b' : captionLen >= 2000 ? '#e67e22' : '#888888';
+    const captionColor = captionLen >= 2200 ? theme.status.danger : captionLen >= 2000 ? theme.status.warn : theme.text.muted;
     const selectedClub = clubs.find(c => c.id === selectedClubId);
 
     return (
@@ -524,7 +524,7 @@ export default function PostCreator({ visible, onClose, onPostCreated, currentSt
         else if (wantsPhoto) setStep('camera');
         else setStep('type-select');
       }}>
-        <View style={{ flex: 1, backgroundColor: '#0a0a0a' }}>
+        <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
           {/* Header */}
           <View style={[styles.captionHeader, { paddingTop: insets.top + 12 }]}>
             <TouchableOpacity
@@ -535,7 +535,7 @@ export default function PostCreator({ visible, onClose, onPostCreated, currentSt
               }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons name="arrow-back" size={24} color="#f0f0f0" />
+              <Ionicons name="arrow-back" size={24} color={theme.text.primary} />
             </TouchableOpacity>
             <Text style={styles.captionHeaderTitle}>New Post</Text>
             <View style={{ width: 24 }} />
@@ -553,7 +553,7 @@ export default function PostCreator({ visible, onClose, onPostCreated, currentSt
 
             {/* Oryx card preview */}
             {oryxCardData && (
-              <OryxDataCardPreview data={oryxCardData} currentStats={currentStats} dashboard={dashboard} />
+              <OryxDataCardPreview data={oryxCardData} currentStats={currentStats} dashboard={dashboard} styles={styles} />
             )}
 
             {/* Caption input */}
@@ -561,7 +561,7 @@ export default function PostCreator({ visible, onClose, onPostCreated, currentSt
               <TextInput
                 style={styles.captionInput}
                 placeholder="Write a caption..."
-                placeholderTextColor="#555555"
+                placeholderTextColor={theme.text.muted}
                 value={caption}
                 onChangeText={setCaption}
                 multiline
@@ -584,8 +584,8 @@ export default function PostCreator({ visible, onClose, onPostCreated, currentSt
                 <Switch
                   value={alsoStory}
                   onValueChange={setAlsoStory}
-                  trackColor={{ false: '#2a2a2a', true: '#555555' }}
-                  thumbColor={alsoStory ? '#f0f0f0' : '#888888'}
+                  trackColor={{ false: theme.border, true: theme.accent }}
+                  thumbColor={alsoStory ? theme.accentInk : theme.text.muted}
                 />
               </View>
             )}
@@ -597,7 +597,7 @@ export default function PostCreator({ visible, onClose, onPostCreated, currentSt
                   {selectedClub ? selectedClub.name : 'None selected'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#555555" />
+              <Ionicons name="chevron-forward" size={18} color={theme.text.muted} />
             </TouchableOpacity>
           </ScrollView>
 
@@ -609,9 +609,9 @@ export default function PostCreator({ visible, onClose, onPostCreated, currentSt
               style={[styles.shareBtn, uploading && { opacity: 0.6 }]}
             >
               {uploading ? (
-                <ActivityIndicator color="#000000" />
+                <ActivityIndicator color={theme.accentInk} />
               ) : (
-                <Text style={{ color: '#000000', fontWeight: '700', fontSize: 16 }}>Share</Text>
+                <Text style={{ color: theme.accentInk, fontFamily: TY.sans.bold, fontSize: 16 }}>Share</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -639,8 +639,8 @@ export default function PostCreator({ visible, onClose, onPostCreated, currentSt
                     onPress={() => { setSelectedClubId(null); setShowClubSheet(false); }}
                     style={[styles.clubRow, !selectedClubId && styles.clubRowSelected]}
                   >
-                    <Text style={{ color: '#f0f0f0', fontSize: 14 }}>None</Text>
-                    {!selectedClubId && <Ionicons name="checkmark" size={18} color="#f0f0f0" />}
+                    <Text style={{ color: theme.text.primary, fontSize: 14, fontFamily: TY.sans.regular }}>None</Text>
+                    {!selectedClubId && <Ionicons name="checkmark" size={18} color={theme.accent} />}
                   </TouchableOpacity>
                   {clubs.map(c => (
                     <TouchableOpacity
@@ -648,8 +648,8 @@ export default function PostCreator({ visible, onClose, onPostCreated, currentSt
                       onPress={() => { setSelectedClubId(c.id); setShowClubSheet(false); }}
                       style={[styles.clubRow, selectedClubId === c.id && styles.clubRowSelected]}
                     >
-                      <Text style={{ color: '#f0f0f0', fontSize: 14 }}>{c.name}</Text>
-                      {selectedClubId === c.id && <Ionicons name="checkmark" size={18} color="#f0f0f0" />}
+                      <Text style={{ color: theme.text.primary, fontSize: 14, fontFamily: TY.sans.regular }}>{c.name}</Text>
+                      {selectedClubId === c.id && <Ionicons name="checkmark" size={18} color={theme.accent} />}
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -758,7 +758,7 @@ function createStyles(t: ThemeColors) {
   },
 
   oryxSheet: {
-    backgroundColor: '#0a0a0a',
+    backgroundColor: t.bg.elevated,
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     padding: 20, gap: 12,
   },
@@ -767,119 +767,123 @@ function createStyles(t: ThemeColors) {
   },
   cardTypeTile: {
     width: (SCREEN_WIDTH - 40 - 12) / 2,
-    backgroundColor: '#1a1a1a',
-    borderRadius: 16, borderWidth: 1, borderColor: '#2a2a2a',
-    padding: 14, gap: 4, alignItems: 'flex-start',
+    backgroundColor: t.bg.elevated,
+    borderRadius: 16, borderWidth: 1, borderColor: t.border,
+    padding: 14, gap: 4, alignItems: 'flex-start' as const,
   },
   cardTypeTileSelected: {
-    borderColor: '#ffffff',
+    borderColor: t.accent,
+    backgroundColor: t.accentDim,
   },
   cardTypeName: {
-    fontSize: 13, fontWeight: '700', color: '#888888',
+    fontSize: 13, fontFamily: TY.sans.semibold, color: t.text.secondary,
   },
   cardTypeSubtitle: {
-    fontSize: 11, color: '#555555',
+    fontSize: 11, fontFamily: TY.sans.regular, color: t.text.muted,
   },
 
   oryxCard: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 16, borderWidth: 1, borderColor: '#2a2a2a',
+    backgroundColor: t.bg.elevated,
+    borderRadius: 16, borderWidth: 1, borderColor: t.border,
     padding: 16, gap: 8,
   },
   oryxCardLabel: {
-    fontSize: 9, color: '#555555', letterSpacing: 2,
-    textTransform: 'uppercase', fontWeight: '700',
+    fontSize: 9, color: t.text.muted, letterSpacing: 2,
+    textTransform: 'uppercase' as const, fontFamily: TY.mono.semibold,
   },
   oryxCardTitle: {
-    fontSize: 16, fontWeight: '700', color: '#f0f0f0',
+    fontSize: 16, fontFamily: TY.sans.bold, color: t.text.primary,
   },
   oryxCardRow: {
-    flexDirection: 'row', gap: 16,
+    flexDirection: 'row' as const, gap: 16,
   },
   oryxStat: {
-    alignItems: 'center', gap: 2,
+    alignItems: 'center' as const, gap: 2,
   },
   oryxStatVal: {
-    fontSize: 18, fontWeight: '700', color: '#f0f0f0',
+    fontSize: 18, fontFamily: TY.sans.bold, color: t.text.primary,
   },
   oryxStatLabel: {
-    fontSize: 10, color: '#555555', textTransform: 'uppercase',
+    fontSize: 10, color: t.text.muted, textTransform: 'uppercase' as const, fontFamily: TY.mono.regular,
   },
   oryxCardBody: {
-    fontSize: 13, color: '#888888', lineHeight: 20,
+    fontSize: 13, color: t.text.secondary, lineHeight: 20, fontFamily: TY.sans.regular,
   },
   oryxTagRow: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 6,
+    flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6,
   },
   oryxTag: {
-    backgroundColor: '#2a2a2a', borderRadius: 6,
+    backgroundColor: t.glass.pill, borderRadius: 6,
     paddingHorizontal: 8, paddingVertical: 3,
+    borderWidth: 1, borderColor: t.glass.border,
   },
   oryxTagText: {
-    fontSize: 11, color: '#888888',
+    fontSize: 11, color: t.text.secondary, fontFamily: TY.sans.regular,
   },
 
   captionHeader: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row' as const, alignItems: 'center' as const,
     paddingHorizontal: 16, paddingBottom: 12,
-    borderBottomWidth: 1, borderBottomColor: '#2a2a2a',
+    borderBottomWidth: 1, borderBottomColor: t.border,
   },
   captionHeaderTitle: {
-    flex: 1, textAlign: 'center',
-    fontSize: 16, fontWeight: '700', color: '#f0f0f0',
+    flex: 1, textAlign: 'center' as const,
+    fontSize: 16, fontFamily: TY.sans.bold, color: t.text.primary,
   },
   captionInput: {
-    backgroundColor: '#1a1a1a', borderRadius: 12,
-    borderWidth: 1, borderColor: '#2a2a2a',
+    backgroundColor: t.bg.elevated, borderRadius: 12,
+    borderWidth: 1, borderColor: t.border,
     paddingHorizontal: 14, paddingVertical: 10,
-    color: '#f0f0f0', fontSize: 14, minHeight: 80,
+    color: t.text.primary, fontSize: 14, minHeight: 80,
+    fontFamily: TY.sans.regular,
   },
   sectionLabel: {
-    fontSize: 10, color: '#555555', letterSpacing: 2,
-    textTransform: 'uppercase', fontWeight: '700',
+    fontSize: 10, color: t.text.muted, letterSpacing: 2,
+    textTransform: 'uppercase' as const, fontFamily: TY.mono.semibold,
   },
   optionRow: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#1a1a1a', borderRadius: 12,
-    borderWidth: 1, borderColor: '#2a2a2a',
+    flexDirection: 'row' as const, alignItems: 'center' as const,
+    backgroundColor: t.bg.elevated, borderRadius: 12,
+    borderWidth: 1, borderColor: t.border,
     paddingHorizontal: 14, paddingVertical: 12,
   },
   optionLabel: {
-    fontSize: 14, color: '#f0f0f0', fontWeight: '600',
+    fontSize: 14, color: t.text.primary, fontFamily: TY.sans.semibold,
   },
   optionSubtitle: {
-    fontSize: 12, color: '#555555',
+    fontSize: 12, color: t.text.muted, fontFamily: TY.sans.regular,
   },
   shareFooter: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
+    position: 'absolute' as const, bottom: 0, left: 0, right: 0,
     paddingHorizontal: 16, paddingTop: 12,
-    backgroundColor: '#0a0a0a',
-    borderTopWidth: 1, borderTopColor: '#2a2a2a',
+    backgroundColor: t.bg.primary,
+    borderTopWidth: 1, borderTopColor: t.border,
   },
   shareBtn: {
-    backgroundColor: '#ffffff', borderRadius: 24,
-    height: 52, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: t.accent, borderRadius: 24,
+    height: 52, alignItems: 'center' as const, justifyContent: 'center' as const,
   },
   toast: {
-    position: 'absolute', bottom: 80, alignSelf: 'center',
+    position: 'absolute' as const, bottom: 80, alignSelf: 'center' as const,
     paddingHorizontal: 16, paddingVertical: 12,
     borderRadius: 24, zIndex: 999,
   },
   toastText: {
-    color: '#ffffff', fontSize: 14, fontWeight: '600',
+    color: t.text.primary, fontSize: 14, fontFamily: TY.sans.semibold,
   },
   clubSheet: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: t.bg.elevated,
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     padding: 20, gap: 4,
+    borderWidth: 1, borderColor: t.border,
   },
   clubRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const,
     paddingVertical: 12, paddingHorizontal: 8,
     borderRadius: 8,
   },
   clubRowSelected: {
-    backgroundColor: '#2a2a2a',
+    backgroundColor: t.accentDim,
   },
   });
 }

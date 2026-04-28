@@ -37,7 +37,30 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return bcrypt.checkpw(_pre_hash(plain), hashed.encode("utf-8"))
+    """Verify password against stored hash.
+
+    Supports two schemes:
+    - New (current): SHA-256+base64 pre-hash then bcrypt (introduced in the
+      soft-delete PR). All passwords hashed by the current `hash_password()`.
+    - Legacy: raw bcrypt of the plain UTF-8 bytes (used by the original
+      passlib CryptContext). Users who signed up before the scheme migration
+      would still have these hashes in the DB.
+
+    On a successful legacy-scheme login we transparently re-hash using the new
+    scheme so the user migrates forward without any UX friction.
+    """
+    hashed_bytes = hashed.encode("utf-8")
+    # Try new scheme first (should be the common case)
+    try:
+        if bcrypt.checkpw(_pre_hash(plain), hashed_bytes):
+            return True
+    except Exception:
+        pass
+    # Fallback: legacy passlib direct-bcrypt (plain UTF-8 bytes)
+    try:
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed_bytes)
+    except Exception:
+        return False
 
 
 def create_access_token(user_id: UUID) -> str:
@@ -133,7 +156,14 @@ async def signup(payload: UserCreate, request: Request, db: AsyncSession = Depen
     from app.services.rate_limit import check_rate_limit, client_ip
     await check_rate_limit(db, f"signup:{client_ip(request)}", limit=5, window_seconds=3600)
 
-    result = await db.execute(select(User).where(User.email == payload.email))
+    # Always store emails fully lowercased so login lookups are consistent
+    # regardless of what capitalization the user or their email client supplies.
+    payload.email = payload.email.lower()  # type: ignore[assignment]
+
+    from sqlalchemy import func as _func
+    result = await db.execute(
+        select(User).where(_func.lower(User.email) == payload.email)
+    )
     existing = result.scalar_one_or_none()
     if existing:
         raise HTTPException(
@@ -253,13 +283,32 @@ async def login(payload: UserLogin, request: Request, db: AsyncSession = Depends
     from app.services.rate_limit import check_rate_limit, client_ip
     await check_rate_limit(db, f"login:{client_ip(request)}", limit=10, window_seconds=60)
 
-    result = await db.execute(select(User).where(User.email == payload.email))
+    # Normalize email: case-insensitive lookup covers users who signed up with
+    # mixed-case local parts (pydantic EmailStr only lowercases the domain).
+    email_lower = payload.email.lower()
+    from sqlalchemy import func as _func
+    result = await db.execute(
+        select(User).where(_func.lower(User.email) == email_lower)
+    )
     user = result.scalar_one_or_none()
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
         )
+    # Transparent re-hash: if the user's stored hash used the old passlib
+    # direct-bcrypt scheme, upgrade it to the current SHA-256+bcrypt scheme now.
+    legacy_hashed_bytes = user.hashed_password.encode("utf-8")
+    try:
+        is_legacy = (
+            not bcrypt.checkpw(_pre_hash(payload.password), legacy_hashed_bytes)
+            and bcrypt.checkpw(payload.password.encode("utf-8"), legacy_hashed_bytes)
+        )
+    except Exception:
+        is_legacy = False
+    if is_legacy:
+        user.hashed_password = hash_password(payload.password)
+        await db.flush()
     # Account pending deletion — don't issue a real token; hand back a restore token
     if user.delete_requested_at is not None:
         await _log_event(

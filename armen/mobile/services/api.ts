@@ -100,11 +100,14 @@ export interface HealthSnapshot {
 }
 
 export interface DiagnosisResult {
-  diagnosis: string;
-  main_factor: string;
+  diagnosis_text: string;
+  contributing_factors: string[];
   recommendation: string;
-  recovery_score: number;
-  recovery_color: 'green' | 'yellow' | 'red';
+  tone: string;
+  generated_at?: string;
+  cached?: boolean;
+  recovery_score: number | null;
+  recovery_color: 'green' | 'yellow' | 'red' | null;
 }
 
 export interface AuthResponse {
@@ -1928,13 +1931,17 @@ export const createStory = async (data: {
 export const uploadMedia = async (uri: string, maxWidth = 1080): Promise<{ url: string }> => {
   let uploadUri = uri;
 
-  // Try expo-image-manipulator for compression
+  // Compress before upload. Target ≤720px wide at q=0.72 so the resulting JPEG
+  // stays well under the 2 MB dev-fallback cap and loads fast in feeds.
+  // S3-configured prod environments receive the same compressed file (smaller
+  // storage + faster CDN delivery).
   try {
     const ImageManipulator = await import('expo-image-manipulator');
+    const targetWidth = Math.min(maxWidth, 720);
     const result = await ImageManipulator.manipulateAsync(
       uri,
-      [{ resize: { width: maxWidth } }],
-      { compress: maxWidth <= 720 ? 0.8 : 0.85, format: ImageManipulator.SaveFormat.JPEG }
+      [{ resize: { width: targetWidth } }],
+      { compress: 0.72, format: ImageManipulator.SaveFormat.JPEG }
     );
     uploadUri = result.uri;
   } catch {

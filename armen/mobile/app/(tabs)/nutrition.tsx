@@ -20,7 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import {
   getTodayNutrition,
   logNutrition,
@@ -54,7 +54,7 @@ import {
   NutritionLimits,
 } from '@/services/api';
 import { useTheme } from '@/contexts/ThemeContext';
-import { ThemeColors, theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
+import { ThemeColors, type as TY, radius as R, space as SP } from '@/services/theme';
 import { useCountUp } from '@/services/animations';
 import FoodSearchModal from '@/components/FoodSearchModal';
 import GlassCard from '@/components/GlassCard';
@@ -181,9 +181,9 @@ function MacroCircle({ label, value, target, unit, color, size = 76 }: MacroCirc
         <Text style={{ fontSize: 10, color: theme.text.muted }}>/ {target}{unit}</Text>
         {target > 0 && (() => {
           const pct = value / target;
-          if (pct > 1.1) return <Text style={{ fontSize: 9, color: T.status.danger, fontWeight: '600' }}>Over</Text>;
-          if (pct >= 0.8) return <Text style={{ fontSize: 9, color: T.status.warn, fontWeight: '600' }}>On Track</Text>;
-          return <Text style={{ fontSize: 9, color: T.text.muted, fontWeight: '600' }}>Low</Text>;
+          if (pct > 1.1) return <Text style={{ fontSize: 9, color: theme.status.danger, fontWeight: '600' }}>Over</Text>;
+          if (pct >= 0.8) return <Text style={{ fontSize: 9, color: theme.status.warn, fontWeight: '600' }}>On Track</Text>;
+          return <Text style={{ fontSize: 9, color: theme.text.muted, fontWeight: '600' }}>Low</Text>;
         })()}
       </View>
     </View>
@@ -293,7 +293,7 @@ function CalorieMacroCard({
   const animatedFill = (circumference * Math.min(displayPct, Math.round(fillPct * 100))) / 100;
 
   return (
-    <View style={{ backgroundColor: T.glass.card, borderRadius: R.lg, padding: SP[5], borderWidth: 1, borderColor: T.glass.border, marginBottom: SP[4] }}>
+    <View style={{ backgroundColor: theme.glass.card, borderRadius: R.lg, padding: SP[5], borderWidth: 1, borderColor: theme.glass.border, marginBottom: SP[4] }}>
       {/* Calorie ring */}
       <View style={{ alignItems: 'center', paddingTop: 4 }}>
         <View style={{ width: RING_SIZE, height: RING_SIZE }}>
@@ -315,14 +315,14 @@ function CalorieMacroCard({
           {/* Center text */}
           <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{
-              fontSize: 28, color: T.text.primary, lineHeight: 32,
+              fontSize: 28, color: theme.text.primary, lineHeight: 32,
               fontFamily: TY.sans.semibold, letterSpacing: -0.8,
               ...TY.tabular,
             }}>
               {displayCalories}
             </Text>
             <Text style={{
-              fontSize: 10, color: T.text.secondary, marginTop: 1,
+              fontSize: 10, color: theme.text.secondary, marginTop: 1,
               fontFamily: TY.mono.medium, letterSpacing: 1.4, textTransform: 'uppercase',
             }}>kcal</Text>
             <Text style={{
@@ -335,7 +335,7 @@ function CalorieMacroCard({
         </View>
         {/* Below ring */}
         <Text style={{
-          fontSize: 11, color: T.text.muted, marginTop: 12,
+          fontSize: 11, color: theme.text.muted, marginTop: 12,
           fontFamily: TY.mono.medium, letterSpacing: 1.2, textTransform: 'uppercase',
         }}>
           Daily goal · {calorieTarget} kcal
@@ -585,6 +585,15 @@ export default function NutritionScreen() {
   }, []);
 
   useEffect(() => { loadData(); loadMealPlan(); refreshLimits(); }, [loadData, loadMealPlan, refreshLimits]);
+
+  // Re-check meal plan state whenever the screen re-focuses (e.g. returning from
+  // nutrition-survey after completing it). Tabs stay mounted so useEffect above
+  // only runs once; useFocusEffect catches subsequent focus events.
+  useFocusEffect(
+    useCallback(() => {
+      loadMealPlan();
+    }, [loadMealPlan])
+  );
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
@@ -976,7 +985,7 @@ export default function NutritionScreen() {
   const waterPct = waterInputMode === 'ml'
     ? (waterTargetMl > 0 ? waterAmountMl / waterTargetMl : 0)
     : (dropCount > 0 ? currentGlasses / dropCount : 0);
-  const waterColor = waterPct >= 0.8 ? T.status.success : waterPct >= 0.5 ? T.status.warn : T.text.body;
+  const waterColor = waterPct >= 0.8 ? theme.status.success : waterPct >= 0.5 ? theme.status.warn : theme.text.body;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -1050,8 +1059,8 @@ export default function NutritionScreen() {
             {/* Page 1: Macros */}
             <View style={[s.nutritionSwipePage, { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' }]}>
               <MacroCircle label="Protein" value={totalProtein} target={proteinTarget} unit="g" color={theme.accent} />
-              <MacroCircle label="Carbs" value={totalCarbs} target={carbsTarget} unit="g" color={T.text.secondary} />
-              <MacroCircle label="Fat" value={totalFat} target={fatTarget} unit="g" color={T.status.danger} />
+              <MacroCircle label="Carbs" value={totalCarbs} target={carbsTarget} unit="g" color={theme.text.secondary} />
+              <MacroCircle label="Fat" value={totalFat} target={fatTarget} unit="g" color={theme.status.danger} />
             </View>
             {/* Page 2: Fibre & Micros */}
             <View style={s.nutritionSwipePage}>
@@ -1207,7 +1216,7 @@ export default function NutritionScreen() {
                 disabled={!chatInput.trim() || chatLoading}
                 activeOpacity={0.7}
               >
-                <Ionicons name="arrow-up" size={18} color={T.text.primary} />
+                <Ionicons name="arrow-up" size={18} color={theme.accentInk} />
               </TouchableOpacity>
             </View>
           </View>
@@ -1216,7 +1225,7 @@ export default function NutritionScreen() {
         {/* ── Meal Modified Banner ── */}
         {mealModifiedBanner && (
           <View style={s.mealModifiedBanner}>
-            <Ionicons name="checkmark-circle" size={16} color={T.status.success} />
+            <Ionicons name="checkmark-circle" size={16} color={theme.status.success} />
             <Text style={s.mealModifiedBannerText}>{mealModifiedBanner}</Text>
           </View>
         )}
@@ -1301,7 +1310,7 @@ export default function NutritionScreen() {
                     setWaterContainerSizeMl(res.container_size_ml);
                   } catch {} finally { setWaterLoading(false); }
                 }}
-                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: T.glass.card, borderWidth: 1, borderColor: T.glass.border, alignItems: 'center', justifyContent: 'center' }}
+                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.glass.card, borderWidth: 1, borderColor: theme.glass.border, alignItems: 'center', justifyContent: 'center' }}
                 activeOpacity={0.7}
               >
                 <Ionicons name="remove" size={20} color={theme.text.primary} />
@@ -1323,7 +1332,7 @@ export default function NutritionScreen() {
                     setWaterContainerSizeMl(res.container_size_ml);
                   } catch {} finally { setWaterLoading(false); }
                 }}
-                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: T.glass.card, borderWidth: 1, borderColor: T.glass.border, alignItems: 'center', justifyContent: 'center' }}
+                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.glass.card, borderWidth: 1, borderColor: theme.glass.border, alignItems: 'center', justifyContent: 'center' }}
                 activeOpacity={0.7}
               >
                 <Ionicons name="add" size={20} color={theme.text.primary} />
@@ -1387,7 +1396,7 @@ export default function NutritionScreen() {
                     onPress={() => setSettingsInputMode(mode)}
                     style={{
                       flex: 1, paddingVertical: 9, borderRadius: 10, borderWidth: 1, alignItems: 'center',
-                      borderColor: settingsInputMode === mode ? theme.accent : T.glass.border,
+                      borderColor: settingsInputMode === mode ? theme.accent : theme.glass.border,
                       backgroundColor: settingsInputMode === mode ? `${theme.accent}22` : 'transparent',
                     }}
                     activeOpacity={0.7}
@@ -1408,7 +1417,7 @@ export default function NutritionScreen() {
                     onPress={() => setSettingsContainerSize(ml)}
                     style={{
                       flex: 1, paddingVertical: 7, borderRadius: 8, borderWidth: 1, alignItems: 'center',
-                      borderColor: settingsContainerSize === ml ? theme.accent : T.glass.border,
+                      borderColor: settingsContainerSize === ml ? theme.accent : theme.glass.border,
                       backgroundColor: settingsContainerSize === ml ? `${theme.accent}22` : 'transparent',
                     }}
                     activeOpacity={0.7}
@@ -1424,7 +1433,7 @@ export default function NutritionScreen() {
               <Text style={{ fontSize: 11, color: theme.text.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Daily Target (ml)</Text>
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6 }}>
                 <TextInput
-                  style={{ flex: 1, height: 44, backgroundColor: T.glass.card, borderRadius: 10, borderWidth: 1, borderColor: T.glass.border, paddingHorizontal: 12, fontSize: 15, color: theme.text.primary }}
+                  style={{ flex: 1, height: 44, backgroundColor: theme.glass.card, borderRadius: 10, borderWidth: 1, borderColor: theme.glass.border, paddingHorizontal: 12, fontSize: 15, color: theme.text.primary }}
                   placeholder={`${waterTargetMl} (current)`}
                   placeholderTextColor={theme.text.muted}
                   value={settingsTargetInput}
@@ -1433,7 +1442,7 @@ export default function NutritionScreen() {
                 />
                 <TouchableOpacity
                   onPress={() => setSettingsTargetInput('')}
-                  style={{ height: 44, paddingHorizontal: 14, backgroundColor: T.glass.card, borderRadius: 10, borderWidth: 1, borderColor: T.glass.border, alignItems: 'center', justifyContent: 'center' }}
+                  style={{ height: 44, paddingHorizontal: 14, backgroundColor: theme.glass.card, borderRadius: 10, borderWidth: 1, borderColor: theme.glass.border, alignItems: 'center', justifyContent: 'center' }}
                   activeOpacity={0.7}
                 >
                   <Text style={{ fontSize: 12, color: theme.text.muted }}>Reset</Text>
@@ -1601,7 +1610,7 @@ export default function NutritionScreen() {
           >
             <View style={s.surveyPromptLeft}>
               <View style={s.surveyIconWrap}>
-                <Ionicons name="nutrition-outline" size={22} color={T.text.primary} />
+                <Ionicons name="nutrition-outline" size={22} color={theme.text.primary} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.surveyPromptTitle}>Set Up Your Meal Plan</Text>
@@ -1649,7 +1658,7 @@ export default function NutritionScreen() {
             {/* Collapsible body */}
             {mealPlanExpanded && <>
             <View style={s.mpMealList}>
-              {mealPlan.meals.map((meal) => {
+              {(mealPlan.meals ?? []).map((meal) => {
                 const isExpanded = expandedMealId === meal.meal_name;
                 return (
                   <View key={meal.meal_name}>
@@ -1662,7 +1671,7 @@ export default function NutritionScreen() {
                         // Parse meal.time e.g. "8:00 AM", "12:30 PM"
                         const now2 = new Date();
                         const match = /^(\d+):(\d+)\s*(AM|PM)$/i.exec(meal.time?.trim() ?? '');
-                        let dotColor: string = T.glass.border;
+                        let dotColor: string = theme.glass.border;
                         if (match) {
                           let h = parseInt(match[1], 10);
                           const m = parseInt(match[2], 10);
@@ -1671,11 +1680,11 @@ export default function NutritionScreen() {
                           const mealMinutes = h * 60 + m;
                           const nowMinutes = now2.getHours() * 60 + now2.getMinutes();
                           const diff = Math.abs(nowMinutes - mealMinutes);
-                          if (diff <= 30) dotColor = T.status.success;       // current window
-                          else if (mealMinutes < nowMinutes) dotColor = T.text.muted; // past
-                          else dotColor = T.text.muted;                               // upcoming
+                          if (diff <= 30) dotColor = theme.status.success;       // current window
+                          else if (mealMinutes < nowMinutes) dotColor = theme.text.muted; // past
+                          else dotColor = theme.text.muted;                               // upcoming
                         }
-                        const isCurrent = dotColor === T.status.success;
+                        const isCurrent = dotColor === theme.status.success;
                         return (
                           <View style={[s.mpTimingDot, { backgroundColor: dotColor }, isCurrent && { opacity: 1 }]} />
                         );
@@ -1683,7 +1692,7 @@ export default function NutritionScreen() {
                       <Text style={s.mpMealTime}>{meal.time}</Text>
                       <Text style={s.mpMealName} numberOfLines={1}>{meal.meal_name}</Text>
                       <Text style={s.mpMealCals}>{meal.calories}</Text>
-                      <Ionicons name={isExpanded ? 'chevron-down' : 'chevron-forward'} size={13} color={T.text.muted} />
+                      <Ionicons name={isExpanded ? 'chevron-down' : 'chevron-forward'} size={13} color={theme.text.muted} />
                     </TouchableOpacity>
                     {isExpanded && (
                       <View style={s.mpMealExpanded}>
@@ -1702,7 +1711,7 @@ export default function NutritionScreen() {
                             <Text style={s.mpLogBtnText}>Log</Text>
                           </TouchableOpacity>
                           <TouchableOpacity onPress={() => handleBookmarkMeal(meal)} activeOpacity={0.8}>
-                            <Ionicons name="bookmark-outline" size={16} color={T.text.muted} />
+                            <Ionicons name="bookmark-outline" size={16} color={theme.text.muted} />
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -1736,9 +1745,9 @@ export default function NutritionScreen() {
             </TouchableOpacity>
 
             {/* Grocery List — collapsible */}
-            {mealPlan.grocery_items.length > 0 && (() => {
-              const checkedCount = mealPlan.grocery_items.filter(i => !!groceryChecked[i]).length;
-              const total = mealPlan.grocery_items.length;
+            {(mealPlan.grocery_items ?? []).length > 0 && (() => {
+              const checkedCount = (mealPlan.grocery_items ?? []).filter(i => !!groceryChecked[i]).length;
+              const total = (mealPlan.grocery_items ?? []).length;
               return (
                 <View style={s.groceryCard}>
                   {/* Header — always visible */}
@@ -1776,7 +1785,7 @@ export default function NutritionScreen() {
                   {/* Expanded list */}
                   {groceryExpanded && (
                     <View style={s.groceryList}>
-                      {mealPlan.grocery_items.map((item, idx) => {
+                      {(mealPlan.grocery_items ?? []).map((item, idx) => {
                         const checked = !!groceryChecked[item];
                         const dashIdx = item.indexOf(' — ');
                         const itemName = dashIdx !== -1 ? item.slice(0, dashIdx) : item;
@@ -1821,7 +1830,7 @@ export default function NutritionScreen() {
                           {!!meal.calories && <Text style={s.savedMealMacro}>{meal.calories} kcal</Text>}
                           {!!meal.protein_g && <Text style={[s.savedMealMacro, { color: theme.accent }]}>{meal.protein_g}g P</Text>}
                           {!!meal.carbs_g && <Text style={s.savedMealMacro}>{meal.carbs_g}g C</Text>}
-                          {!!meal.fat_g && <Text style={[s.savedMealMacro, { color: T.status.danger }]}>{meal.fat_g}g F</Text>}
+                          {!!meal.fat_g && <Text style={[s.savedMealMacro, { color: theme.status.danger }]}>{meal.fat_g}g F</Text>}
                         </View>
                       </View>
                       <TouchableOpacity onPress={() => handleDeleteSavedMeal(meal.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 4, marginLeft: 8 }}>
@@ -1906,8 +1915,8 @@ export default function NutritionScreen() {
               {[
                 { key: 'calories', label: 'Calories', unit: 'kcal', color: theme.text.primary },
                 { key: 'protein_g', label: 'Protein', unit: 'g', color: theme.accent },
-                { key: 'carbs_g', label: 'Carbs', unit: 'g', color: T.text.secondary },
-                { key: 'fat_g', label: 'Fat', unit: 'g', color: T.status.danger },
+                { key: 'carbs_g', label: 'Carbs', unit: 'g', color: theme.text.secondary },
+                { key: 'fat_g', label: 'Fat', unit: 'g', color: theme.status.danger },
               ].map(({ key, label, unit, color }) => (
                 <View key={key} style={s.macroInputBox}>
                   <TextInput
@@ -2052,8 +2061,8 @@ export default function NutritionScreen() {
                   {[
                     { key: 'calories', label: 'Calories', unit: 'kcal', color: theme.text.primary },
                     { key: 'protein_g', label: 'Protein', unit: 'g', color: theme.accent },
-                    { key: 'carbs_g', label: 'Carbs', unit: 'g', color: T.text.secondary },
-                    { key: 'fat_g', label: 'Fat', unit: 'g', color: T.status.danger },
+                    { key: 'carbs_g', label: 'Carbs', unit: 'g', color: theme.text.secondary },
+                    { key: 'fat_g', label: 'Fat', unit: 'g', color: theme.status.danger },
                   ].map(({ key, label, unit, color }) => (
                     <View key={key} style={s.macroInputBox}>
                       <TextInput
@@ -2113,7 +2122,7 @@ export default function NutritionScreen() {
                 {scanImageUri && (
                   <Image source={{ uri: scanImageUri }} style={s.scanThumbnailLarge} />
                 )}
-                <Ionicons name="alert-circle-outline" size={40} color={T.status.danger} style={{ marginTop: 16 }} />
+                <Ionicons name="alert-circle-outline" size={40} color={theme.status.danger} style={{ marginTop: 16 }} />
                 <Text style={s.scanErrorTitle}>Could not analyze this photo</Text>
                 <Text style={s.scanErrorDetail}>{scanError}</Text>
                 <TouchableOpacity style={s.scanRetryBtn} onPress={() => { resetScan(); handleScanPhoto(); }} activeOpacity={0.75}>

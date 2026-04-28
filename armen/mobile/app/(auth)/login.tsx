@@ -12,6 +12,7 @@ import {
   Animated,
 } from 'react-native';
 import { Link, router } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { login, getMe } from '@/services/api';
 import { useAuthStore } from '@/services/authStore';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -84,7 +85,8 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <SafeAreaView style={s.root} edges={['top', 'bottom']}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
 
         <View style={s.wordmarkSection}>
@@ -165,6 +167,7 @@ export default function LoginScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -187,7 +190,7 @@ function createStyles(t: ThemeColors) {
     inputGroup: { marginBottom: SP[4] },
     label: { fontFamily: TY.sans.medium, fontSize: TY.size.small + 1, color: t.text.secondary, marginBottom: SP[2], letterSpacing: 0.3 },
     passwordLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SP[2] },
-    forgotText: { fontFamily: TY.sans.regular, fontSize: TY.size.small + 1, color: t.text.muted, textDecorationLine: 'underline' },
+    forgotText: { fontFamily: TY.sans.regular, fontSize: TY.size.small + 1, color: t.text.secondary, textDecorationLine: 'underline' },
     input: {
       fontFamily: TY.sans.regular,
       backgroundColor: t.bg.elevated,

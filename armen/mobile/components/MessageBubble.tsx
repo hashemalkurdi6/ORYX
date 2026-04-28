@@ -33,7 +33,7 @@ export default function MessageBubble({
   const { theme, radius, space } = useTheme();
 
   const bg = isMine ? theme.accentDim : theme.glass.card;
-  const border = isMine ? 'rgba(222,255,71,0.30)' : theme.glass.border;
+  const border = isMine ? theme.accentDim : theme.glass.border;
   const textColor = isDeleted ? theme.text.muted : theme.text.primary;
   const fontStyle = isDeleted ? ('italic' as const) : ('normal' as const);
 

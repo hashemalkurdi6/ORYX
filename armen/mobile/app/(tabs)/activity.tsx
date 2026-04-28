@@ -68,7 +68,7 @@ import {
 
 type IntensityType = 'Easy' | 'Moderate' | 'Hard' | 'Max';
 type LogStep = 'sport' | 'cardio' | 'strength' | 'rpe' | 'review';
-type FilterType = 'All' | 'Strength' | 'Cardio' | 'Sport' | 'Strava' | 'Hevy';
+type FilterType = 'All' | 'Strength' | 'Cardio' | 'Mind-body' | 'Sport' | 'Strava' | 'Hevy';
 type SetType = 'working' | 'warmup' | 'drop' | 'failure';
 
 interface ExerciseSet {
@@ -100,7 +100,7 @@ type FeedItem =
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const FILTERS: FilterType[] = ['All', 'Strength', 'Cardio', 'Sport', 'Strava', 'Hevy'];
+const FILTERS: FilterType[] = ['All', 'Strength', 'Cardio', 'Mind-body', 'Sport', 'Strava', 'Hevy'];
 const INTENSITIES: IntensityType[] = ['Easy', 'Moderate', 'Hard', 'Max'];
 // Evaluated at call time so color tokens track the active theme (module-level
 // array literals would freeze the palette to whatever theme was live at import).
@@ -255,7 +255,8 @@ function getWeekLabel(weekKey: string): string {
 const FILTER_EMPTY: Record<FilterType, { icon: string; title: string; subtitle: string; action?: string }> = {
   All: { icon: 'barbell-outline', title: 'No activities yet', subtitle: 'Tap + to record your first session' },
   Strength: { icon: 'barbell-outline', title: 'No strength sessions yet', subtitle: 'Tap + to log a workout' },
-  Cardio: { icon: 'walk-outline', title: 'No cardio sessions yet', subtitle: 'Log a run or connect Strava' },
+  Cardio: { icon: 'walk-outline', title: 'No cardio sessions yet', subtitle: 'Log a run, outdoor track, or hike' },
+  'Mind-body': { icon: 'leaf-outline', title: 'No mind-body sessions yet', subtitle: 'Log a yoga, pilates, or meditation session' },
   Sport: { icon: 'football-outline', title: 'No sport sessions yet', subtitle: 'Tap + to log a sport session' },
   Strava: { icon: 'bicycle-outline', title: 'No Strava activities', subtitle: 'Connect Strava in Settings to sync' },
   Hevy: { icon: 'barbell-outline', title: 'No Hevy workouts', subtitle: 'Connect Hevy in Settings to sync' },
@@ -938,10 +939,10 @@ const CardioLogger = ({
           disabled={!duration || submitting}
         >
           {submitting ? (
-            <ActivityIndicator color={T.text.primary} />
+            <ActivityIndicator color={T.accentInk} />
           ) : (
             <>
-              <Ionicons name="checkmark-circle-outline" size={20} color={T.text.primary} />
+              <Ionicons name="checkmark-circle-outline" size={20} color={T.accentInk} />
               <Text style={styles.submitBtnText}>Log Session</Text>
             </>
           )}
@@ -1688,6 +1689,7 @@ const WeeklyLoadCard = ({ data }: { data: WeeklyLoad }) => {
 // ── Activity Heatmap ───────────────────────────────────────────────────────────
 
 const ActivityHeatmap = ({ data }: { data: HeatmapEntry[] }) => {
+  const { theme: hmTheme } = useTheme();
   const dateMap = useMemo(() => new Map(data.map(d => [d.date, d])), [data]);
 
   const weeks = useMemo(() => {
@@ -1705,12 +1707,12 @@ const ActivityHeatmap = ({ data }: { data: HeatmapEntry[] }) => {
   }, [dateMap]);
 
   const getColor = (entry?: HeatmapEntry) => {
-    if (!entry) return T.glass.card;
+    if (!entry) return hmTheme.glass.card;
     const h = entry.total_minutes;
-    if (h >= 90) return T.text.primary;
-    if (h >= 45) return T.text.primary;
-    if (h >= 20) return T.glass.card;
-    return T.glass.border;
+    if (h >= 90) return hmTheme.accent;
+    if (h >= 45) return hmTheme.accentDim;
+    if (h >= 20) return hmTheme.glass.cardHi;
+    return hmTheme.glass.border;
   };
 
   return (
@@ -1919,7 +1921,7 @@ export default function ActivityScreen() {
     } catch { /* non-fatal */ } finally {
       setLoadingMore(false);
     }
-  }, [stravaPage, hasMoreStrava, weeklyGroups.length, extraWeeks]);
+  }, [stravaPage, hasMoreStrava, feed.length, extraWeeks]);
 
   const handleOutdoorSave = useCallback(async (activity: SavedOutdoorActivity) => {
     setShowOutdoorTracker(false);
@@ -1927,7 +1929,17 @@ export default function ActivityScreen() {
       await logActivity({
         activity_type: activity.activityType.charAt(0).toUpperCase() + activity.activityType.slice(1),
         duration_minutes: Math.max(1, Math.round(activity.durationS / 60)),
-        intensity: activity.summary.avgSpeedKmh > 10 ? 'Hard' : activity.summary.avgSpeedKmh > 6 ? 'Moderate' : 'Easy',
+        intensity: (() => {
+          const spd = activity.summary.avgSpeedKmh;
+          if (activity.activityType === 'cycling') {
+            return spd > 25 ? 'Hard' : spd > 15 ? 'Moderate' : 'Easy';
+          }
+          if (activity.activityType === 'walking' || activity.activityType === 'hiking') {
+            return spd > 7 ? 'Hard' : spd > 4 ? 'Moderate' : 'Easy';
+          }
+          // running / jogging
+          return spd > 12 ? 'Hard' : spd > 8 ? 'Moderate' : 'Easy';
+        })(),
         distance_meters: activity.distanceM,
         sport_category: 'cardio',
         muscle_groups: activity.activityType === 'cycling'
@@ -2175,11 +2187,12 @@ export default function ActivityScreen() {
     let result = feed;
     if (filter === 'Hevy') result = feed.filter(f => f.kind === 'hevy');
     else if (filter === 'Strava') result = feed.filter(f => f.kind === 'strava');
-    else if (filter === 'Strength') result = feed.filter(f => (f.kind === 'manual' && f.data.sport_category === 'strength') || f.kind === 'hevy');
+    else if (filter === 'Strength') result = feed.filter(f => f.kind === 'manual' && f.data.sport_category === 'strength');
     else if (filter === 'Cardio') result = feed.filter(f =>
       (f.kind === 'manual' && (f.data.sport_category === 'cardio' || f.data.sport_category === 'other')) ||
       f.kind === 'strava'
     );
+    else if (filter === 'Mind-body') result = feed.filter(f => f.kind === 'manual' && f.data.sport_category === 'mindBody');
     else if (filter === 'Sport') result = feed.filter(f => f.kind === 'manual' && (f.data.sport_category === 'sport' || f.data.sport_category === 'combat'));
 
     if (journalSearch.trim()) {
@@ -2898,7 +2911,7 @@ function createStyles(t: ThemeColors) {
     fontSize: 11, color: t.text.muted,
     fontFamily: TY.mono.regular, letterSpacing: 0.3,
   },
-  stepsBarBg: { height: 6, backgroundColor: T.hairline, borderRadius: R.pill, overflow: 'hidden' },
+  stepsBarBg: { height: 6, backgroundColor: t.hairline, borderRadius: R.pill, overflow: 'hidden' },
   stepsBarFill: { height: 6, borderRadius: R.pill },
 
   // Stats bar — two rows of 3
@@ -2940,7 +2953,7 @@ function createStyles(t: ThemeColors) {
   heatmapLegend: { flexDirection: 'row', gap: 12, marginTop: 8 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendDot: { width: 10, height: 10, borderRadius: 2 },
-  legendText: { fontSize: 10, color: T.text.muted },
+  legendText: { fontSize: 10, color: t.text.muted },
 
   // Breakdown
   breakdownRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 8 },
@@ -2948,7 +2961,7 @@ function createStyles(t: ThemeColors) {
     width: 72, fontSize: 12, color: t.text.secondary,
     fontFamily: TY.sans.regular,
   },
-  breakdownBarBg: { flex: 1, height: 8, backgroundColor: T.hairline, borderRadius: R.pill, overflow: 'hidden' },
+  breakdownBarBg: { flex: 1, height: 8, backgroundColor: t.hairline, borderRadius: R.pill, overflow: 'hidden' },
   breakdownBarFill: { height: 8, borderRadius: R.pill },
   breakdownPct: {
     width: 40, fontSize: 11, color: t.text.secondary, textAlign: 'right',
@@ -3001,7 +3014,7 @@ function createStyles(t: ThemeColors) {
     fontSize: 12, color: t.text.secondary,
     fontFamily: TY.mono.regular, letterSpacing: 0.3,
   },
-  goalBarBg: { height: 6, backgroundColor: T.hairline, borderRadius: R.pill, overflow: 'hidden' },
+  goalBarBg: { height: 6, backgroundColor: t.hairline, borderRadius: R.pill, overflow: 'hidden' },
   goalBarFill: { height: 6, borderRadius: R.pill },
 
   // Journal
@@ -3086,7 +3099,7 @@ function createStyles(t: ThemeColors) {
   },
 
   // Log modal
-  logModalContainer: { flex: 1, backgroundColor: T.bg.primary },
+  logModalContainer: { flex: 1, backgroundColor: t.bg.primary },
 
   // Sport selector
   sportSelectorHeader: {
@@ -3150,20 +3163,20 @@ function createStyles(t: ThemeColors) {
   },
 
   // Strength builder
-  strengthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: T.glass.card },
-  elapsedTimer: { fontSize: 22, fontWeight: '700', color: T.text.primary },
-  elapsedLabel: { fontSize: 11, color: T.text.muted, textAlign: 'center' },
-  completeBtn: { backgroundColor: T.status.success, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-  completeBtnText: { color: T.text.primary, fontWeight: '700', fontSize: 14 },
+  strengthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: t.glass.border },
+  elapsedTimer: { fontSize: 22, fontWeight: '700', color: t.text.primary },
+  elapsedLabel: { fontSize: 11, color: t.text.muted, textAlign: 'center' },
+  completeBtn: { backgroundColor: t.status.success, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  completeBtnText: { color: t.bg.primary, fontWeight: '700', fontSize: 14 },
   strengthScrollContent: { paddingHorizontal: 16, paddingBottom: 20 },
-  workoutNameInput: { marginHorizontal: 16, marginVertical: 10, backgroundColor: T.glass.card, borderRadius: 10, padding: 12, fontSize: 15, fontWeight: '600', color: T.text.primary, borderWidth: 1, borderColor: T.glass.card },
+  workoutNameInput: { marginHorizontal: 16, marginVertical: 10, backgroundColor: t.glass.card, borderRadius: 10, padding: 12, fontSize: 15, fontWeight: '600', color: t.text.primary, borderWidth: 1, borderColor: t.glass.border },
 
   // Exercise card
-  exerciseCard: { backgroundColor: T.glass.card, borderRadius: 12, padding: 12, marginBottom: 12 },
+  exerciseCard: { backgroundColor: t.glass.card, borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: t.glass.border },
   exerciseCardInSuperset: {
     marginLeft: 12,
     borderLeftWidth: 2,
-    borderLeftColor: T.accent,
+    borderLeftColor: t.accent,
     borderTopLeftRadius: 4,
     borderBottomLeftRadius: 4,
   },
@@ -3178,155 +3191,155 @@ function createStyles(t: ThemeColors) {
   supersetHeaderBar: {
     width: 18,
     height: 2,
-    backgroundColor: T.accent,
+    backgroundColor: t.accent,
     borderRadius: 1,
   },
   supersetHeaderText: {
     fontFamily: TY.mono.semibold,
     fontSize: 10,
-    color: T.accent,
+    color: t.accent,
     letterSpacing: 1.2,
   },
   exerciseCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  exerciseCardName: { flex: 1, fontSize: 15, fontWeight: '600', color: T.text.primary },
+  exerciseCardName: { flex: 1, fontSize: 15, fontWeight: '600', color: t.text.primary },
   exDot: { width: 10, height: 10, borderRadius: 5 },
 
   // Set headers
   setHeaderRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 2, marginBottom: 4 },
-  setHeaderNum: { width: 22, fontSize: 10, color: T.text.muted, textAlign: 'center' },
-  setHeaderType: { width: 32, fontSize: 10, color: T.text.muted, textAlign: 'center' },
-  setHeaderInput: { flex: 1, fontSize: 10, color: T.text.muted, textAlign: 'center' },
-  setHeaderRPE: { width: 36, fontSize: 10, color: T.text.muted, textAlign: 'center' },
-  setHeaderCheck: { width: 28, fontSize: 10, color: T.text.muted, textAlign: 'center' },
+  setHeaderNum: { width: 22, fontSize: 10, color: t.text.muted, textAlign: 'center' },
+  setHeaderType: { width: 32, fontSize: 10, color: t.text.muted, textAlign: 'center' },
+  setHeaderInput: { flex: 1, fontSize: 10, color: t.text.muted, textAlign: 'center' },
+  setHeaderRPE: { width: 36, fontSize: 10, color: t.text.muted, textAlign: 'center' },
+  setHeaderCheck: { width: 28, fontSize: 10, color: t.text.muted, textAlign: 'center' },
 
   // Set row
   setRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5, gap: 4 },
   setRowCompleted: { opacity: 0.6 },
-  setNum: { width: 22, fontSize: 12, color: T.text.muted, textAlign: 'center' },
+  setNum: { width: 22, fontSize: 12, color: t.text.muted, textAlign: 'center' },
   setTypePill: { width: 30, height: 24, borderRadius: 6, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   setTypeText: { fontSize: 11, fontWeight: '700' },
-  setInput: { flex: 1, height: 34, backgroundColor: T.bg.primary, borderRadius: 6, textAlign: 'center', color: T.text.primary, fontSize: 13, borderWidth: 1, borderColor: T.hairline },
+  setInput: { flex: 1, height: 34, backgroundColor: t.bg.elevated, borderRadius: 6, textAlign: 'center', color: t.text.primary, fontSize: 13, borderWidth: 1, borderColor: t.hairline },
   setInputRPE: { width: 36, flex: 0 },
   setCheckBtn: { width: 28, alignItems: 'center' },
 
   addSetBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, justifyContent: 'center' },
-  addSetText: { fontSize: 13, color: T.text.primary, fontWeight: '600' },
-  exNotesInput: { marginTop: 4, backgroundColor: T.bg.primary, borderRadius: 8, padding: 8, fontSize: 12, color: T.text.secondary, borderWidth: 1, borderColor: T.glass.card },
+  addSetText: { fontSize: 13, color: t.text.primary, fontWeight: '600' },
+  exNotesInput: { marginTop: 4, backgroundColor: t.bg.elevated, borderRadius: 8, padding: 8, fontSize: 12, color: t.text.secondary, borderWidth: 1, borderColor: t.glass.border },
 
-  addExerciseBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: T.glass.card, borderRadius: 12, padding: 14, justifyContent: 'center', borderWidth: 1, borderColor: T.text.primary + '44' },
-  addExerciseText: { fontSize: 14, color: T.text.primary, fontWeight: '600' },
+  addExerciseBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: t.glass.card, borderRadius: 12, padding: 14, justifyContent: 'center', borderWidth: 1, borderColor: t.glass.border },
+  addExerciseText: { fontSize: 14, color: t.text.primary, fontWeight: '600' },
 
   // Rest timer
-  restTimerBanner: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: T.glass.card, paddingVertical: 14, paddingHorizontal: 20, borderTopWidth: 1, borderTopColor: T.glass.border, alignItems: 'center', gap: 4 },
-  restTimerLabel: { fontSize: 11, color: T.text.secondary, textTransform: 'uppercase', letterSpacing: 1 },
-  restTimerCount: { fontSize: 32, fontWeight: '700', color: T.text.primary },
+  restTimerBanner: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: t.bg.elevated, paddingVertical: 14, paddingHorizontal: 20, borderTopWidth: 1, borderTopColor: t.glass.border, alignItems: 'center', gap: 4 },
+  restTimerLabel: { fontSize: 11, color: t.text.secondary, textTransform: 'uppercase', letterSpacing: 1 },
+  restTimerCount: { fontSize: 32, fontWeight: '700', color: t.text.primary },
   restTimerRow: { flexDirection: 'row', gap: 16, alignItems: 'center' },
-  restAdjBtn: { paddingHorizontal: 14, paddingVertical: 7, backgroundColor: T.glass.card, borderRadius: 8 },
-  restAdjText: { fontSize: 13, color: T.text.secondary },
-  restSkipBtn: { paddingHorizontal: 24, paddingVertical: 8, backgroundColor: T.text.primary, borderRadius: 20 },
-  restSkipText: { fontSize: 13, fontWeight: '600', color: T.text.primary },
+  restAdjBtn: { paddingHorizontal: 14, paddingVertical: 7, backgroundColor: t.glass.card, borderRadius: 8, borderWidth: 1, borderColor: t.glass.border },
+  restAdjText: { fontSize: 13, color: t.text.secondary },
+  restSkipBtn: { paddingHorizontal: 24, paddingVertical: 8, backgroundColor: t.accent, borderRadius: 20 },
+  restSkipText: { fontSize: 13, fontWeight: '600', color: t.accentInk },
 
   // Exercise search
-  exSearchContainer: { flex: 1, backgroundColor: T.bg.primary },
+  exSearchContainer: { flex: 1, backgroundColor: t.bg.primary },
   exSearchHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16 },
-  exSearchTitle: { fontSize: 20, fontWeight: '700', color: T.text.primary },
-  exSearchInputWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, backgroundColor: T.glass.card, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
-  exSearchInput: { flex: 1, fontSize: 14, color: T.text.primary },
-  exRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: T.glass.card, gap: 10 },
+  exSearchTitle: { fontSize: 20, fontWeight: '700', color: t.text.primary },
+  exSearchInputWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, backgroundColor: t.bg.elevated, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: t.glass.border },
+  exSearchInput: { flex: 1, fontSize: 14, color: t.text.primary },
+  exRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.divider, gap: 10 },
   exRowInfo: { flex: 1 },
-  exRowName: { fontSize: 14, fontWeight: '600', color: T.text.primary },
-  exRowGroup: { fontSize: 12, color: T.text.muted, marginTop: 1 },
+  exRowName: { fontSize: 14, fontWeight: '600', color: t.text.primary },
+  exRowGroup: { fontSize: 12, color: t.text.muted, marginTop: 1 },
 
   // Cardio form
-  cardioHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: T.glass.card },
+  cardioHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: t.glass.border },
   cardioSportTag: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  cardioSportLabel: { fontSize: 15, fontWeight: '600', color: T.text.primary },
+  cardioSportLabel: { fontSize: 15, fontWeight: '600', color: t.text.primary },
   cardioScrollContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 },
   cardioRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   cardioField: { flex: 1 },
-  cardioFieldLabel: { fontSize: 12, color: T.text.secondary, marginBottom: 6 },
-  cardioInputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: T.glass.card, borderRadius: 10, borderWidth: 1, borderColor: T.glass.card, paddingHorizontal: 12 },
-  cardioInput: { flex: 1, paddingVertical: 12, fontSize: 16, color: T.text.primary },
-  cardioUnit: { fontSize: 13, color: T.text.muted },
-  sectionLabel: { fontSize: 12, color: T.text.secondary, marginBottom: 8, marginTop: 4 },
+  cardioFieldLabel: { fontSize: 12, color: t.text.secondary, marginBottom: 6 },
+  cardioInputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: t.bg.elevated, borderRadius: 10, borderWidth: 1, borderColor: t.glass.border, paddingHorizontal: 12 },
+  cardioInput: { flex: 1, paddingVertical: 12, fontSize: 16, color: t.text.primary },
+  cardioUnit: { fontSize: 13, color: t.text.muted },
+  sectionLabel: { fontSize: 12, color: t.text.secondary, marginBottom: 8, marginTop: 4 },
   intensityRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  intensityPill: { flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: T.glass.card, alignItems: 'center', borderWidth: 1, borderColor: T.glass.card },
-  intensityPillText: { fontSize: 12, fontWeight: '600', color: T.text.secondary },
-  calsPreviewCard: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: T.glass.card, borderRadius: 10, padding: 12, marginBottom: 16 },
-  calsPreviewText: { fontSize: 14, color: T.status.danger, fontWeight: '600' },
-  notesInput: { backgroundColor: T.glass.card, borderRadius: 10, padding: 12, fontSize: 13, color: T.text.secondary, borderWidth: 1, borderColor: T.glass.card, minHeight: 80, textAlignVertical: 'top', marginBottom: 20 },
-  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: T.text.primary, paddingVertical: 14, borderRadius: 12 },
-  submitBtnText: { fontSize: 15, fontWeight: '700', color: T.text.primary },
+  intensityPill: { flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: t.glass.card, alignItems: 'center', borderWidth: 1, borderColor: t.glass.border },
+  intensityPillText: { fontSize: 12, fontWeight: '600', color: t.text.secondary },
+  calsPreviewCard: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: t.glass.card, borderRadius: 10, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: t.glass.border },
+  calsPreviewText: { fontSize: 14, color: t.status.danger, fontWeight: '600' },
+  notesInput: { backgroundColor: t.bg.elevated, borderRadius: 10, padding: 12, fontSize: 13, color: t.text.body, borderWidth: 1, borderColor: t.glass.border, minHeight: 80, textAlignVertical: 'top', marginBottom: 20 },
+  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: t.accent, paddingVertical: 14, borderRadius: 12 },
+  submitBtnText: { fontSize: 15, fontWeight: '700', color: t.accentInk },
 
   // Post session / review
   reviewScroll: { padding: 24, paddingTop: 80, alignItems: 'center' },
   reviewCheckCircle: { marginBottom: 12 },
-  reviewTitle: { fontSize: 22, fontWeight: '700', color: T.text.primary, marginBottom: 4 },
-  reviewSubtitle: { fontSize: 14, color: T.text.secondary, marginBottom: 20 },
+  reviewTitle: { fontSize: 22, fontWeight: '700', color: t.text.primary, marginBottom: 4 },
+  reviewSubtitle: { fontSize: 14, color: t.text.secondary, marginBottom: 20 },
   reviewStatsRow: { flexDirection: 'row', gap: 12, marginBottom: 20, flexWrap: 'wrap', justifyContent: 'center' },
-  reviewStat: { backgroundColor: T.glass.card, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, alignItems: 'center', minWidth: 80 },
-  reviewStatVal: { fontSize: 20, fontWeight: '700', color: T.text.primary },
-  reviewStatLabel: { fontSize: 11, color: T.text.muted, marginTop: 2 },
+  reviewStat: { backgroundColor: t.glass.card, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, alignItems: 'center', minWidth: 80, borderWidth: 1, borderColor: t.glass.border },
+  reviewStatVal: { fontSize: 20, fontWeight: '700', color: t.text.primary },
+  reviewStatLabel: { fontSize: 11, color: t.text.muted, marginTop: 2 },
   reviewSection: { width: '100%', marginBottom: 16 },
-  reviewSectionTitle: { fontSize: 12, color: T.text.secondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+  reviewSectionTitle: { fontSize: 12, color: t.text.secondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
   muscleTagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   muscleTag: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
   muscleDot: { width: 7, height: 7, borderRadius: 3.5 },
   muscleTagText: { fontSize: 12, fontWeight: '600' },
-  stravaMapWrap: { width: '100%', height: 220, borderRadius: 16, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: T.glass.border },
+  stravaMapWrap: { width: '100%', height: 220, borderRadius: 16, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: t.glass.border },
   stravaMap: { width: '100%', height: '100%' },
   generateAutopsyBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16, paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12, borderWidth: 1, borderColor: '#FC4C02', backgroundColor: 'rgba(252,76,2,0.08)', justifyContent: 'center' },
   generateAutopsyText: { fontSize: 14, fontWeight: '600', color: '#FC4C02' },
-  autopsyCard: { width: '100%', backgroundColor: T.glass.card, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: T.glass.border },
+  autopsyCard: { width: '100%', backgroundColor: t.glass.card, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: t.glass.border },
   autopsyHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-  autopsyTitle: { fontSize: 12, fontWeight: '700', color: T.text.primary, textTransform: 'uppercase', letterSpacing: 0.5 },
-  autopsyText: { fontSize: 13, color: T.text.secondary, lineHeight: 20 },
-  autopsyGenerating: { fontSize: 13, color: T.text.muted, marginTop: 8, textAlign: 'center' },
-  doneBtn: { marginTop: 24, backgroundColor: T.text.primary, paddingHorizontal: 48, paddingVertical: 14, borderRadius: 12, width: '100%', alignItems: 'center' },
-  doneBtnText: { fontSize: 16, fontWeight: '700', color: T.text.primary },
+  autopsyTitle: { fontSize: 12, fontWeight: '700', color: t.text.primary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  autopsyText: { fontSize: 13, color: t.text.secondary, lineHeight: 20 },
+  autopsyGenerating: { fontSize: 13, color: t.text.muted, marginTop: 8, textAlign: 'center' },
+  doneBtn: { marginTop: 24, backgroundColor: t.accent, paddingHorizontal: 48, paddingVertical: 14, borderRadius: 12, width: '100%', alignItems: 'center' },
+  doneBtnText: { fontSize: 16, fontWeight: '700', color: t.accentInk },
   reviewLoading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 },
-  reviewLoadingText: { fontSize: 14, color: T.text.secondary },
+  reviewLoadingText: { fontSize: 14, color: t.text.secondary },
 
   // Autopsy retry
-  autopsyRetryBtn: { marginTop: 10, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: T.glass.border, borderRadius: 8, alignSelf: 'flex-start' },
-  autopsyRetryText: { fontSize: 13, color: T.text.primary, fontWeight: '600' },
+  autopsyRetryBtn: { marginTop: 10, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: t.glass.card, borderRadius: 8, alignSelf: 'flex-start', borderWidth: 1, borderColor: t.glass.border },
+  autopsyRetryText: { fontSize: 13, color: t.text.primary, fontWeight: '600' },
 
   // Plus button (matches Nutrition page)
-  plusBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: T.text.primary, alignItems: 'center', justifyContent: 'center' },
+  plusBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: t.accent, alignItems: 'center', justifyContent: 'center' },
 
   // Action menu
   menuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  menuSheet: { backgroundColor: T.glass.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingHorizontal: 20, paddingBottom: 40, borderWidth: 1, borderColor: T.glass.border },
-  menuHandle: { width: 40, height: 4, backgroundColor: T.glass.border, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: T.glass.border },
-  menuIconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: T.glass.border, alignItems: 'center', justifyContent: 'center' },
-  menuItemText: { flex: 1, fontSize: 16, color: T.text.primary, fontWeight: '500' },
+  menuSheet: { backgroundColor: t.bg.elevated, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingHorizontal: 20, paddingBottom: 40, borderWidth: 1, borderColor: t.glass.border },
+  menuHandle: { width: 40, height: 4, backgroundColor: t.glass.border, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: t.glass.border },
+  menuIconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: t.glass.pill, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: t.glass.border },
+  menuItemText: { flex: 1, fontSize: 16, color: t.text.primary, fontWeight: '500' },
 
   // Expanded modal
-  expandContainer: { flex: 1, backgroundColor: T.bg.primary },
+  expandContainer: { flex: 1, backgroundColor: t.bg.primary },
   expandHeader: { paddingHorizontal: 20, paddingVertical: 12 },
   expandScroll: { padding: 20 },
-  expandTitle: { fontSize: 22, fontWeight: '700', color: T.text.primary, marginBottom: 4 },
-  expandMeta: { fontSize: 13, color: T.text.secondary, marginBottom: 4 },
-  expandSectionTitle: { fontSize: 12, color: T.text.secondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 16, marginBottom: 8 },
-  expandExRow: { backgroundColor: T.glass.card, borderRadius: 10, padding: 10, marginBottom: 8 },
-  expandExName: { fontSize: 13, fontWeight: '600', color: T.text.primary, marginBottom: 4 },
-  expandSetText: { fontSize: 12, color: T.text.secondary, marginBottom: 2 },
-  expandNotes: { fontSize: 13, color: T.text.secondary, fontStyle: 'italic', marginTop: 16 },
+  expandTitle: { fontSize: 22, fontWeight: '700', color: t.text.primary, marginBottom: 4 },
+  expandMeta: { fontSize: 13, color: t.text.secondary, marginBottom: 4 },
+  expandSectionTitle: { fontSize: 12, color: t.text.secondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 16, marginBottom: 8 },
+  expandExRow: { backgroundColor: t.glass.card, borderRadius: 10, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: t.glass.border },
+  expandExName: { fontSize: 13, fontWeight: '600', color: t.text.primary, marginBottom: 4 },
+  expandSetText: { fontSize: 12, color: t.text.secondary, marginBottom: 2 },
+  expandNotes: { fontSize: 13, color: t.text.secondary, fontStyle: 'italic', marginTop: 16 },
 
   // RPE Prompt
-  rpeContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, gap: 20 },
-  rpeQuestion: { fontSize: 24, fontWeight: '700', color: T.text.primary, textAlign: 'center' },
-  rpeSubtitle: { fontSize: 14, color: T.text.secondary, textAlign: 'center', marginTop: -12 },
+  rpeContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, gap: 20, backgroundColor: t.bg.primary },
+  rpeQuestion: { fontSize: 24, fontWeight: '700', color: t.text.primary, textAlign: 'center' },
+  rpeSubtitle: { fontSize: 14, color: t.text.secondary, textAlign: 'center', marginTop: -12 },
   rpeCirclesRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center' },
-  rpeCircle: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: T.glass.border, backgroundColor: T.glass.card, alignItems: 'center', justifyContent: 'center' },
-  rpeCircleNum: { fontSize: 15, fontWeight: '700', color: T.text.primary },
+  rpeCircle: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: t.glass.border, backgroundColor: t.glass.card, alignItems: 'center', justifyContent: 'center' },
+  rpeCircleNum: { fontSize: 15, fontWeight: '700', color: t.text.primary },
   rpeLabelPill: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
   rpeLabelText: { fontSize: 13, fontWeight: '600' },
-  rpeSubmitBtn: { backgroundColor: T.text.primary, paddingHorizontal: 48, paddingVertical: 14, borderRadius: 12, width: '100%', alignItems: 'center' },
-  rpeSubmitText: { fontSize: 16, fontWeight: '700', color: T.bg.primary },
+  rpeSubmitBtn: { backgroundColor: t.accent, paddingHorizontal: 48, paddingVertical: 14, borderRadius: 12, width: '100%', alignItems: 'center' },
+  rpeSubmitText: { fontSize: 16, fontWeight: '700', color: t.accentInk },
   rpeSkipBtn: { paddingVertical: 10 },
-  rpeSkipText: { fontSize: 14, color: T.text.muted },
+  rpeSkipText: { fontSize: 14, color: t.text.muted },
 
   // Load badge (feed card)
   loadBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
@@ -3354,35 +3367,35 @@ function createStyles(t: ThemeColors) {
     fontSize: 13, color: t.text.body, lineHeight: 19,
     fontFamily: TY.sans.regular,
   },
-  restDayBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: T.status.warn + '22', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, alignSelf: 'flex-start', borderWidth: 1, borderColor: T.status.warn },
-  restDayBannerText: { fontSize: 12, fontWeight: '600', color: T.status.warn },
+  restDayBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: t.status.warn + '22', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, alignSelf: 'flex-start', borderWidth: 1, borderColor: t.status.warn },
+  restDayBannerText: { fontSize: 12, fontWeight: '600', color: t.status.warn },
   restModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: 32 },
-  restModalSheet: { backgroundColor: T.glass.card, borderRadius: 20, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: T.glass.border, width: '100%' },
-  restModalTitle: { fontSize: 18, fontWeight: '700', color: T.text.primary, marginBottom: 12, textAlign: 'center' },
-  restModalBody: { fontSize: 14, color: T.text.secondary, lineHeight: 21, textAlign: 'center', marginBottom: 20 },
-  restModalDismiss: { backgroundColor: T.glass.border, paddingHorizontal: 32, paddingVertical: 12, borderRadius: 10 },
-  restModalDismissText: { fontSize: 14, fontWeight: '600', color: T.text.primary },
+  restModalSheet: { backgroundColor: t.bg.elevated, borderRadius: 20, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: t.glass.border, width: '100%' },
+  restModalTitle: { fontSize: 18, fontWeight: '700', color: t.text.primary, marginBottom: 12, textAlign: 'center' },
+  restModalBody: { fontSize: 14, color: t.text.secondary, lineHeight: 21, textAlign: 'center', marginBottom: 20 },
+  restModalDismiss: { backgroundColor: t.glass.card, paddingHorizontal: 32, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: t.glass.border },
+  restModalDismissText: { fontSize: 14, fontWeight: '600', color: t.text.primary },
 
   // Goals — reached label
-  goalReachedText: { fontSize: 11, color: T.status.success, fontWeight: '600', marginTop: 2, marginBottom: 4 },
+  goalReachedText: { fontSize: 11, color: t.status.success, fontWeight: '600', marginTop: 2, marginBottom: 4 },
 
   // Feed card — rest day variant
-  feedCardRest: { backgroundColor: T.glass.cardHi },
+  feedCardRest: { backgroundColor: t.glass.cardLo },
 
   // Journal search bar
-  journalSearchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, backgroundColor: T.glass.card, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: T.glass.card },
-  journalSearchInput: { flex: 1, fontSize: 13, color: T.text.primary },
+  journalSearchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, backgroundColor: t.bg.elevated, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: t.glass.border },
+  journalSearchInput: { flex: 1, fontSize: 13, color: t.text.primary },
 
   // Weekly journal group headers
   weekHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 10, marginTop: 4 },
-  weekHeaderLabel: { fontSize: 13, fontWeight: '600', color: T.text.secondary },
-  weekHeaderCount: { fontSize: 11, color: T.text.muted },
+  weekHeaderLabel: { fontSize: 13, fontWeight: '600', color: t.text.secondary },
+  weekHeaderCount: { fontSize: 11, color: t.text.muted },
 
   // Show more / load earlier
-  showMoreBtn: { marginHorizontal: 16, marginBottom: 4, paddingVertical: 10, alignItems: 'center', backgroundColor: T.glass.card, borderRadius: 10, borderWidth: 1, borderColor: T.glass.card },
-  showMoreText: { fontSize: 13, color: T.text.secondary, fontWeight: '500' },
-  loadEarlierBtn: { marginHorizontal: 16, marginTop: 8, marginBottom: 16, paddingVertical: 14, alignItems: 'center', backgroundColor: T.glass.card, borderRadius: 10, borderWidth: 1, borderColor: T.glass.border },
-  loadEarlierText: { fontSize: 13, color: T.text.muted, fontWeight: '500' },
+  showMoreBtn: { marginHorizontal: 16, marginBottom: 4, paddingVertical: 10, alignItems: 'center', backgroundColor: t.glass.card, borderRadius: 10, borderWidth: 1, borderColor: t.glass.border },
+  showMoreText: { fontSize: 13, color: t.text.secondary, fontWeight: '500' },
+  loadEarlierBtn: { marginHorizontal: 16, marginTop: 8, marginBottom: 16, paddingVertical: 14, alignItems: 'center', backgroundColor: t.glass.card, borderRadius: 10, borderWidth: 1, borderColor: t.glass.border },
+  loadEarlierText: { fontSize: 13, color: t.text.muted, fontWeight: '500' },
 
   // Weekly load card
   weeklyLoadCard: {
@@ -3401,15 +3414,15 @@ function createStyles(t: ThemeColors) {
   },
   weeklyLoadChange: { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 6 },
   weeklyLoadChangePct: { fontSize: 12, fontWeight: '600' },
-  weeklyLoadBarBg: { height: 8, backgroundColor: T.glass.border, borderRadius: 4, marginBottom: 4, overflow: 'hidden' },
+  weeklyLoadBarBg: { height: 8, backgroundColor: t.glass.border, borderRadius: 4, marginBottom: 4, overflow: 'hidden' },
   weeklyLoadBarFill: { height: 8, borderRadius: 4 },
-  weeklyLoadAvgLabel: { fontSize: 11, color: T.text.muted, marginBottom: 12 },
+  weeklyLoadAvgLabel: { fontSize: 11, color: t.text.muted, marginBottom: 12 },
   acwrRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  acwrLabel: { fontSize: 12, color: T.text.secondary, fontWeight: '600' },
+  acwrLabel: { fontSize: 12, color: t.text.secondary, fontWeight: '600' },
   acwrValue: { fontSize: 18, fontWeight: '800' },
   acwrStatusPill: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1 },
   acwrStatusText: { fontSize: 11, fontWeight: '600' },
-  acwrInsufficient: { fontSize: 12, color: T.text.muted },
-  acwrExplanation: { fontSize: 12, color: T.text.muted, lineHeight: 17 },
+  acwrInsufficient: { fontSize: 12, color: t.text.muted },
+  acwrExplanation: { fontSize: 12, color: t.text.muted, lineHeight: 17 },
   });
 }
