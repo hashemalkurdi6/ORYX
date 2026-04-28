@@ -170,9 +170,12 @@ function estimateCals(sport: SportType | null, intensity: IntensityType, duratio
   return Math.round(met * weightKg * (durationMin / 60));
 }
 
-function uniqueMuscles(exercises: ExerciseEntry[]): string[] {
+function uniqueMuscles(exercises: ExerciseEntry[] | any[] | null | undefined): string[] {
+  if (!Array.isArray(exercises)) return [];
   const set = new Set<string>();
-  exercises.forEach(ex => ex.muscles.forEach(m => set.add(m)));
+  exercises.forEach(ex => {
+    if (ex && Array.isArray(ex.muscles)) ex.muscles.forEach((m: string) => set.add(m));
+  });
   return Array.from(set).filter(m => m !== 'full_body' && m !== 'cardio').slice(0, 6);
 }
 
@@ -1188,7 +1191,9 @@ const FeedCard = ({ item, onPress, onShare }: { item: FeedItem; onPress: () => v
       );
     }
 
-    const muscles = a.muscle_groups ?? (a.exercise_data ? uniqueMuscles(a.exercise_data as any) : []);
+    const muscles = Array.isArray(a.muscle_groups)
+      ? a.muscle_groups
+      : (a.exercise_data ? uniqueMuscles(a.exercise_data as any) : []);
     return (
       <TouchableOpacity style={styles.feedCard} onPress={onPress} activeOpacity={0.8}>
         <View style={styles.feedCardTop}>
@@ -1271,10 +1276,10 @@ const FeedCard = ({ item, onPress, onShare }: { item: FeedItem; onPress: () => v
           )}
           <View style={styles.feedStatItem}>
             <Ionicons name="barbell-outline" size={12} color={T.text.secondary} />
-            <Text style={styles.feedStatText}>{h.exercises?.length ?? 0} exercises</Text>
+            <Text style={styles.feedStatText}>{Array.isArray(h.exercises) ? h.exercises.length : 0} exercises</Text>
           </View>
         </View>
-        {h.prs && h.prs.length > 0 && (
+        {Array.isArray(h.prs) && h.prs.length > 0 && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
             {h.prs.slice(0, 3).map((pr, i) => (
               <View
@@ -1446,7 +1451,7 @@ const ExpandedModal = ({ item, onClose }: { item: FeedItem | null; onClose: () =
   const renderContent = () => {
     if (item.kind === 'manual') {
       const a = item.data;
-      const muscles = a.muscle_groups ?? [];
+      const muscles = Array.isArray(a.muscle_groups) ? a.muscle_groups : [];
       // Self-tracked outdoor activities store route points in exercise_data[0].route_points.
       const outdoorEntry = Array.isArray(a.exercise_data)
         ? (a.exercise_data as any[]).find((ex) => ex?._outdoor && Array.isArray(ex.route_points))
@@ -1491,7 +1496,7 @@ const ExpandedModal = ({ item, onClose }: { item: FeedItem | null; onClose: () =
             </>
           )}
 
-          {a.exercise_data && a.exercise_data.length > 0 && (
+          {Array.isArray(a.exercise_data) && a.exercise_data.length > 0 && (
             <>
               <Text style={styles.expandSectionTitle}>Exercises</Text>
               {a.exercise_data.map((ex: any, i: number) => (
@@ -1528,7 +1533,7 @@ const ExpandedModal = ({ item, onClose }: { item: FeedItem | null; onClose: () =
           <Text style={styles.expandMeta}>{fmtDate(h.started_at)} · {h.duration_seconds ? formatDuration(Math.round(h.duration_seconds / 60)) : '—'}</Text>
           {h.volume_kg != null && <Text style={styles.expandMeta}>Volume: {Math.round(h.volume_kg)} kg</Text>}
 
-          {h.exercises?.length > 0 && (
+          {Array.isArray(h.exercises) && h.exercises.length > 0 && (
             <>
               <Text style={styles.expandSectionTitle}>Exercises</Text>
               {h.exercises.map((ex: any, i: number) => (
