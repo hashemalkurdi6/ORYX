@@ -7,22 +7,25 @@
 // entirely through colour. Subtle enough that users don't consciously notice
 // it but it tells them visually "this app is about cycling states of the body".
 //
-// Implementation: react-native-svg <RadialGradient> with three stops fading
-// the readiness colour from 0.25 opacity at the centre to fully transparent
-// at 100% radius. This avoids the "hard-edged disc" failure mode of using a
-// borderRadius: 9999 view + BlurView, which leaves a visible boundary because
-// BlurView samples the bg behind it, not the coloured blob underneath. The
-// SVG approach has no boundary at all — the gradient *is* the falloff.
-//
-// Note: components/AmbientBackdrop.tsx remains for the home/wellness multi-
-// glow canvas; that's a different (static) effect.
+// Implementation notes:
+//   - Three static <RadialGradient>s (one per readiness colour) defined in
+//     <Defs>, each with the same opacity profile: 0.25 at centre → 0.10 at
+//     40 % → fully transparent at 100 %. The fully-transparent edge is what
+//     makes the halo boundless — there is no edge to see.
+//   - Three <Rect>s stacked on top of each other, each filled with one of
+//     the gradients. We crossfade their *opacities* via Reanimated to walk
+//     from one colour to the next.
+//   - We can't animate <Stop> directly: Stop lives inside <Defs> and never
+//     renders a host instance, so Reanimated's createAnimatedComponent has
+//     nothing to attach animated props to. <Rect> is a real host component
+//     and animates fine.
 
 import React, { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
 import Animated, {
   Easing,
-  interpolateColor,
+  interpolate,
   useAnimatedProps,
   useReducedMotion,
   useSharedValue,
@@ -31,7 +34,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTheme } from '@/contexts/ThemeContext';
 
-const AnimatedStop = Animated.createAnimatedComponent(Stop);
+const AnimatedRect = Animated.createAnimatedComponent(Rect);
 
 interface ReadinessHaloProps {
   /** Halo diameter in px. Default 600. */
@@ -47,9 +50,9 @@ export default function ReadinessHalo({
   const { theme } = useTheme();
   const reduceMotion = useReducedMotion();
 
-  // progress drives the colour interpolation. Reversed withRepeat means the
-  // value bounces 0 → 1 → 0, so the visible cycle is high → mid → low → mid →
-  // high. ease-in-out so the dwell on each colour feels gentle, not linear.
+  // progress drives the crossfade. Reversed withRepeat means the value
+  // bounces 0 → 1 → 0, so the visible cycle is high → mid → low → mid →
+  // high. ease-in-out so the dwell on each colour feels gentle.
   const progress = useSharedValue(0);
 
   useEffect(() => {
@@ -65,58 +68,48 @@ export default function ReadinessHalo({
     );
   }, [duration, reduceMotion]);
 
-  // Single animated colour shared by all three gradient stops so the centre,
-  // mid, and edge stops cycle in lockstep. interpolateColor + useAnimatedProps
-  // runs entirely on the UI thread — no JS-bridge per-frame.
-  const innerStopProps = useAnimatedProps(() => ({
-    stopColor: interpolateColor(
-      progress.value,
-      [0, 0.5, 1],
-      [theme.readiness.high, theme.readiness.mid, theme.readiness.low],
-    ),
+  // Linear crossfade between the three colour layers. At progress=0 only
+  // `high` is visible; at 0.5 only `mid`; at 1 only `low`. The opacities
+  // cleanly hand off without ever summing to >1, so there is no brief
+  // double-bright moment.
+  const highProps = useAnimatedProps(() => ({
+    opacity: interpolate(progress.value, [0, 0.5, 1], [1, 0, 0]),
   }));
-  const midStopProps = useAnimatedProps(() => ({
-    stopColor: interpolateColor(
-      progress.value,
-      [0, 0.5, 1],
-      [theme.readiness.high, theme.readiness.mid, theme.readiness.low],
-    ),
+  const midProps = useAnimatedProps(() => ({
+    opacity: interpolate(progress.value, [0, 0.5, 1], [0, 1, 0]),
   }));
-  const outerStopProps = useAnimatedProps(() => ({
-    stopColor: interpolateColor(
-      progress.value,
-      [0, 0.5, 1],
-      [theme.readiness.high, theme.readiness.mid, theme.readiness.low],
-    ),
+  const lowProps = useAnimatedProps(() => ({
+    opacity: interpolate(progress.value, [0, 0.5, 1], [0, 0, 1]),
   }));
 
   return (
     <View pointerEvents="none" style={[styles.wrap, { width: size, height: size }]}>
       <Svg width={size} height={size}>
         <Defs>
-          <RadialGradient
-            id="halo"
-            cx="50%"
-            cy="50%"
-            rx="50%"
-            ry="50%"
-            fx="50%"
-            fy="50%"
-          >
-            {/* 0% — full colour at low opacity. The "warmth at the centre". */}
-            <AnimatedStop offset="0%" stopOpacity={0.25} animatedProps={innerStopProps} />
-            {/* 40% — half-bright. Carries the colour out without making the
-                centre look like a defined disc. */}
-            <AnimatedStop offset="40%" stopOpacity={0.10} animatedProps={midStopProps} />
-            {/* 100% — fully transparent. This is what makes the edge invisible. */}
-            <AnimatedStop offset="100%" stopOpacity={0} animatedProps={outerStopProps} />
+          {/* One static gradient per readiness colour. All share the same
+              opacity profile so the falloff shape stays constant — only the
+              hue changes as we crossfade. */}
+          <RadialGradient id="halo-high" cx="50%" cy="50%" rx="50%" ry="50%" fx="50%" fy="50%">
+            <Stop offset="0%"   stopColor={theme.readiness.high} stopOpacity={0.25} />
+            <Stop offset="40%"  stopColor={theme.readiness.high} stopOpacity={0.10} />
+            <Stop offset="100%" stopColor={theme.readiness.high} stopOpacity={0} />
+          </RadialGradient>
+          <RadialGradient id="halo-mid" cx="50%" cy="50%" rx="50%" ry="50%" fx="50%" fy="50%">
+            <Stop offset="0%"   stopColor={theme.readiness.mid} stopOpacity={0.25} />
+            <Stop offset="40%"  stopColor={theme.readiness.mid} stopOpacity={0.10} />
+            <Stop offset="100%" stopColor={theme.readiness.mid} stopOpacity={0} />
+          </RadialGradient>
+          <RadialGradient id="halo-low" cx="50%" cy="50%" rx="50%" ry="50%" fx="50%" fy="50%">
+            <Stop offset="0%"   stopColor={theme.readiness.low} stopOpacity={0.25} />
+            <Stop offset="40%"  stopColor={theme.readiness.low} stopOpacity={0.10} />
+            <Stop offset="100%" stopColor={theme.readiness.low} stopOpacity={0} />
           </RadialGradient>
         </Defs>
-        {/* Fill a square covering the SVG bounds — the gradient does the
-            falloff, no need for a circle clip. Using Rect instead of Circle
-            means the colour reaches all four corners before fading, which
-            extends the halo's apparent reach without any visible boundary. */}
-        <Rect width={size} height={size} fill="url(#halo)" />
+        {/* Three stacked rects covering the SVG bounds. Each is filled with
+            one of the gradients above; opacity crossfades between them. */}
+        <AnimatedRect width={size} height={size} fill="url(#halo-high)" animatedProps={highProps} />
+        <AnimatedRect width={size} height={size} fill="url(#halo-mid)"  animatedProps={midProps} />
+        <AnimatedRect width={size} height={size} fill="url(#halo-low)"  animatedProps={lowProps} />
       </Svg>
     </View>
   );
