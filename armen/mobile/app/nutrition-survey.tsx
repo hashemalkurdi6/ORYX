@@ -386,6 +386,16 @@ export default function NutritionSurveyScreen() {
         ...surveyData,
         nutrition_survey_complete: true,
       });
+      // Backend recomputes nutrition_targets when diet_type / carb_approach /
+      // sugar_preference / strictness_level change. Force a fresh fetch on
+      // the next Nutrition tab read so the user sees the updated calorie +
+      // macro split immediately. The recalculate endpoint is idempotent;
+      // calling it here is the explicit invalidation step the prompt asked
+      // for. See docs/bugs/calorie-target-inconsistency.md.
+      try {
+        const { recalculateNutritionTargets } = await import('@/services/api');
+        await recalculateNutritionTargets();
+      } catch { /* non-fatal — backend already recomputed during the patch */ }
       router.replace('/(tabs)/nutrition');
     } catch {
       Alert.alert('Error', 'Could not save your profile. Please try again.');

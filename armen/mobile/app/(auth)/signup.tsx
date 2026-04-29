@@ -93,16 +93,27 @@ const ACTIVITY_MULT: Record<string, number> = {
   '1 to 2 days': 1.375, '3 to 4 days': 1.55,
   '5 to 6 days': 1.725, 'Every day': 1.9,
 };
-const GOAL_ADJ: Record<string, number> = {
-  'Build Muscle': 200,
-  'Improve Endurance': 100, 'Enhance Recovery': 0,
-  'Compete in a Sport': 150, 'General Fitness': 0,
-};
 
+// Goal multiplier — must match backend nutrition_service._compute_tdee so the
+// preview shown here matches the value persisted server-side. See
+// docs/bugs/calorie-target-inconsistency.md.
+function goalMultiplier(primaryGoal: string): number {
+  const g = primaryGoal.toLowerCase();
+  if (['fat', 'loss', 'cut', 'lose', 'lean'].some(k => g.includes(k))) return 0.85;
+  if (['muscle', 'build', 'bulk', 'gain', 'mass'].some(k => g.includes(k))) return 1.10;
+  if (['perform', 'athlete', 'sport', 'endurance'].some(k => g.includes(k))) return 1.05;
+  return 1.0;
+}
+
+// Cut-rate selector kept for UX continuity (the user picks an aspirational
+// pace), but it no longer drives the displayed calorie target. The backend
+// uses a single ×0.85 multiplier for any "Lose Fat" goal — adding per-rate
+// granularity here would require a new persisted field. Subtitles are
+// illustrative.
 const FAT_LOSS_RATES = [
-  { label: 'Light cut',      sub: 'lose ~0.2 kg / week',  adj: -200 },
-  { label: 'Moderate cut',   sub: 'lose ~0.5 kg / week',  adj: -400 },
-  { label: 'Aggressive cut', sub: 'lose ~0.7 kg / week',  adj: -600 },
+  { label: 'Light cut',      sub: 'gradual deficit'  },
+  { label: 'Moderate cut',   sub: '~0.5 kg / week'   },
+  { label: 'Aggressive cut', sub: 'larger deficit'   },
 ] as const;
 
 function calcAgeFromBirthday(day: string, month: string, year: string): number {
@@ -116,11 +127,19 @@ function calcAgeFromBirthday(day: string, month: string, year: string): number {
   return Math.max(0, age);
 }
 
-function calcTDEE(wKg: number, hCm: number, age: number, sex: string, days: string, goalAdj: number) {
+function calcTDEE(wKg: number, hCm: number, age: number, sex: string, days: string, primaryGoal: string) {
   const bonus = sex === 'Male' ? 5 : sex === 'Female' ? -161 : -78;
   const bmr = Math.round(10 * wKg + 6.25 * hCm - 5 * age + bonus);
   const mult = ACTIVITY_MULT[days] ?? 1.55;
-  return { bmr, tdee: Math.round(bmr * mult + goalAdj), multiplier: mult, goalAdj };
+  const goalMult = goalMultiplier(primaryGoal);
+  const maintenance = bmr * mult;
+  return {
+    bmr,
+    tdee: Math.round(maintenance * goalMult),
+    multiplier: mult,
+    goalMult,
+    goalAdj: Math.round(maintenance * (goalMult - 1)), // for breakdown display
+  };
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -161,8 +180,6 @@ export default function SignupFlow() {
   const [heightStr, setHeightStr] = useState('');
   const [heightUnit, setHeightUnit] = useState<'cm' | 'ft'>('cm');
   const [biologicalSex, setBiologicalSex] = useState('');
-  const [useCustomCal, setUseCustomCal] = useState(false);
-  const [customCalStr, setCustomCalStr] = useState('');
   const [trainingTime, setTrainingTime] = useState('');
 
   // — Step 12
@@ -190,15 +207,12 @@ export default function SignupFlow() {
   const dateOfBirth = (parseInt(bdYear) >= 1900 && parseInt(bdMonth) >= 1 && parseInt(bdDay) >= 1)
     ? `${bdYear.padStart(4, '0')}-${bdMonth.padStart(2, '0')}-${bdDay.padStart(2, '0')}`
     : undefined;
-  const effectiveGoalAdj = primaryGoal === 'Lose Fat'
-    ? (FAT_LOSS_RATES.find(r => r.label === fatLossRate)?.adj ?? -400)
-    : (GOAL_ADJ[primaryGoal] ?? 0);
   const tdeeData = (weightKg > 0 && heightCm > 0 && age > 0 && biologicalSex && weeklyDays && primaryGoal)
-    ? calcTDEE(weightKg, heightCm, age, biologicalSex, weeklyDays, effectiveGoalAdj)
+    ? calcTDEE(weightKg, heightCm, age, biologicalSex, weeklyDays, primaryGoal)
     : null;
-  const finalCalories = useCustomCal
-    ? (parseInt(customCalStr) || tdeeData?.tdee || 2000)
-    : (tdeeData?.tdee || 2000);
+  // Display-only — backend computes and persists the canonical value using
+  // the same formula. See docs/bugs/calorie-target-inconsistency.md.
+  const finalCalories = tdeeData?.tdee || 2000;
 
   // ── Navigation ────────────────────────────────────────────────────────────────
   const navigate = (next: number) => {
@@ -272,7 +286,8 @@ export default function SignupFlow() {
         weight_kg: weightKg > 0 ? Math.round(weightKg * 10) / 10 : undefined,
         height_cm: heightCm > 0 ? Math.round(heightCm * 10) / 10 : undefined,
         biological_sex: biologicalSex || undefined,
-        daily_calorie_target: finalCalories,
+        // daily_calorie_target intentionally omitted — backend computes it
+        // from the inputs above so mobile and backend can never diverge.
         preferred_training_time: trainingTime || undefined,
       });
       useAuthStore.setState({ token: tokenResp.access_token });
@@ -364,8 +379,7 @@ export default function SignupFlow() {
         )}
         {step === 9 && (
           <S9Calories
-            tdeeData={tdeeData} useCustom={useCustomCal} setUseCustom={setUseCustomCal}
-            customStr={customCalStr} setCustomStr={setCustomCalStr}
+            tdeeData={tdeeData}
             finalTarget={finalCalories} primaryGoal={primaryGoal} fatLossRate={fatLossRate}
             onNext={goNext} s={s} theme={theme}
           />
@@ -564,14 +578,14 @@ function S5Goal({ primaryGoal, setPrimaryGoal, fatLossRate, setFatLossRate, onNe
         <View style={{ marginBottom: 24 }}>
           <Text style={[s.label, { marginTop: 4 }]}>How aggressively do you want to cut?</Text>
           <View style={[s.list, { marginTop: 10, marginBottom: 0 }]}>
-            {FAT_LOSS_RATES.map(({ label, sub, adj }) => {
+            {FAT_LOSS_RATES.map(({ label, sub }) => {
               const sel = fatLossRate === label;
               return (
                 <TouchableOpacity key={label} style={[s.row, sel && s.rowOn]} onPress={() => setFatLossRate(label)} activeOpacity={0.8}>
                   <View style={{ flex: 1 }}>
                     <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
                     <Text style={[s.rowSub, sel && { color: 'rgba(255,255,255,0.6)' }]}>
-                      {sub}  ·  {adj} kcal/day
+                      {sub}
                     </Text>
                   </View>
                   {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
@@ -742,7 +756,7 @@ function S8Body({
 
 // ── Screen 9: Calorie target (required) ───────────────────────────────────────
 
-function S9Calories({ tdeeData, useCustom, setUseCustom, customStr, setCustomStr, finalTarget, primaryGoal, fatLossRate, onNext, s, theme }: any) {
+function S9Calories({ tdeeData, finalTarget, primaryGoal, fatLossRate, onNext, s, theme }: any) {
   const goalLabel = primaryGoal === 'Lose Fat' && fatLossRate ? fatLossRate : primaryGoal;
   return (
     <KeyboardAvoidingView style={s.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -760,25 +774,15 @@ function S9Calories({ tdeeData, useCustom, setUseCustom, customStr, setCustomStr
           <View style={s.breakCard}>
             <BRow label="Base Metabolic Rate" value={`${tdeeData.bmr} kcal`} theme={theme} />
             <BRow label="Activity multiplier" value={`× ${tdeeData.multiplier.toFixed(3)}`} theme={theme} />
-            {tdeeData.goalAdj !== 0 && (
+            {tdeeData.goalMult !== 1 && (
               <BRow
                 label={`${goalLabel} adjustment`}
-                value={`${tdeeData.goalAdj > 0 ? '+' : ''}${tdeeData.goalAdj} kcal`}
+                value={`× ${tdeeData.goalMult.toFixed(2)} (${tdeeData.goalAdj > 0 ? '+' : ''}${tdeeData.goalAdj} kcal)`}
                 color={tdeeData.goalAdj > 0 ? theme.status.success : theme.status.danger}
                 theme={theme}
               />
             )}
           </View>
-        )}
-
-        <TouchableOpacity style={s.customToggle} onPress={() => setUseCustom((v: boolean) => !v)} activeOpacity={0.75}>
-          <Ionicons name={useCustom ? 'close-circle-outline' : 'pencil-outline'} size={16} color={theme.text.muted} />
-          <Text style={s.customToggleTxt}>{useCustom ? 'Use calculated target' : 'Set a custom target'}</Text>
-        </TouchableOpacity>
-
-        {useCustom && (
-          <TextInput style={s.input} placeholder="e.g. 2400" placeholderTextColor={theme.text.muted}
-            keyboardType="number-pad" value={customStr} onChangeText={setCustomStr} autoFocus />
         )}
 
         <TouchableOpacity style={s.cta} onPress={onNext} activeOpacity={0.85}>
@@ -1034,9 +1038,6 @@ function styles(t: ThemeColors) {
       backgroundColor: t.bg.elevated, borderRadius: R.sm, padding: 16,
       borderWidth: 1, borderColor: t.border, marginBottom: 16,
     },
-    customToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-    customToggleTxt: { fontSize: 13, color: t.text.muted },
-
     // Done screen
     doneIcon: { marginTop: 16, marginBottom: 16, alignItems: 'center' },
     doneTitle: { fontSize: 26, fontFamily: TY.sans.bold, color: t.text.primary, textAlign: 'center', marginBottom: 12 },

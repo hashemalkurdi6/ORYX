@@ -49,7 +49,8 @@ export interface OnboardingData {
   weight_kg?: number;
   height_cm?: number;
   biological_sex?: string;
-  daily_calorie_target?: number;
+  // daily_calorie_target intentionally not in the patch payload — backend
+  // recomputes whenever a TDEE input field changes.
   preferred_training_time?: string;
   onboarding_complete?: boolean;
   current_onboarding_step?: number;
@@ -690,7 +691,10 @@ export interface SignupCompletePayload {
   weight_kg?: number;
   height_cm?: number;
   biological_sex?: string;
-  daily_calorie_target?: number;
+  // daily_calorie_target intentionally NOT in this payload — the backend
+  // computes it from the inputs above (Mifflin-St Jeor + goal multiplier)
+  // so the value the user sees and the value the backend stores can never
+  // diverge. See docs/bugs/calorie-target-inconsistency.md.
   preferred_training_time?: string;
 }
 
