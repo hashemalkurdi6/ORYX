@@ -41,7 +41,9 @@ import { signupComplete, checkUsername, getMe } from '@/services/api';
 import { useAuthStore } from '@/services/authStore';
 
 const { width: SW } = Dimensions.get('window');
-const TOTAL = 12;
+// Welcome screen is now its own route at /(auth)/landing — signup proper
+// starts on the account-details step. Step 1 = account, step 11 = Done.
+const TOTAL = 11;
 
 // ── Option data ───────────────────────────────────────────────────────────────
 
@@ -226,7 +228,13 @@ export default function SignupFlow() {
   };
 
   const goNext = () => navigate(step + 1);
-  const goBack = () => navigate(step - 1);
+  // On step 1, back exits the signup stack and lands the user on the landing
+  // screen. The Welcome step that used to live at step 1 has been promoted to
+  // its own route (app/(auth)/landing.tsx).
+  const goBack = () => {
+    if (step <= 1) router.back();
+    else navigate(step - 1);
+  };
   const skip = () => navigate(step + 1);
 
   // ── Username check ────────────────────────────────────────────────────────────
@@ -254,8 +262,10 @@ export default function SignupFlow() {
     if (!/[A-Za-z]/.test(password)) return 'Password must contain at least one letter.';
     if (!/[0-9]/.test(password)) return 'Password must contain at least one number.';
     if (password !== confirmPassword) return 'Passwords do not match.';
-    if (username && !USERNAME_RE.test(username)) return 'Username must be 3–20 characters: letters, numbers, underscores.';
-    if (username && usernameStatus === 'taken') return 'That username is already taken.';
+    if (!username.trim()) return 'Username is required.';
+    if (!USERNAME_RE.test(username)) return 'Username must be 3–20 characters: letters, numbers, underscores.';
+    if (usernameStatus === 'taken') return 'That username is already taken.';
+    if (usernameStatus === 'checking') return 'Checking username availability…';
     return null;
   };
 
@@ -274,7 +284,7 @@ export default function SignupFlow() {
       const tokenResp = await signupComplete({
         email: email.trim().toLowerCase(),
         password,
-        username: username.trim() || undefined,
+        username: username.trim(),
         full_name: fullName.trim() || undefined,
         display_name: displayName.trim() || undefined,
         sport_tags: sportTags.length > 0 ? sportTags : undefined,
@@ -316,9 +326,13 @@ export default function SignupFlow() {
   };
 
   // ── Layout helpers ────────────────────────────────────────────────────────────
-  const showProgress = step > 1;
-  const showBack = step > 1;
-  const canSkip = step > 2 && step !== 8 && step !== 9 && step !== 12;
+  // Welcome step is gone — progress + back are visible on every signup step
+  // (back on step 1 exits to the landing screen). Skip is hidden on the
+  // account-details step (1), the calorie step (8 — needs the value), the
+  // calorie review (9 — same), and the Done step (11).
+  const showProgress = true;
+  const showBack = true;
+  const canSkip = step !== 1 && step !== 7 && step !== 8 && step !== 11;
   const progress = step / TOTAL;
 
   return (
@@ -343,8 +357,7 @@ export default function SignupFlow() {
       )}
 
       <Animated.View style={[s.screenWrap, { transform: [{ translateX: slideAnim }] }]}>
-        {step === 1 && <S1Welcome onCreateAccount={goNext} s={s} theme={theme} />}
-        {step === 2 && (
+        {step === 1 && (
           <S2Account
             fullName={fullName} setFullName={setFullName}
             username={username} onUsernameChange={handleUsernameChange} usernameStatus={usernameStatus}
@@ -355,18 +368,18 @@ export default function SignupFlow() {
             s={s} theme={theme}
           />
         )}
-        {step === 3 && <S3Name displayName={displayName} setDisplayName={setDisplayName} onNext={goNext} s={s} theme={theme} />}
-        {step === 4 && <S4Sports sportTags={sportTags} setSportTags={setSportTags} onNext={goNext} s={s} theme={theme} />}
-        {step === 5 && (
+        {step === 2 && <S3Name displayName={displayName} setDisplayName={setDisplayName} onNext={goNext} s={s} theme={theme} />}
+        {step === 3 && <S4Sports sportTags={sportTags} setSportTags={setSportTags} onNext={goNext} s={s} theme={theme} />}
+        {step === 4 && (
           <S5Goal
             primaryGoal={primaryGoal} setPrimaryGoal={setPrimaryGoal}
             fatLossRate={fatLossRate} setFatLossRate={setFatLossRate}
             onNext={goNext} s={s} theme={theme}
           />
         )}
-        {step === 6 && <S6Level fitnessLevel={fitnessLevel} setFitnessLevel={setFitnessLevel} onNext={goNext} s={s} theme={theme} />}
-        {step === 7 && <S7Frequency weeklyDays={weeklyDays} setWeeklyDays={setWeeklyDays} onNext={goNext} s={s} theme={theme} />}
-        {step === 8 && (
+        {step === 5 && <S6Level fitnessLevel={fitnessLevel} setFitnessLevel={setFitnessLevel} onNext={goNext} s={s} theme={theme} />}
+        {step === 6 && <S7Frequency weeklyDays={weeklyDays} setWeeklyDays={setWeeklyDays} onNext={goNext} s={s} theme={theme} />}
+        {step === 7 && (
           <S8Body
             bdDay={bdDay} setBdDay={setBdDay}
             bdMonth={bdMonth} setBdMonth={setBdMonth}
@@ -377,16 +390,16 @@ export default function SignupFlow() {
             onNext={goNext} s={s} theme={theme}
           />
         )}
-        {step === 9 && (
+        {step === 8 && (
           <S9Calories
             tdeeData={tdeeData}
             finalTarget={finalCalories} primaryGoal={primaryGoal} fatLossRate={fatLossRate}
             onNext={goNext} s={s} theme={theme}
           />
         )}
-        {step === 10 && <S10Connections s={s} theme={theme} onNext={goNext} />}
-        {step === 11 && <S11Time trainingTime={trainingTime} setTrainingTime={setTrainingTime} onNext={goNext} s={s} theme={theme} />}
-        {step === 12 && (
+        {step === 9 && <S10Connections s={s} theme={theme} onNext={goNext} />}
+        {step === 10 && <S11Time trainingTime={trainingTime} setTrainingTime={setTrainingTime} onNext={goNext} s={s} theme={theme} />}
+        {step === 11 && (
           <S12Done
             displayName={displayName} sportTags={sportTags} primaryGoal={primaryGoal}
             finalCalories={finalCalories} saving={saving} error={finishError}
@@ -395,27 +408,6 @@ export default function SignupFlow() {
         )}
       </Animated.View>
     </SafeAreaView>
-  );
-}
-
-// ── Screen 1: Welcome ─────────────────────────────────────────────────────────
-
-function S1Welcome({ onCreateAccount, s, theme }: any) {
-  return (
-    <View style={[s.screen, { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }]}>
-      <Text style={s.wordmark}>ORYX</Text>
-      <Text style={s.tagline}>Know your body.</Text>
-      <TouchableOpacity style={[s.cta, { width: '100%', marginTop: 56 }]} onPress={onCreateAccount} activeOpacity={0.85}>
-        <Text style={s.ctaText}>Create Account</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={s.loginLinkBtn}
-        onPress={() => router.push('/(auth)/login')}
-        activeOpacity={0.75}
-      >
-        <Text style={s.loginLinkText}>Already have an account? <Text style={{ color: theme.text.primary, fontFamily: TY.sans.bold }}>Log In</Text></Text>
-      </TouchableOpacity>
-    </View>
   );
 }
 
@@ -434,7 +426,7 @@ function S2Account({
   return (
     <KeyboardAvoidingView style={s.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-        <Text style={s.stepLabel}>02 / {TOTAL}</Text>
+        <Text style={s.stepLabel}>01 / {TOTAL}</Text>
         <Text style={s.title}>Create your account.</Text>
 
         {error && (
@@ -450,7 +442,7 @@ function S2Account({
           autoCapitalize="words" returnKeyType="next"
         />
 
-        <Text style={s.label}>Username <Text style={s.labelOpt}>(optional)</Text></Text>
+        <Text style={s.label}>Username</Text>
         <View style={s.usernameRow}>
           <Text style={s.usernameAt}>@</Text>
           <TextInput
@@ -502,7 +494,7 @@ function S3Name({ displayName, setDisplayName, onNext, s, theme }: any) {
   return (
     <KeyboardAvoidingView style={s.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-        <Text style={s.stepLabel}>03 / {TOTAL}</Text>
+        <Text style={s.stepLabel}>02 / {TOTAL}</Text>
         <Text style={s.title}>What should we call you?</Text>
         <Text style={s.subtitle}>Your first name personalises all AI insights in ORYX.</Text>
         <TextInput
@@ -525,7 +517,7 @@ function S4Sports({ sportTags, setSportTags, onNext, s, theme }: any) {
     setSportTags((p: string[]) => p.includes(label) ? p.filter((x: string) => x !== label) : [...p, label]);
   return (
     <ScrollView contentContainerStyle={s.content}>
-      <Text style={s.stepLabel}>04 / {TOTAL}</Text>
+      <Text style={s.stepLabel}>03 / {TOTAL}</Text>
       <Text style={s.title}>What is your main sport or activity?</Text>
       <Text style={s.subtitle}>Select all that apply.</Text>
       <View style={s.tileGrid}>
@@ -553,7 +545,7 @@ function S5Goal({ primaryGoal, setPrimaryGoal, fatLossRate, setFatLossRate, onNe
   const canContinue = primaryGoal && (!needsCutRate || fatLossRate);
   return (
     <ScrollView contentContainerStyle={s.content}>
-      <Text style={s.stepLabel}>05 / {TOTAL}</Text>
+      <Text style={s.stepLabel}>04 / {TOTAL}</Text>
       <Text style={s.title}>What is your main goal?</Text>
       <Text style={s.subtitle}>ORYX frames all recommendations around this.</Text>
       <View style={s.list}>
@@ -608,7 +600,7 @@ function S5Goal({ primaryGoal, setPrimaryGoal, fatLossRate, setFatLossRate, onNe
 function S6Level({ fitnessLevel, setFitnessLevel, onNext, s, theme }: any) {
   return (
     <ScrollView contentContainerStyle={s.content}>
-      <Text style={s.stepLabel}>06 / {TOTAL}</Text>
+      <Text style={s.stepLabel}>05 / {TOTAL}</Text>
       <Text style={s.title}>How would you describe your fitness level?</Text>
       <Text style={s.subtitle}>Affects strength standards and AI coaching tone.</Text>
       <View style={s.list}>
@@ -637,7 +629,7 @@ function S6Level({ fitnessLevel, setFitnessLevel, onNext, s, theme }: any) {
 function S7Frequency({ weeklyDays, setWeeklyDays, onNext, s, theme }: any) {
   return (
     <ScrollView contentContainerStyle={s.content}>
-      <Text style={s.stepLabel}>07 / {TOTAL}</Text>
+      <Text style={s.stepLabel}>06 / {TOTAL}</Text>
       <Text style={s.title}>How many days per week do you train?</Text>
       <Text style={s.subtitle}>Used for deload detection and recovery recommendations.</Text>
       <View style={s.list}>
@@ -678,7 +670,7 @@ function S8Body({
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <KeyboardAvoidingView style={s.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-          <Text style={s.stepLabel}>08 / {TOTAL}</Text>
+          <Text style={s.stepLabel}>07 / {TOTAL}</Text>
           <Text style={s.title}>Tell us about your body.</Text>
           <Text style={s.subtitle}>Required for calorie calculations and strength standards.</Text>
 
@@ -761,7 +753,7 @@ function S9Calories({ tdeeData, finalTarget, primaryGoal, fatLossRate, onNext, s
   return (
     <KeyboardAvoidingView style={s.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-        <Text style={s.stepLabel}>09 / {TOTAL}</Text>
+        <Text style={s.stepLabel}>08 / {TOTAL}</Text>
         <Text style={s.title}>Your daily calorie target.</Text>
         <Text style={s.subtitle}>Calculated using the Mifflin St Jeor formula.</Text>
 
@@ -814,7 +806,7 @@ function S10Connections({ s, theme, onNext }: any) {
   ];
   return (
     <ScrollView contentContainerStyle={s.content}>
-      <Text style={s.stepLabel}>10 / {TOTAL}</Text>
+      <Text style={s.stepLabel}>09 / {TOTAL}</Text>
       <Text style={s.title}>Connect your existing apps.</Text>
       <Text style={s.subtitle}>ORYX gets smarter with more data. Connect later from Profile.</Text>
       <View style={s.tileGrid}>
@@ -842,7 +834,7 @@ function S10Connections({ s, theme, onNext }: any) {
 function S11Time({ trainingTime, setTrainingTime, onNext, s, theme }: any) {
   return (
     <ScrollView contentContainerStyle={s.content}>
-      <Text style={s.stepLabel}>11 / {TOTAL}</Text>
+      <Text style={s.stepLabel}>10 / {TOTAL}</Text>
       <Text style={s.title}>When do you usually train?</Text>
       <Text style={s.subtitle}>Used for workout reminders and nutrition timing suggestions.</Text>
       <View style={s.list}>
@@ -941,10 +933,6 @@ function styles(t: ThemeColors) {
     content: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 48, flexGrow: 1 },
 
     // Welcome
-    wordmark: { fontSize: 38, fontFamily: TY.sans.bold, color: t.text.primary, letterSpacing: 6 },
-    tagline: { fontSize: 15, color: t.text.muted, marginTop: 10, letterSpacing: 0.5 },
-    loginLinkBtn: { marginTop: 20 },
-    loginLinkText: { fontSize: 14, color: t.text.muted, textAlign: 'center' },
 
     // Typography
     stepLabel: { fontSize: 12, color: t.text.muted, fontFamily: TY.sans.semibold, letterSpacing: 1, marginBottom: 16 },
@@ -953,7 +941,6 @@ function styles(t: ThemeColors) {
 
     // Form
     label: { fontSize: 13, color: t.text.secondary, fontFamily: TY.sans.semibold, marginBottom: 8, marginTop: 14 },
-    labelOpt: { fontFamily: TY.sans.regular, color: t.text.muted },
     input: {
       backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border,
       borderRadius: R.sm, paddingHorizontal: 16, paddingVertical: 14,
