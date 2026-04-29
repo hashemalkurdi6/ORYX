@@ -1,5 +1,5 @@
-// ORYX — ambient readiness-color halo. A soft, persistent breathing glow that
-// cycles through the readiness state palette (high → mid → low → high) over a
+// ORYX — ambient readiness-color halo. A soft, persistent aurora that cycles
+// through the readiness state palette (high → mid → low → mid → high) over a
 // long, never-ending loop. Used on the landing screen behind the logo and is
 // reusable on splash / loading states / behind the home readiness ring.
 //
@@ -7,17 +7,23 @@
 // entirely through colour. Subtle enough that users don't consciously notice
 // it but it tells them visually "this app is about cycling states of the body".
 //
-// Note: there is also components/AmbientBackdrop.tsx which renders the
-// multi-glow canvas behind the home/wellness hero. That's a different (static)
-// effect and stays put; this halo is the new animated readiness-color blob.
+// Implementation: react-native-svg <RadialGradient> with three stops fading
+// the readiness colour from 0.25 opacity at the centre to fully transparent
+// at 100% radius. This avoids the "hard-edged disc" failure mode of using a
+// borderRadius: 9999 view + BlurView, which leaves a visible boundary because
+// BlurView samples the bg behind it, not the coloured blob underneath. The
+// SVG approach has no boundary at all — the gradient *is* the falloff.
+//
+// Note: components/AmbientBackdrop.tsx remains for the home/wellness multi-
+// glow canvas; that's a different (static) effect.
 
 import React, { useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { StyleSheet, View } from 'react-native';
+import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
 import Animated, {
   Easing,
   interpolateColor,
-  useAnimatedStyle,
+  useAnimatedProps,
   useReducedMotion,
   useSharedValue,
   withRepeat,
@@ -25,82 +31,97 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTheme } from '@/contexts/ThemeContext';
 
+const AnimatedStop = Animated.createAnimatedComponent(Stop);
+
 interface ReadinessHaloProps {
-  /** Halo diameter in px. Default 420. */
+  /** Halo diameter in px. Default 600. */
   size?: number;
   /** Loop duration in ms. Default 12000. */
   duration?: number;
-  /** Opacity of the colour blob. Default 0.18 — ambient, not loud. */
-  opacity?: number;
-  /** Blur intensity 0–100 to soften the edge. Default 60. */
-  blurIntensity?: number;
 }
 
 export default function ReadinessHalo({
-  size = 420,
+  size = 600,
   duration = 12000,
-  opacity = 0.18,
-  blurIntensity = 60,
 }: ReadinessHaloProps) {
-  const { theme, resolvedScheme } = useTheme();
+  const { theme } = useTheme();
   const reduceMotion = useReducedMotion();
 
-  // progress goes 0 → 1 linearly, looping forever. Interpolation domain
-  // [0, 0.33, 0.66, 1] maps to [high, mid, low, high] so the loop closes
-  // seamlessly without a jump on wrap-around.
+  // progress drives the colour interpolation. Reversed withRepeat means the
+  // value bounces 0 → 1 → 0, so the visible cycle is high → mid → low → mid →
+  // high. ease-in-out so the dwell on each colour feels gentle, not linear.
   const progress = useSharedValue(0);
 
   useEffect(() => {
     if (reduceMotion) {
-      progress.value = 0; // hold on `high` if motion is off
+      progress.value = 0; // hold on readiness.high
       return;
     }
     progress.value = 0;
     progress.value = withRepeat(
-      withTiming(1, { duration, easing: Easing.linear }),
+      withTiming(1, { duration, easing: Easing.inOut(Easing.ease) }),
       -1,
-      false,
+      true,
     );
   }, [duration, reduceMotion]);
 
-  const blobStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(
+  // Single animated colour shared by all three gradient stops so the centre,
+  // mid, and edge stops cycle in lockstep. interpolateColor + useAnimatedProps
+  // runs entirely on the UI thread — no JS-bridge per-frame.
+  const innerStopProps = useAnimatedProps(() => ({
+    stopColor: interpolateColor(
       progress.value,
-      [0, 0.33, 0.66, 1],
-      [
-        theme.readiness.high,
-        theme.readiness.mid,
-        theme.readiness.low,
-        theme.readiness.high,
-      ],
+      [0, 0.5, 1],
+      [theme.readiness.high, theme.readiness.mid, theme.readiness.low],
+    ),
+  }));
+  const midStopProps = useAnimatedProps(() => ({
+    stopColor: interpolateColor(
+      progress.value,
+      [0, 0.5, 1],
+      [theme.readiness.high, theme.readiness.mid, theme.readiness.low],
+    ),
+  }));
+  const outerStopProps = useAnimatedProps(() => ({
+    stopColor: interpolateColor(
+      progress.value,
+      [0, 0.5, 1],
+      [theme.readiness.high, theme.readiness.mid, theme.readiness.low],
     ),
   }));
 
   return (
-    <View
-      pointerEvents="none"
-      style={[styles.wrap, { width: size, height: size, borderRadius: size / 2 }]}
-    >
-      <Animated.View
-        style={[
-          styles.blob,
-          { borderRadius: size / 2, opacity },
-          blobStyle,
-        ]}
-      />
-      {/* expo-blur softens the disc edge into the surrounding bg. tint matches
-          the resolved scheme so the blur reads correctly in both modes. */}
-      <BlurView
-        intensity={blurIntensity}
-        tint={resolvedScheme === 'light' ? 'light' : 'dark'}
-        style={[styles.blur, { borderRadius: size / 2 }]}
-      />
+    <View pointerEvents="none" style={[styles.wrap, { width: size, height: size }]}>
+      <Svg width={size} height={size}>
+        <Defs>
+          <RadialGradient
+            id="halo"
+            cx="50%"
+            cy="50%"
+            rx="50%"
+            ry="50%"
+            fx="50%"
+            fy="50%"
+          >
+            {/* 0% — full colour at low opacity. The "warmth at the centre". */}
+            <AnimatedStop offset="0%" stopOpacity={0.25} animatedProps={innerStopProps} />
+            {/* 40% — half-bright. Carries the colour out without making the
+                centre look like a defined disc. */}
+            <AnimatedStop offset="40%" stopOpacity={0.10} animatedProps={midStopProps} />
+            {/* 100% — fully transparent. This is what makes the edge invisible. */}
+            <AnimatedStop offset="100%" stopOpacity={0} animatedProps={outerStopProps} />
+          </RadialGradient>
+        </Defs>
+        {/* Fill a square covering the SVG bounds — the gradient does the
+            falloff, no need for a circle clip. Using Rect instead of Circle
+            means the colour reaches all four corners before fading, which
+            extends the halo's apparent reach without any visible boundary. */}
+        <Rect width={size} height={size} fill="url(#halo)" />
+      </Svg>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
-  blob: { ...StyleSheet.absoluteFillObject },
-  blur: { ...StyleSheet.absoluteFillObject },
+  wrap: { alignItems: 'center', justifyContent: 'center' },
 });

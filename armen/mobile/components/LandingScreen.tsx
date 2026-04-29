@@ -36,6 +36,13 @@ import ReadinessHalo from '@/components/ReadinessHalo';
 
 const { width: SW } = Dimensions.get('window');
 
+// Halo diameter in px. Sized so the gradient's soft falloff extends a long way
+// past the 120px logo on every side — by 100% the gradient is fully transparent
+// so there is no boundary visible regardless of how big this gets.
+const HALO_SIZE = Math.min(SW * 1.6, 600);
+const LOGO_SIZE = 120;
+const HALO_OFFSET = (HALO_SIZE - LOGO_SIZE) / 2;
+
 export default function LandingScreen() {
   const { theme } = useTheme();
   const s = styles(theme);
@@ -82,16 +89,17 @@ export default function LandingScreen() {
   return (
     <Animated.View style={[s.root, bgStyle]}>
       <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
-        {/* Halo sits absolutely behind everything, slightly above centre to
-            sit *behind* the logo rather than the buttons. */}
-        <View pointerEvents="none" style={s.haloWrap}>
-          <ReadinessHalo size={Math.min(SW * 1.05, 460)} />
-        </View>
-
         {/* Logo + text block — vertically centred, slightly above the
-            absolute centre so the buttons have room below. */}
+            absolute centre so the buttons have room below. The halo is
+            anchored as an absolute child of the logo wrapper so it sits
+            *behind the mark*, not behind the entire screen. */}
         <View style={s.center}>
-          <Logo size={120} />
+          <View style={s.logoCluster}>
+            <View pointerEvents="none" style={s.haloAbsolute}>
+              <ReadinessHalo size={HALO_SIZE} />
+            </View>
+            <Logo size={120} />
+          </View>
 
           <Animated.Text style={[s.wordmark, wordmarkStyle]}>ORYX</Animated.Text>
 
@@ -131,17 +139,23 @@ const styles = (t: ThemeColors) =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: t.bg.primary },
     safe: { flex: 1, paddingHorizontal: SP[7] },
-    haloWrap: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
+    center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: SP[4] },
+    // Wraps just the logo so the halo can be positioned absolutely against it
+    // without leaking out and pushing other content around. zIndex keeps the
+    // logo on top of the halo.
+    logoCluster: {
+      width: LOGO_SIZE,
+      height: LOGO_SIZE,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingBottom: 80, // shift the halo a touch above absolute centre
     },
-    center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: SP[4] },
+    haloAbsolute: {
+      position: 'absolute',
+      top: -HALO_OFFSET,
+      left: -HALO_OFFSET,
+      width: HALO_SIZE,
+      height: HALO_SIZE,
+    },
     wordmark: {
       fontFamily: TY.sans.bold,
       fontSize: 44,
