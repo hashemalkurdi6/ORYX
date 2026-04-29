@@ -152,8 +152,20 @@ async def log_weight(
         db.add(entry)
 
     # Also update users.weight_kg to the latest value
+    weight_changed = current_user.weight_kg != body.weight_kg
     current_user.weight_kg = body.weight_kg
     await db.flush()
+
+    # Body weight feeds Mifflin-St Jeor TDEE — keep nutrition_targets in sync
+    # so the Nutrition tab and meal plans react to the new weight on next read.
+    if weight_changed:
+        from app.routers.auth import _has_full_macro_inputs
+        if _has_full_macro_inputs(current_user):
+            from app.services.nutrition_service import calculate_macro_targets
+            try:
+                await calculate_macro_targets(current_user.id, db)
+            except Exception:
+                logger.exception("Macro target recalc failed for user %s", current_user.id)
 
     unit = getattr(current_user, "weight_unit", "kg") or "kg"
     display = round(body.weight_kg * 2.20462, 1) if unit == "lbs" else body.weight_kg

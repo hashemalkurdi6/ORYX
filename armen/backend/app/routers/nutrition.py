@@ -481,7 +481,11 @@ async def get_weekly_nutrition_summary(
         vals = [r[col_idx] or 0 for r in rows if r[col_idx] is not None]
         return round(sum(vals) / len(vals), 1) if vals else 0.0
 
-    calorie_target = getattr(current_user, "daily_calorie_target", None) or 2000
+    # Single source of truth — nutrition_targets, populated lazily.
+    from app.services.nutrition_service import calculate_macro_targets, get_cached_targets
+    targets = await get_cached_targets(current_user.id, db) or await calculate_macro_targets(current_user.id, db)
+    calorie_target = targets.get("daily_calorie_target") or 2000
+    protein_target = targets.get("protein_g") or 125.0
 
     def _days_on_target(rows):
         count = 0
@@ -490,11 +494,6 @@ async def get_weekly_nutrition_summary(
             if cal > 0 and abs(cal - calorie_target) / calorie_target <= 0.10:
                 count += 1
         return count
-
-    from app.models.nutrition_targets import NutritionTargets
-    tgt_res = await db.execute(select(NutritionTargets).where(NutritionTargets.user_id == current_user.id))
-    tgt = tgt_res.scalar_one_or_none()
-    protein_target = tgt.protein_g if tgt else 125.0
 
     def _days_protein_hit(rows):
         count = 0
@@ -521,14 +520,10 @@ async def get_weekly_calories(
 ):
     """Return last 7 days of daily calorie totals vs target."""
     from sqlalchemy import func
-    from app.models.nutrition_targets import NutritionTargets
+    from app.services.nutrition_service import calculate_macro_targets, get_cached_targets
 
-    tgt_res = await db.execute(select(NutritionTargets).where(NutritionTargets.user_id == current_user.id))
-    tgt = tgt_res.scalar_one_or_none()
-    calorie_target = (
-        tgt.daily_calorie_target if tgt and tgt.daily_calorie_target
-        else getattr(current_user, "daily_calorie_target", None) or 2000
-    )
+    targets = await get_cached_targets(current_user.id, db) or await calculate_macro_targets(current_user.id, db)
+    calorie_target = targets.get("daily_calorie_target") or 2000
 
     now = datetime.utcnow()
     start = (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)

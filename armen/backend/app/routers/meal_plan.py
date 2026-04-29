@@ -428,6 +428,20 @@ async def upsert_nutrition_profile(
     await db.flush()
     await db.refresh(profile)
 
+    # Recompute macro targets when fields that drive the formula change. These
+    # feed protein/carb/fat splits, fibre/sugar caps, and iron/calcium targets
+    # in nutrition_service.calculate_macro_targets.
+    _PROFILE_MACRO_INPUTS = {"diet_type", "carb_approach", "sugar_preference", "strictness_level"}
+    if _PROFILE_MACRO_INPUTS & payload.keys():
+        from app.services.nutrition_service import calculate_macro_targets
+        try:
+            await calculate_macro_targets(current_user.id, db)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "Macro target recalc failed for user %s after profile patch", current_user.id
+            )
+
     return {
         "id": str(profile.id),
         "user_id": str(profile.user_id),

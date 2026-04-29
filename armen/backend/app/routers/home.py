@@ -45,25 +45,6 @@ async def _run_query(query, *, mode: str = "result"):
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-def _compute_macro_targets(calorie_target: int | None, primary_goal: str | None) -> dict:
-    if not calorie_target:
-        return {"protein_target": None, "carbs_target": None, "fat_target": None}
-    goal = (primary_goal or "").lower()
-    if any(k in goal for k in ["muscle", "gain", "bulk", "build", "mass"]):
-        p_pct, c_pct, f_pct = 0.30, 0.45, 0.25
-    elif any(k in goal for k in ["fat", "loss", "cut", "lose", "weight", "lean"]):
-        p_pct, c_pct, f_pct = 0.35, 0.35, 0.30
-    elif any(k in goal for k in ["perform", "athlete", "sport", "endurance", "speed"]):
-        p_pct, c_pct, f_pct = 0.25, 0.55, 0.20
-    else:
-        p_pct, c_pct, f_pct = 0.25, 0.50, 0.25
-    return {
-        "protein_target": round(calorie_target * p_pct / 4),
-        "carbs_target": round(calorie_target * c_pct / 4),
-        "fat_target": round(calorie_target * f_pct / 9),
-    }
-
-
 def _parse_weekly_training_days(weekly_training_days: str | None) -> int | None:
     if not weekly_training_days:
         return None
@@ -287,21 +268,22 @@ async def _build_dashboard(current_user: User, db: AsyncSession) -> dict:
     )
     primary_goal = current_user.primary_goal
     sport_tags = current_user.sport_tags or []
-    daily_calorie_target = current_user.daily_calorie_target
     weekly_training_goal = _parse_weekly_training_days(current_user.weekly_training_days)
-    # Prefer persisted macro targets from nutrition_service (single source of
-    # truth: Mifflin-St Jeor + profile preferences). Fall back to the simple
-    # percentage split only when the user has never computed nutrition targets.
-    from app.services.nutrition_service import get_cached_targets
+    # Single source of truth: nutrition_targets via nutrition_service. Lazy
+    # populate on first read so any user past onboarding has a row.
+    from app.services.nutrition_service import calculate_macro_targets, get_cached_targets
     cached = await get_cached_targets(current_user.id, db)
-    if cached and cached.get("protein_g") is not None:
+    if cached is None:
+        cached = await calculate_macro_targets(current_user.id, db)
+    daily_calorie_target = cached.get("daily_calorie_target") or current_user.daily_calorie_target
+    if cached.get("protein_g") is not None:
         macro_targets = {
             "protein_target": round(cached["protein_g"]),
             "carbs_target": round(cached["carbs_g"]),
             "fat_target": round(cached["fat_g"]),
         }
     else:
-        macro_targets = _compute_macro_targets(daily_calorie_target, primary_goal)
+        macro_targets = {"protein_target": None, "carbs_target": None, "fat_target": None}
 
     # ── Training ──────────────────────────────────────────────────────────────
     # Fan out independent reads over separate sessions so they run concurrently.

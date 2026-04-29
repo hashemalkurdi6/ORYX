@@ -28,7 +28,10 @@ class UserCreate(BaseModel):
     full_name: str | None = None
     sports: list[str] | None = None
     weight_kg: float | None = None
-    # Onboarding fields — all optional, set onboarding_complete=True on signup
+    # Onboarding fields — all optional, set onboarding_complete=True on signup.
+    # daily_calorie_target is intentionally NOT accepted here: the backend
+    # computes it via calculate_macro_targets so mobile and backend can never
+    # diverge on the formula. See docs/bugs/calorie-target-inconsistency.md.
     display_name: str | None = None
     sport_tags: list[str] | None = None
     primary_goal: str | None = None
@@ -38,7 +41,6 @@ class UserCreate(BaseModel):
     date_of_birth: str | None = None
     height_cm: float | None = None
     biological_sex: str | None = None
-    daily_calorie_target: int | None = None
     preferred_training_time: str | None = None
 
     @field_validator("password")
@@ -206,7 +208,7 @@ class OnboardingUpdate(BaseModel):
     weight_kg: float | None = None
     height_cm: float | None = None
     biological_sex: str | None = None
-    daily_calorie_target: int | None = None
+    # daily_calorie_target intentionally not accepted — see UserCreate.
     preferred_training_time: str | None = None
     onboarding_complete: bool | None = None
     current_onboarding_step: int | None = None

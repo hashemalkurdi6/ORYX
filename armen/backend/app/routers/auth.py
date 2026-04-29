@@ -165,7 +165,6 @@ async def signup(payload: UserCreate, request: Request, db: AsyncSession = Depen
         date_of_birth=payload.date_of_birth,
         height_cm=payload.height_cm,
         biological_sex=payload.biological_sex,
-        daily_calorie_target=payload.daily_calorie_target,
         preferred_training_time=payload.preferred_training_time,
         # Onboarding is marked complete via a later PATCH /auth/me/onboarding,
         # not here. Flipping it true at signup lets users skip the flow entirely.
@@ -175,6 +174,15 @@ async def signup(payload: UserCreate, request: Request, db: AsyncSession = Depen
     db.add(user)
     await db.flush()
     await db.refresh(user)
+    # If the signup payload already contains the full TDEE input set, populate
+    # nutrition_targets immediately so the user's first Nutrition tab open
+    # doesn't silently shift the displayed value.
+    if _has_full_macro_inputs(user):
+        from app.services.nutrition_service import calculate_macro_targets
+        try:
+            await calculate_macro_targets(user.id, db)
+        except Exception:
+            logger.exception("Initial macro target calc failed for user %s", user.id)
     # Send email verification (fire-and-forget — never blocks signup)
     try:
         await _send_email_verification_for(user, db)
@@ -182,6 +190,31 @@ async def signup(payload: UserCreate, request: Request, db: AsyncSession = Depen
         logger.exception("Failed to dispatch verification email for user %s", user.id)
     token = create_access_token(user.id)
     return Token(access_token=token)
+
+
+def _has_full_macro_inputs(user: User) -> bool:
+    """True when the user has every input the TDEE formula needs."""
+    return bool(
+        user.weight_kg
+        and user.height_cm
+        and user.age
+        and user.biological_sex
+        and user.weekly_training_days
+        and user.primary_goal
+    )
+
+
+# Fields whose change requires a macro target recalculation. Kept as a module
+# constant so the same set is checked by every patch handler that mutates the
+# user row (auth + users routers).
+MACRO_INPUT_FIELDS = frozenset({
+    "weight_kg",
+    "height_cm",
+    "age",
+    "biological_sex",
+    "weekly_training_days",
+    "primary_goal",
+})
 
 
 def _create_email_verify_token(user_id: UUID) -> str:
@@ -444,6 +477,17 @@ async def update_onboarding(
         setattr(current_user, field, value)
     await db.flush()
     await db.refresh(current_user)
+    # Recompute macro targets whenever a TDEE input changed or the user just
+    # finished onboarding. This is the single trigger point that keeps
+    # users.daily_calorie_target and nutrition_targets in sync with the survey.
+    if (MACRO_INPUT_FIELDS & fields.keys()) or fields.get("onboarding_complete") is True:
+        if _has_full_macro_inputs(current_user):
+            from app.services.nutrition_service import calculate_macro_targets
+            try:
+                await calculate_macro_targets(current_user.id, db)
+                await db.refresh(current_user)
+            except Exception:
+                logger.exception("Macro target recalc failed for user %s", current_user.id)
     internal = UserOutInternal.model_validate(current_user)
     return internal.to_user_out()
 
@@ -464,5 +508,13 @@ async def update_profile_patch(
         setattr(current_user, field, value)
     await db.flush()
     await db.refresh(current_user)
+    # Profile edits can change weight_kg, which feeds TDEE.
+    if (MACRO_INPUT_FIELDS & fields.keys()) and _has_full_macro_inputs(current_user):
+        from app.services.nutrition_service import calculate_macro_targets
+        try:
+            await calculate_macro_targets(current_user.id, db)
+            await db.refresh(current_user)
+        except Exception:
+            logger.exception("Macro target recalc failed for user %s", current_user.id)
     internal = UserOutInternal.model_validate(current_user)
     return internal.to_user_out()

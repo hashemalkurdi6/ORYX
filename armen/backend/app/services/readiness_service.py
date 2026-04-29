@@ -344,7 +344,11 @@ async def _compute_nutrition(
     total_protein = sum(m.protein_g or 0 for m in meals)
 
     weight_kg = user.weight_kg if user and user.weight_kg else None
-    calorie_target = user.daily_calorie_target if user else None
+    # Pull from nutrition_targets first — that's the canonical store. Fall back
+    # to the User row only if nutrition_targets hasn't been populated yet.
+    from app.services.nutrition_service import get_cached_targets
+    nt = await get_cached_targets(user_id, db) if user else None
+    calorie_target = (nt or {}).get("daily_calorie_target") or (user.daily_calorie_target if user else None)
 
     # Protein adequacy (1.6g/kg/day — minimum recovery dose)
     if weight_kg:

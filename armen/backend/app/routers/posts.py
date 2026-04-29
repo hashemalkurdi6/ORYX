@@ -471,20 +471,16 @@ async def get_insight_data(
     )
     nutr = nutr_res.scalar_one_or_none()
 
-    # Calorie target from nutrition_targets or user profile
-    calorie_target: int | None = None
-    try:
-        from app.models.nutrition_targets import NutritionTargets
-        nt_res = await db.execute(
-            select(NutritionTargets).where(NutritionTargets.user_id == current_user.id)
-        )
-        nt = nt_res.scalar_one_or_none()
-        if nt and nt.daily_calorie_target:
-            calorie_target = nt.daily_calorie_target
-    except Exception as e:
-        logger.warning("NutritionTargets lookup failed for user %s: %s", current_user.id, e)
-    if calorie_target is None:
-        calorie_target = current_user.daily_calorie_target
+    # Calorie target — single source of truth via nutrition_service.
+    from app.services.nutrition_service import calculate_macro_targets, get_cached_targets
+    targets = await get_cached_targets(current_user.id, db)
+    if targets is None:
+        try:
+            targets = await calculate_macro_targets(current_user.id, db)
+        except Exception as e:
+            logger.warning("Macro target calc failed for user %s: %s", current_user.id, e)
+            targets = None
+    calorie_target = (targets or {}).get("daily_calorie_target") or current_user.daily_calorie_target
 
     today_nutrition = {
         "calories_consumed": int(nutr.calories_consumed) if nutr else None,
