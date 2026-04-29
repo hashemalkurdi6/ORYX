@@ -180,4 +180,57 @@ The `users.daily_calorie_target` column becomes a **convenience denormalisation*
 
 ---
 
-**Decision needed from you**: approve the proposed single source of truth + file list above, then I'll execute the fix in three commits (backend fix → mobile fix → data-recalc migration script).
+## Status
+
+Approved on 2026-04-29. Shipped across four commits:
+
+1. `bd7e1f1` — analysis doc (this file)
+2. `17d5f29` — `fix(backend): single source of truth for calorie target`
+3. `ce3041f` — `fix(mobile): align calorie target with backend single source of truth`
+4. (this commit) — backfill migration script at [armen/backend/scripts/recalc_macro_targets.py](../../armen/backend/scripts/recalc_macro_targets.py)
+
+## Verification plan
+
+After deploying these commits, run through the scenarios below on a real device against the dev backend.
+
+### 1. Fresh signup → Nutrition tab consistency
+
+1. Create a new user. Complete onboarding with a known input set (e.g., 30y / 75 kg / 175 cm / Male / 5–6 days / Build Muscle).
+2. On the calorie step (S9), note the displayed kcal. The breakdown card should show "Goal adjustment × 1.10 (+293 kcal)" or similar — multiplicative, matching the backend formula.
+3. Land on Home. The Nutrition snapshot card should show the same calorie target.
+4. Open the Nutrition tab. The big calorie circle should also show the same target.
+5. Open the AI Ask ORYX (assistant). The system prompt should include the same target.
+
+**Pass criteria:** identical kcal value across signup preview, Home, Nutrition, and assistant prompt.
+
+### 2. Survey edit propagates everywhere
+
+1. Same user. Change `primary_goal` from "Build Muscle" to "Lose Fat" via Settings → onboarding edit (or whichever flow saves to `PATCH /me/onboarding`).
+2. Open Nutrition tab — calorie circle should drop (~16% lower vs maintenance).
+3. Open Home — same number.
+4. Trigger meal-plan regenerate — the AI prompt's "Total calories" line should match.
+
+**Pass criteria:** changing any TDEE input (`weight_kg`, `height_cm`, `age`, `biological_sex`, `weekly_training_days`, `primary_goal`) ripples to all read sites.
+
+3. Edit the nutrition survey: change `diet_type` to "Vegan", `carb_approach` to "Low carb". Save. Open Nutrition tab — protein should increase (vegan ×1.10), carbs should drop, fat should rise. The calorie target should be unchanged (those fields don't affect TDEE) but macro split should differ.
+
+### 3. Persistence — not cache-only
+
+1. Recompute targets. Wait. Recompute again with no input change.
+2. The displayed calorie target should be identical both times.
+3. Restart the backend process. `nutrition_targets` row persists in PostgreSQL, so values remain.
+
+### 4. Backfill migration
+
+1. Run `python scripts/recalc_macro_targets.py` (dry run). Output lists every user whose stored target differs from the canonical formula.
+2. Spot-check a few — manually compute expected TDEE for known users, verify the proposed new value matches.
+3. Run `python scripts/recalc_macro_targets.py --apply` to commit.
+4. Re-run the dry run — should report `0 would change`.
+
+**Pass criteria:** idempotent. Second dry run reports zero diffs.
+
+### Edge cases worth manual testing
+
+- Mid-onboarding user (some inputs missing) — should not crash. `_has_full_macro_inputs` returns False, no recalc fires, the User row stays at its default.
+- User with `weight_kg=null` who logs a weight — first weight log triggers a recalc once all other inputs are present.
+- User who has never opened Nutrition tab — first read of `/home/dashboard` lazily populates `nutrition_targets`.
