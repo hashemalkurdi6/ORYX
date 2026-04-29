@@ -7,18 +7,18 @@
 // entirely through colour. Subtle enough that users don't consciously notice
 // it but it tells them visually "this app is about cycling states of the body".
 //
-// Implementation notes:
-//   - Three static <RadialGradient>s (one per readiness colour) defined in
-//     <Defs>, each with the same opacity profile: 0.25 at centre → 0.10 at
-//     40 % → fully transparent at 100 %. The fully-transparent edge is what
-//     makes the halo boundless — there is no edge to see.
-//   - Three <Rect>s stacked on top of each other, each filled with one of
-//     the gradients. We crossfade their *opacities* via Reanimated to walk
-//     from one colour to the next.
-//   - We can't animate <Stop> directly: Stop lives inside <Defs> and never
-//     renders a host instance, so Reanimated's createAnimatedComponent has
-//     nothing to attach animated props to. <Rect> is a real host component
-//     and animates fine.
+// Performance design:
+//   - Three Animated.Views, one per readiness colour. Each contains a fully
+//     static <Svg> with a single <RadialGradient> + <Rect> fill (0.25 → 0.10
+//     → 0 opacity falloff, fully transparent at the edge — no boundary).
+//   - The SVGs rasterise *once* and are layer-cached via shouldRasterizeIOS /
+//     renderToHardwareTextureAndroid. On every subsequent frame the only work
+//     the GPU does is re-blending three cached bitmap layers at new opacities.
+//   - We animate Animated.View opacity (CALayer.opacity on iOS), not Rect
+//     opacity inside the SVG. CALayer opacity is GPU-only, no re-rasterisation.
+//   - Earlier attempts that animated <Stop> directly, or animated <Rect>
+//     opacity inside one SVG, both forced re-rasterisation per frame and
+//     dropped frames noticeably.
 
 import React, { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -26,7 +26,7 @@ import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
 import Animated, {
   Easing,
   interpolate,
-  useAnimatedProps,
+  useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withRepeat,
@@ -34,13 +34,34 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTheme } from '@/contexts/ThemeContext';
 
-const AnimatedRect = Animated.createAnimatedComponent(Rect);
-
 interface ReadinessHaloProps {
   /** Halo diameter in px. Default 600. */
   size?: number;
   /** Loop duration in ms. Default 12000. */
   duration?: number;
+}
+
+interface GradientLayerProps {
+  color: string;
+  size: number;
+  /** Unique id so the three RadialGradient defs don't collide. */
+  id: string;
+}
+
+// Static gradient layer — renders once, gets layer-cached. No animation here.
+function GradientLayer({ color, size, id }: GradientLayerProps) {
+  return (
+    <Svg width={size} height={size} style={StyleSheet.absoluteFillObject}>
+      <Defs>
+        <RadialGradient id={id} cx="50%" cy="50%" rx="50%" ry="50%" fx="50%" fy="50%">
+          <Stop offset="0%"   stopColor={color} stopOpacity={0.25} />
+          <Stop offset="40%"  stopColor={color} stopOpacity={0.10} />
+          <Stop offset="100%" stopColor={color} stopOpacity={0} />
+        </RadialGradient>
+      </Defs>
+      <Rect width={size} height={size} fill={`url(#${id})`} />
+    </Svg>
+  );
 }
 
 export default function ReadinessHalo({
@@ -68,53 +89,46 @@ export default function ReadinessHalo({
     );
   }, [duration, reduceMotion]);
 
-  // Linear crossfade between the three colour layers. At progress=0 only
-  // `high` is visible; at 0.5 only `mid`; at 1 only `low`. The opacities
-  // cleanly hand off without ever summing to >1, so there is no brief
-  // double-bright moment.
-  const highProps = useAnimatedProps(() => ({
+  // Linear crossfade across [0, 0.5, 1]. Opacities cleanly hand off so the
+  // sum is always ≤ 1 — no brief double-bright moment between colours.
+  const highStyle = useAnimatedStyle(() => ({
     opacity: interpolate(progress.value, [0, 0.5, 1], [1, 0, 0]),
   }));
-  const midProps = useAnimatedProps(() => ({
+  const midStyle = useAnimatedStyle(() => ({
     opacity: interpolate(progress.value, [0, 0.5, 1], [0, 1, 0]),
   }));
-  const lowProps = useAnimatedProps(() => ({
+  const lowStyle = useAnimatedStyle(() => ({
     opacity: interpolate(progress.value, [0, 0.5, 1], [0, 0, 1]),
   }));
 
   return (
     <View pointerEvents="none" style={[styles.wrap, { width: size, height: size }]}>
-      <Svg width={size} height={size}>
-        <Defs>
-          {/* One static gradient per readiness colour. All share the same
-              opacity profile so the falloff shape stays constant — only the
-              hue changes as we crossfade. */}
-          <RadialGradient id="halo-high" cx="50%" cy="50%" rx="50%" ry="50%" fx="50%" fy="50%">
-            <Stop offset="0%"   stopColor={theme.readiness.high} stopOpacity={0.25} />
-            <Stop offset="40%"  stopColor={theme.readiness.high} stopOpacity={0.10} />
-            <Stop offset="100%" stopColor={theme.readiness.high} stopOpacity={0} />
-          </RadialGradient>
-          <RadialGradient id="halo-mid" cx="50%" cy="50%" rx="50%" ry="50%" fx="50%" fy="50%">
-            <Stop offset="0%"   stopColor={theme.readiness.mid} stopOpacity={0.25} />
-            <Stop offset="40%"  stopColor={theme.readiness.mid} stopOpacity={0.10} />
-            <Stop offset="100%" stopColor={theme.readiness.mid} stopOpacity={0} />
-          </RadialGradient>
-          <RadialGradient id="halo-low" cx="50%" cy="50%" rx="50%" ry="50%" fx="50%" fy="50%">
-            <Stop offset="0%"   stopColor={theme.readiness.low} stopOpacity={0.25} />
-            <Stop offset="40%"  stopColor={theme.readiness.low} stopOpacity={0.10} />
-            <Stop offset="100%" stopColor={theme.readiness.low} stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        {/* Three stacked rects covering the SVG bounds. Each is filled with
-            one of the gradients above; opacity crossfades between them. */}
-        <AnimatedRect width={size} height={size} fill="url(#halo-high)" animatedProps={highProps} />
-        <AnimatedRect width={size} height={size} fill="url(#halo-mid)"  animatedProps={midProps} />
-        <AnimatedRect width={size} height={size} fill="url(#halo-low)"  animatedProps={lowProps} />
-      </Svg>
+      <Animated.View
+        style={[styles.layer, highStyle]}
+        shouldRasterizeIOS
+        renderToHardwareTextureAndroid
+      >
+        <GradientLayer color={theme.readiness.high} size={size} id="halo-high" />
+      </Animated.View>
+      <Animated.View
+        style={[styles.layer, midStyle]}
+        shouldRasterizeIOS
+        renderToHardwareTextureAndroid
+      >
+        <GradientLayer color={theme.readiness.mid} size={size} id="halo-mid" />
+      </Animated.View>
+      <Animated.View
+        style={[styles.layer, lowStyle]}
+        shouldRasterizeIOS
+        renderToHardwareTextureAndroid
+      >
+        <GradientLayer color={theme.readiness.low} size={size} id="halo-low" />
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', justifyContent: 'center' },
+  layer: { ...StyleSheet.absoluteFillObject },
 });
