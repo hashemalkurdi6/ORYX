@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  Easing,
   View,
   Text,
   ScrollView,
@@ -206,10 +207,15 @@ function formatTicker(): string {
 // useCountUp moved to services/animations.ts — imported at the top of this file
 // with cacheKey support so modal opens / tab switches don't replay the animation.
 
+// Strong ease-out — punchier than Easing.out(Easing.cubic). Used across every
+// dusk entry beat. Sine in-out gives a true breath shape for skeleton pulse.
+const STRONG_OUT_EASING  = Easing.bezier(0.23, 1, 0.32, 1);
+const SOFT_BREATH_EASING = Easing.bezier(0.45, 0, 0.55, 1);
+
 /**
  * Stagger-entrance wrapper — fades + slides up children by `delay` ms.
- * Mirrors the design's `oryx-up` keyframe applied with incremental per-card
- * delays (60ms / 120ms / 180ms / ...).
+ * Strong ease-out so each card *settles* into place rather than easing
+ * symmetrically.
  */
 function AnimatedCard({ delay = 0, children, style }: {
   delay?: number;
@@ -220,8 +226,8 @@ function AnimatedCard({ delay = 0, children, style }: {
   const translateY = useRef(new Animated.Value(20)).current;
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 380, delay, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 380, delay, useNativeDriver: true }),
+      Animated.timing(opacity,    { toValue: 1, duration: 420, delay, easing: STRONG_OUT_EASING, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 420, delay, easing: STRONG_OUT_EASING, useNativeDriver: true }),
     ]).start();
   }, []);
   return (
@@ -235,10 +241,12 @@ function AnimatedCard({ delay = 0, children, style }: {
 function SkeletonBlock({ width, height, style }: { width: string | number; height: number; style?: object }) {
   const opacity = useRef(new Animated.Value(0.3)).current;
   useEffect(() => {
+    // Sine in-out breath — the most common skeleton-loader tell is linear
+    // pulse. A symmetric sine curve makes the pulse feel organic.
     const anim = Animated.loop(
       Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.6, duration: 700, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.3, duration: 700, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.6, duration: 700, easing: SOFT_BREATH_EASING, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 700, easing: SOFT_BREATH_EASING, useNativeDriver: true }),
       ])
     );
     anim.start();
@@ -287,9 +295,10 @@ function ConcentricHero({
   const { resolvedScheme, theme } = useTheme();
   const isLight = resolvedScheme === 'light';
   // Ring track (the unfilled portion of the circle). Very subtle — guides the
-  // eye, doesn't compete with the arc.
-  const trackOuter = isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)';
-  const trackInner = isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.05)';
+  // eye, doesn't compete with the arc. Routes through theme.glass.border so
+  // dark = Ivory hairline @ 10% (warm), light = black @ 8%.
+  const trackOuter = theme.glass.border;
+  const trackInner = theme.glass.border;
   const oHex  = readinessHex(color);
   // Light mode bumps stroke width +2 and draws a soft glow halo behind the arc
   // to compensate for the missing translucent-glow treatment dark mode gets.
@@ -431,7 +440,7 @@ function ScanSweep() {
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(x, { toValue: 1.1, duration: 3000, delay: 1000, useNativeDriver: true }),
+        Animated.timing(x, { toValue: 1.1, duration: 3000, delay: 1000, easing: STRONG_OUT_EASING, useNativeDriver: true }),
         Animated.timing(x, { toValue: -0.6, duration: 0, useNativeDriver: true }),
         Animated.timing(x, { toValue: -0.6, duration: 1000, useNativeDriver: true }),
       ]),
@@ -707,7 +716,7 @@ export default function HomeScreen() {
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={T.text.muted} colors={[CLR_PALETTE.ACCENT]} />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={T.text.secondary} colors={[CLR_PALETTE.ACCENT]} />
         }
       >
         {/* Error banner */}
@@ -1053,7 +1062,7 @@ export default function HomeScreen() {
                 {dashboard?.last_session ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <View style={s.lastSessionIcon}>
-                      <Ionicons name={getTrainingIcon(dashboard.last_session.sport_type) as any} size={16} color={T.text.secondary} />
+                      <Ionicons name={getTrainingIcon(dashboard.last_session.sport_type) as any} size={16} color={T.accentInk} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={s.lastSessionName} numberOfLines={1}>{dashboard.last_session.name}</Text>
@@ -1196,9 +1205,13 @@ export default function HomeScreen() {
 
                 <View style={s.nutMacrosRow}>
                   {[
-                    { label: 'PROTEIN', val: Math.round(dashboard?.protein_today ?? 0), target: dashboard?.protein_target, color: '#ef4444' },
-                    { label: 'CARBS',   val: Math.round(dashboard?.carbs_today   ?? 0), target: dashboard?.carbs_target,   color: '#f59e0b' },
-                    { label: 'FAT',     val: Math.round(dashboard?.fat_today     ?? 0), target: dashboard?.fat_target,     color: CLR_PALETTE.GREEN },
+                    // Three macros, three warm-family hues — kept inside the
+                    // dusk palette so the cluster reads as one place. Smoulder
+                    // (deep) / Glow (light) / Bloom (rose) are clearly distinct
+                    // by lightness and hue against Vesper.
+                    { label: 'PROTEIN', val: Math.round(dashboard?.protein_today ?? 0), target: dashboard?.protein_target, color: T.status.danger },
+                    { label: 'CARBS',   val: Math.round(dashboard?.carbs_today   ?? 0), target: dashboard?.carbs_target,   color: T.readiness.mid },
+                    { label: 'FAT',     val: Math.round(dashboard?.fat_today     ?? 0), target: dashboard?.fat_target,     color: T.readiness.high },
                   ].map((m) => (
                     <View key={m.label} style={s.nutMacro}>
                       <MiniArc pct={m.target && m.target > 0 ? m.val / m.target : 0} color={m.color} />
@@ -1255,7 +1268,7 @@ export default function HomeScreen() {
                 )}
               </View>
               <TouchableOpacity
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: weightLoggedToday ? 'rgba(39,174,96,0.12)' : 'rgba(255,255,255,0.08)', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: weightLoggedToday ? 'rgba(224,131,148,0.14)' : T.glass.pill, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 }}
                 onPress={(e) => { e.stopPropagation(); setShowWeightSheet(true); }}
                 activeOpacity={0.7}
               >
@@ -1595,9 +1608,9 @@ function createStyles(t: ThemeColors) {
       color: t.text.primary, letterSpacing: 1.4, textTransform: 'uppercase',
     },
 
-    // Error
+    // Error — Smoulder-tinted, in-family with theme.status.danger
     errorBox: {
-      backgroundColor: 'rgba(242,122,92,0.12)',
+      backgroundColor: 'rgba(198,100,87,0.12)',
       borderLeftWidth: 3,
       borderLeftColor: CLR_PALETTE.RED,
       borderRadius: R.sm,
@@ -1608,7 +1621,7 @@ function createStyles(t: ThemeColors) {
       justifyContent: 'space-between',
     },
     errorText: { color: CLR_PALETTE.RED, fontSize: 13, flex: 1 },
-    retryBtn: { paddingHorizontal: SP[3], paddingVertical: 5, backgroundColor: 'rgba(242,122,92,0.15)', borderRadius: R.xs, marginLeft: SP[2] },
+    retryBtn: { paddingHorizontal: SP[3], paddingVertical: 5, backgroundColor: 'rgba(198,100,87,0.15)', borderRadius: R.xs, marginLeft: SP[2] },
     retryText: { color: CLR_PALETTE.RED, fontSize: 12, fontWeight: '600' },
 
     // ── Section 1: Header ──────────────────────────────────────────────────────
@@ -1840,7 +1853,7 @@ function createStyles(t: ThemeColors) {
     lastSessionName: { fontSize: 16, fontWeight: '500', color: t.text.primary, marginBottom: 2, letterSpacing: -0.3 },
     lastSessionMeta: { fontSize: 12, color: t.text.secondary, fontFamily: TY.mono.medium, letterSpacing: 0.4 },
     rpePill: {
-      backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: R.xs,
+      backgroundColor: t.glass.pill, borderRadius: R.xs,
       paddingHorizontal: SP[2], paddingVertical: 4,
       borderWidth: 1, borderColor: t.divider,
     },
@@ -1959,7 +1972,7 @@ function createStyles(t: ThemeColors) {
     },
     infoIcon: {
       width: 34, height: 34, borderRadius: R.sm,
-      backgroundColor: 'rgba(255,255,255,0.04)',
+      backgroundColor: t.glass.pill,
       borderWidth: 1, borderColor: t.divider,
       alignItems: 'center', justifyContent: 'center',
     },

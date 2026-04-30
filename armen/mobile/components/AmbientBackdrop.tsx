@@ -1,12 +1,15 @@
 // AmbientBackdrop — the rich multi-colour canvas under the app.
 //
-// Dark mode (original Claude Design v2 spec, unchanged):
-//   radial glow stack over a #141820 → #0E1118 base
+// Dark mode (Dusk Direction, 2026-04 — see docs/design/dusk-direction.md):
+//   Vesper → Nightfall vertical base. Five glows arranged as the dusk sky
+//   from inside a room: warm afterglow rising from the bottom (Ember),
+//   rose mid-band (Bloom), mauve/periwinkle high (Veil + Horizon).
 //
 // Light mode (from Claude Design "ORYX Light" handoff):
 //   radial-gradient(ellipse at 40% 0%, #D8F2A8 0%, #EEF2FA 40%, #E4EAF8 100%)
 //   A pale green-to-periwinkle wash. Same structural idea (soft radial tint),
 //   just lightened neutrals and a single dominant tint instead of five glows.
+//   Untouched in this pass.
 //
 // React Native has no radial gradient primitive, so each "glow" is an
 // absolutely-positioned circular View with a solid fill + opacity. The chosen
@@ -65,27 +68,30 @@ export default function AmbientBackdrop() {
     );
   }
 
-  // Dark mode — original spec, exactly as it was.
+  // Dark mode — Dusk Direction. The five glows form a literal dusk sky:
+  // Veil + Horizon overhead (cool, moving in), Bloom in the rose mid-band,
+  // Ember rising warm at the bottom horizon. Bottom Ember is the strongest
+  // glow because the sun's afterglow is the brightest part of civil twilight.
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {/* Deep-slate base */}
+      {/* Vesper → Nightfall base — never #000, always indigo */}
       <LinearGradient
-        colors={['#141820', '#0E1118']}
+        colors={['#161A2E', '#0F1220']}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Top-left: lime, strongest */}
-      <Glow color="#A8EF3A" opacity={0.18} size={700} x={0.20} y={0.05} />
-      {/* Top-right: sky blue */}
-      <Glow color="#5BA8FF" opacity={0.16} size={600} x={0.85} y={0.15} />
-      {/* Bottom-centre: coral */}
-      <Glow color="#FF6B4A" opacity={0.12} size={800} x={0.50} y={0.88} />
-      {/* Mid-right: electric accent */}
-      <Glow color="#DEFF47" opacity={0.10} size={500} x={0.78} y={0.52} />
-      {/* Lower-left: second blue */}
-      <Glow color="#5BA8FF" opacity={0.09} size={600} x={0.10} y={0.70} />
+      {/* Top-left: Veil — dusty mauve, the held transition */}
+      <Glow color="#9E83BD" opacity={0.18} size={700} x={0.20} y={0.05} />
+      {/* Top-right: Horizon — periwinkle, the cool anchoring the indigo */}
+      <Glow color="#7E84C2" opacity={0.16} size={600} x={0.85} y={0.15} />
+      {/* Bottom-centre: Ember — the warm afterglow rising from the horizon */}
+      <Glow color="#EE9B7A" opacity={0.18} size={800} x={0.50} y={0.88} />
+      {/* Mid-right: Bloom — rose mid-sky, subtle */}
+      <Glow color="#E08394" opacity={0.10} size={500} x={0.78} y={0.52} />
+      {/* Lower-left: Bloom — recessive, a hint of warmth on the cool side */}
+      <Glow color="#E08394" opacity={0.08} size={600} x={0.10} y={0.70} />
     </View>
   );
 }
