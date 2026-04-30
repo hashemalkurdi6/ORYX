@@ -612,12 +612,12 @@ async def lifespan(app: FastAPI):
     # diagnosis, autopsy). ANTHROPIC_API_KEY is kept only for /nutrition/scan Claude vision.
     anthropic_key = _settings.ANTHROPIC_API_KEY
     if anthropic_key:
-        logger.info("ANTHROPIC_API_KEY present (len=%d, starts=%s...)", len(anthropic_key), anthropic_key[:8])
+        logger.info("ANTHROPIC_API_KEY present (len=%d)", len(anthropic_key))
     else:
         logger.warning("ANTHROPIC_API_KEY is MISSING — Claude vision food scan will fail (not diagnosis/autopsy)")
     openai_key = _settings.OPENAI_API_KEY
     if openai_key:
-        logger.info("OPENAI_API_KEY present (len=%d, starts=%s...)", len(openai_key), openai_key[:7])
+        logger.info("OPENAI_API_KEY present (len=%d)", len(openai_key))
     else:
         logger.warning("OPENAI_API_KEY is MISSING — diagnosis, autopsy, meal plans, nutrition assistant, food photo scanning will all fail")
 

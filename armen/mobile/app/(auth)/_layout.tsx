@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router';
-import { theme as T } from '@/services/theme';
+import { theme } from '@/services/theme';
 
 // Auth stack uses a soft fade between screens so the dusk canvas stays
 // continuous — Vesper carries through; no flash to a darker tone. 220ms
@@ -9,7 +9,7 @@ export default function AuthLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: T.bg.primary },
+        contentStyle: { backgroundColor: theme.bg.primary },
         animation: 'fade',
         animationDuration: 220,
       }}

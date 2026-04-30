@@ -826,7 +826,7 @@ export default function HomeScreen() {
           const hrv   = dashboard?.hrv_ms ?? null;
           const rhr   = dashboard?.resting_heart_rate ?? null;
           const sleep = dashboard?.sleep_hours != null ? Number(dashboard.sleep_hours).toFixed(1) : null;
-          const allMissing = hrv == null && rhr == null && sleep == null;
+          const anyMissing = hrv == null || rhr == null || sleep == null;
           return (
             <AnimatedCard delay={60}>
               <View style={s.vitalsRow}>
@@ -834,7 +834,7 @@ export default function HomeScreen() {
                 <VitalTile label="RHR"   value={rhr}   unit="bpm" icon="flash-outline" />
                 <VitalTile label="SLEEP" value={sleep} unit="hr"  icon="moon-outline" />
               </View>
-              {allMissing ? (
+              {anyMissing ? (
                 <TouchableOpacity
                   style={s.connectHint}
                   activeOpacity={0.7}
@@ -848,8 +848,8 @@ export default function HomeScreen() {
           );
         })() : null}
 
-        {/* ─── SECTION 3: STRAIN GAUGE (only when a session has been logged) ── */}
-        {!dashLoading && todaySessionLoad > 0 ? (
+        {/* ─── SECTION 3: STRAIN GAUGE — always visible; shows 0 bar before first session ── */}
+        {!dashLoading ? (
           <GlassCard padding={SP[4]} style={{ marginBottom: SP[3] }}>
             <View style={s.strainHeaderRow}>
               <Text style={s.strainLeftLabel}>TODAY'S LOAD</Text>
@@ -874,15 +874,15 @@ export default function HomeScreen() {
                 backgroundColor: T.text.secondary, opacity: 0.4,
               }}/>
             </View>
-            {/* Zone ticks (0 / 7 / 14 / 21) — design's strain scale */}
+            {/* Zone ticks — scaled to dailyRecLoad (training-load units, not Whoop strain) */}
             <View style={s.strainTicks}>
               <Text style={s.strainTickText}>0</Text>
-              <Text style={s.strainTickText}>7</Text>
-              <Text style={s.strainTickText}>14</Text>
-              <Text style={s.strainTickText}>21</Text>
+              <Text style={s.strainTickText}>{Math.round(dailyRecLoad * 0.33)}</Text>
+              <Text style={s.strainTickText}>{Math.round(dailyRecLoad * 0.66)}</Text>
+              <Text style={s.strainTickText}>{dailyRecLoad}</Text>
             </View>
           </GlassCard>
-        ) : null}
+        ) : null /* dashLoading skeleton handled by hero card above */}
 
         {/* ─── SECTION 4: QUICK ACTION PILLS ───────────────────────────────── */}
         <ScrollView
@@ -1166,12 +1166,16 @@ export default function HomeScreen() {
 
               {(thisWeek > 0 || lastWeek > 0) && <View style={s.trainDividerH} />}
 
-              {/* ── Zone 4: Recommendation ── */}
-              <View style={[s.trainZone, { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingBottom: 0 }]}>
-                <Ionicons name="flash" size={12} color={T.text.muted} style={{ marginTop: 2 }} />
-                <Text style={{ flex: 1, fontSize: 12, color: T.text.secondary, fontStyle: 'italic' }}>{rec}</Text>
-                <Ionicons name="chevron-forward" size={13} color={T.text.muted} style={{ marginTop: 2 }} />
-              </View>
+              {/* ── Zone 4: Recommendation — only shown when AI diagnosis has no recommendation
+                  to avoid duplicate messaging (ORYX Intelligence card above already surfaces
+                  diagnosis.recommendation when it exists). */}
+              {!diagnosis?.recommendation ? (
+                <View style={[s.trainZone, { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingBottom: 0 }]}>
+                  <Ionicons name="flash" size={12} color={T.text.muted} style={{ marginTop: 2 }} />
+                  <Text style={{ flex: 1, fontSize: 12, color: T.text.secondary, fontStyle: 'italic' }}>{rec}</Text>
+                  <Ionicons name="chevron-forward" size={13} color={T.text.muted} style={{ marginTop: 2 }} />
+                </View>
+              ) : null}
             </TouchableOpacity>
           );
         })()}
@@ -1268,7 +1272,7 @@ export default function HomeScreen() {
                 )}
               </View>
               <TouchableOpacity
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: weightLoggedToday ? 'rgba(224,131,148,0.14)' : T.glass.pill, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: weightLoggedToday ? T.bg.tint : T.glass.pill, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: weightLoggedToday ? CLR_PALETTE.GREEN : T.glass.border }}
                 onPress={(e) => { e.stopPropagation(); setShowWeightSheet(true); }}
                 activeOpacity={0.7}
               >
@@ -1362,16 +1366,20 @@ export default function HomeScreen() {
             </View>
             <View style={s.weekDivider} />
             <View style={s.weekStat}>
-              <Text style={s.weekStatVal}>{(dashboard?.calories_this_week ?? 0).toLocaleString()}</Text>
-              <Text style={s.weekStatLabel}>CAL THIS WEEK</Text>
+              <Text style={s.weekStatVal}>{dashboard?.weekly_load ?? 0}</Text>
+              <Text style={s.weekStatLabel}>LOAD</Text>
             </View>
             <View style={s.weekDivider} />
             <View style={s.weekStat}>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-                <Text style={s.weekStatVal}>{dashboard?.current_streak ?? 0}</Text>
-                <Ionicons name="flame" size={11} color={CLR_PALETTE.AMBER} style={{ marginLeft: 3 }} />
-              </View>
-              <Text style={s.weekStatLabel}>DAY STREAK</Text>
+              <Text style={[s.weekStatVal, weeklyLoadPct >= 1 ? { color: CLR_PALETTE.GREEN } : {}]}>
+                {Math.round(weeklyLoadPct * 100)}%
+              </Text>
+              <Text style={s.weekStatLabel}>GOAL</Text>
+            </View>
+            <View style={s.weekDivider} />
+            <View style={s.weekStat}>
+              <Text style={s.weekStatVal}>{(dashboard?.calories_this_week ?? 0).toLocaleString()}</Text>
+              <Text style={s.weekStatLabel}>CAL</Text>
             </View>
           </View>
         )}
@@ -1496,6 +1504,14 @@ export default function HomeScreen() {
                       ) : null}
                     </View>
                     <Text style={s.infoDesc}>{info.desc}</Text>
+                    {breakdown?.adjusted_weight != null && breakdown?.default_weight != null && (
+                      <Text style={{ fontSize: 11, color: T.text.muted, marginTop: 2 }}>
+                        Weight: {Math.round(breakdown.adjusted_weight * 100)}%
+                        {Math.abs(breakdown.adjusted_weight - breakdown.default_weight) > 0.005
+                          ? ` (default ${Math.round(breakdown.default_weight * 100)}%)`
+                          : ''}
+                      </Text>
+                    )}
                   </View>
                 </View>
               );
@@ -1608,11 +1624,11 @@ function createStyles(t: ThemeColors) {
       color: t.text.primary, letterSpacing: 1.4, textTransform: 'uppercase',
     },
 
-    // Error — Smoulder-tinted, in-family with theme.status.danger
+    // Error — token-routed through theme.status.danger / theme.bg.tint
     errorBox: {
-      backgroundColor: 'rgba(198,100,87,0.12)',
+      backgroundColor: t.bg.tint,
       borderLeftWidth: 3,
-      borderLeftColor: CLR_PALETTE.RED,
+      borderLeftColor: t.status.danger,
       borderRadius: R.sm,
       padding: SP[3],
       marginBottom: SP[3],
@@ -1620,9 +1636,9 @@ function createStyles(t: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'space-between',
     },
-    errorText: { color: CLR_PALETTE.RED, fontSize: 13, flex: 1 },
-    retryBtn: { paddingHorizontal: SP[3], paddingVertical: 5, backgroundColor: 'rgba(198,100,87,0.15)', borderRadius: R.xs, marginLeft: SP[2] },
-    retryText: { color: CLR_PALETTE.RED, fontSize: 12, fontWeight: '600' },
+    errorText: { color: t.status.danger, fontSize: 13, flex: 1 },
+    retryBtn: { paddingHorizontal: SP[3], paddingVertical: 5, backgroundColor: t.bg.subtle, borderRadius: R.xs, marginLeft: SP[2] },
+    retryText: { color: t.status.danger, fontSize: 12, fontWeight: '600' },
 
     // ── Section 1: Header ──────────────────────────────────────────────────────
     header: {
@@ -1915,8 +1931,8 @@ function createStyles(t: ThemeColors) {
     },
     weekStat: { flex: 1, alignItems: 'center' },
     weekStatVal: {
-      fontSize: 22, fontWeight: '500', color: t.text.primary, marginBottom: 2,
-      fontFamily: TY.mono.medium, letterSpacing: -0.4,
+      fontSize: 18, fontWeight: '500', color: t.text.primary, marginBottom: 2,
+      fontFamily: TY.mono.medium, letterSpacing: -0.3,
     },
     weekStatLabel: { fontSize: 9, color: t.text.secondary, textTransform: 'uppercase', letterSpacing: 1.2, fontFamily: TY.mono.medium },
     weekDivider: { width: 1, height: 30, backgroundColor: t.divider },

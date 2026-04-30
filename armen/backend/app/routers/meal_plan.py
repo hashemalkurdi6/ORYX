@@ -818,7 +818,10 @@ async def nutrition_assistant(
 
     # Today's nutrition logs — bounded on the user's local day
     from app.services.user_time import user_day_bounds, user_today
-    start_of_day, end_of_day = user_day_bounds(current_user)
+    _sod, _eod = user_day_bounds(current_user)
+    # Strip tzinfo: logged_at is TIMESTAMP WITHOUT TIME ZONE.
+    start_of_day = _sod.replace(tzinfo=None)
+    end_of_day = _eod.replace(tzinfo=None)
     logs_res = await db.execute(
         select(NutritionLog).where(
             NutritionLog.user_id == current_user.id,

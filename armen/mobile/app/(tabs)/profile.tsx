@@ -137,13 +137,22 @@ function getSportIcon(sport: string): React.ComponentProps<typeof Ionicons>['nam
 
 // ── Badge definitions ────────────────────────────────────────────────────────
 
+// 'colorKey' references a path in ThemeColors so badge colors update live on
+// theme switch, rather than being frozen to the dark snapshot at module parse time.
+type BadgeColorKey = 'success' | 'secondary';
+
 interface Badge {
   id: string;
   name: string;
   subtitle: string;
   icon: React.ComponentProps<typeof Ionicons>['name'];
-  color: string;
+  colorKey: BadgeColorKey;
   earned: (activities: Activity[]) => boolean;
+}
+
+function badgeColor(key: BadgeColorKey, t: ThemeColors): string {
+  if (key === 'success') return t.status.success;
+  return t.text.secondary;
 }
 
 const BADGES: Badge[] = [
@@ -152,7 +161,7 @@ const BADGES: Badge[] = [
     name: 'First Workout',
     subtitle: 'Started the journey',
     icon: 'checkmark-circle',
-    color: T.status.success,
+    colorKey: 'success',
     earned: (a) => a.length >= 1,
   },
   {
@@ -160,7 +169,7 @@ const BADGES: Badge[] = [
     name: '10 Workouts',
     subtitle: 'Building the habit',
     icon: 'star',
-    color: T.text.secondary,
+    colorKey: 'secondary',
     earned: (a) => a.length >= 10,
   },
   {
@@ -168,7 +177,7 @@ const BADGES: Badge[] = [
     name: '50 Workouts',
     subtitle: 'Committed athlete',
     icon: 'trophy',
-    color: T.text.secondary,
+    colorKey: 'secondary',
     earned: (a) => a.length >= 50,
   },
   {
@@ -176,7 +185,7 @@ const BADGES: Badge[] = [
     name: '100 Workouts',
     subtitle: 'Elite consistency',
     icon: 'ribbon',
-    color: T.text.secondary,
+    colorKey: 'secondary',
     earned: (a) => a.length >= 100,
   },
   {
@@ -184,7 +193,7 @@ const BADGES: Badge[] = [
     name: 'Early Bird',
     subtitle: 'Up before 6am',
     icon: 'sunny',
-    color: T.text.secondary,
+    colorKey: 'secondary',
     earned: (a) =>
       a.some((act) => {
         if (!act.start_date) return false;
@@ -197,7 +206,7 @@ const BADGES: Badge[] = [
     name: 'Distance King',
     subtitle: 'Half marathon+',
     icon: 'navigate',
-    color: T.text.secondary,
+    colorKey: 'secondary',
     earned: (a) => a.some((act) => (act.distance_meters ?? 0) > 21000),
   },
   {
@@ -205,7 +214,7 @@ const BADGES: Badge[] = [
     name: 'Consistent',
     subtitle: '7-day streak',
     icon: 'calendar',
-    color: T.text.secondary,
+    colorKey: 'secondary',
     earned: (a) => computeCurrentStreak(a) >= 7,
   },
   {
@@ -213,7 +222,7 @@ const BADGES: Badge[] = [
     name: 'Green Week',
     subtitle: 'Peak recovery run',
     icon: 'leaf',
-    color: T.status.success,
+    colorKey: 'success',
     earned: (_a) => false,
   },
 ];
@@ -274,9 +283,9 @@ function WorkoutHeatmap({ activities, entries }: { activities: Activity[]; entri
 
   function cellColor(count: number): string {
     if (count === 0) return theme.border;
-    if (count === 1) return 'rgba(39,174,96,0.4)';
-    if (count === 2) return 'rgba(39,174,96,0.7)';
-    return T.status.success;
+    if (count === 1) return theme.status.success + '66'; // 40% opacity
+    if (count === 2) return theme.status.success + 'B3'; // 70% opacity
+    return theme.status.success;
   }
 
   const CELL = 10;
@@ -928,7 +937,7 @@ export default function ProfileScreen() {
                 <Ionicons
                   name={badge.icon}
                   size={28}
-                  color={earned ? badge.color : theme.border}
+                  color={earned ? badgeColor(badge.colorKey, theme) : theme.border}
                 />
                 {!earned && (
                   <View style={s.badgeLockOverlay}>
@@ -1541,7 +1550,7 @@ export default function ProfileScreen() {
                   borderWidth: 1, borderColor: earned ? T.accent : T.border,
                   alignItems: 'center', justifyContent: 'center',
                 }}>
-                  <Ionicons name={selectedBadge.icon} size={40} color={earned ? selectedBadge.color : T.text.muted} />
+                  <Ionicons name={selectedBadge.icon} size={40} color={earned ? badgeColor(selectedBadge.colorKey, theme) : T.text.muted} />
                 </View>
                 <Text style={{
                   fontFamily: TY.sans.bold,

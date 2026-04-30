@@ -40,6 +40,15 @@ const CARD_WIDTH = SCREEN_WIDTH - 40;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+/** Convert a #RRGGBB hex to rgba(r,g,b,a) for chart-kit color callbacks. */
+function hexToRgba(hex: string, alpha: number): string {
+  const m = hex.replace('#', '');
+  const r = parseInt(m.slice(0, 2), 16);
+  const g = parseInt(m.slice(2, 4), 16);
+  const b = parseInt(m.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 function todayISODate(): string {
   return new Date().toISOString().split('T')[0];
 }
@@ -564,10 +573,10 @@ export default function WellnessScreen() {
                 const sevenAvg = trends.hrv_stats.seven_day_avg;
                 const thirtyAvg = trends.hrv_stats.thirty_day_avg;
                 const datasets: Array<{ data: number[]; color: (o?: number) => string; strokeWidth: number; withDots?: boolean }> = [
-                  { data: pts, color: (o = 1) => `rgba(0,196,140,${o})`, strokeWidth: 2 },
+                  { data: pts, color: (o = 1) => hexToRgba(t.status.success, o), strokeWidth: 2 },
                 ];
-                if (sevenAvg != null) datasets.push({ data: pts.map(() => sevenAvg), color: (o = 1) => `rgba(255,200,87,${o})`, strokeWidth: 1, withDots: false });
-                if (thirtyAvg != null) datasets.push({ data: pts.map(() => thirtyAvg), color: (o = 1) => `rgba(160,160,170,${o * 0.7})`, strokeWidth: 1, withDots: false });
+                if (sevenAvg != null) datasets.push({ data: pts.map(() => sevenAvg), color: (o = 1) => hexToRgba(t.readiness.mid, o), strokeWidth: 1, withDots: false });
+                if (thirtyAvg != null) datasets.push({ data: pts.map(() => thirtyAvg), color: (o = 1) => hexToRgba(t.text.muted, o * 0.7), strokeWidth: 1, withDots: false });
                 return (
                   <>
                     <LineChart
@@ -591,13 +600,13 @@ export default function WellnessScreen() {
                       </View>
                       {sevenAvg != null && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          <View style={{ width: 10, height: 2, backgroundColor: 'rgba(255,200,87,1)' }} />
+                          <View style={{ width: 10, height: 2, backgroundColor: t.readiness.mid }} />
                           <Text style={{ fontSize: 9, color: t.text.muted }}>7d avg</Text>
                         </View>
                       )}
                       {thirtyAvg != null && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          <View style={{ width: 10, height: 2, backgroundColor: 'rgba(160,160,170,0.7)' }} />
+                          <View style={{ width: 10, height: 2, backgroundColor: t.text.muted, opacity: 0.7 }} />
                           <Text style={{ fontSize: 9, color: t.text.muted }}>30d avg</Text>
                         </View>
                       )}
@@ -660,7 +669,7 @@ export default function WellnessScreen() {
                       backgroundGradientFromOpacity: 0,
                       backgroundGradientToOpacity: 0,
                       decimalPlaces: 1,
-                      color: (o = 1) => `rgba(0,196,140,${o})`,
+                      color: (o = 1) => hexToRgba(t.status.success, o),
                       labelColor: () => t.text.muted,
                       propsForBackgroundLines: { stroke: 'transparent' },
                       barPercentage: 0.6,
@@ -746,10 +755,10 @@ export default function WellnessScreen() {
                       data={{
                         labels: [],
                         datasets: [
-                          { data: sleepSeries,   color: (o = 1) => `rgba(122,162,247,${o})`, strokeWidth: 2 },
-                          { data: fatigueSeries, color: (o = 1) => `rgba(255,200,87,${o})`,  strokeWidth: 2 },
-                          { data: stressSeries,  color: (o = 1) => `rgba(247,118,142,${o})`, strokeWidth: 2 },
-                          { data: soreSeries,    color: (o = 1) => `rgba(0,196,140,${o})`,   strokeWidth: 2 },
+                          { data: sleepSeries,   color: (o = 1) => hexToRgba(t.signal.load,    o), strokeWidth: 2 },
+                          { data: fatigueSeries, color: (o = 1) => hexToRgba(t.readiness.mid,  o), strokeWidth: 2 },
+                          { data: stressSeries,  color: (o = 1) => hexToRgba(t.readiness.low,  o), strokeWidth: 2 },
+                          { data: soreSeries,    color: (o = 1) => hexToRgba(t.status.success, o), strokeWidth: 2 },
                         ],
                         legend: [],
                       }}
@@ -767,10 +776,10 @@ export default function WellnessScreen() {
                     {/* Per-component legend */}
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 10, justifyContent: 'center' }}>
                       {[
-                        { c: 'rgba(122,162,247,1)', label: 'Sleep' },
-                        { c: 'rgba(255,200,87,1)',  label: 'Fatigue' },
-                        { c: 'rgba(247,118,142,1)', label: 'Stress' },
-                        { c: 'rgba(0,196,140,1)',   label: 'Soreness' },
+                        { c: t.signal.load,    label: 'Sleep' },
+                        { c: t.readiness.mid,  label: 'Fatigue' },
+                        { c: t.readiness.low,  label: 'Stress' },
+                        { c: t.status.success, label: 'Soreness' },
                       ].map(({ c, label }) => (
                         <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                           <View style={{ width: 10, height: 2, backgroundColor: c }} />
@@ -881,7 +890,7 @@ export default function WellnessScreen() {
 function createStyles(t: ThemeColors) {
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: t.bg.primary },
-  contentContainer: { paddingHorizontal: 20, paddingBottom: 40 },
+  contentContainer: { paddingHorizontal: 20, paddingBottom: 120 },
   loadingContainer: { flex: 1, backgroundColor: t.bg.primary, alignItems: 'center', justifyContent: 'center' },
   safeHeader: { paddingBottom: 20 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -900,7 +909,7 @@ function createStyles(t: ThemeColors) {
   recoveryScoreRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 16 },
   recoveryScoreCircle: {
     width: 72, height: 72, borderRadius: 36,
-    backgroundColor: t.bg.primary, borderWidth: 2, borderColor: t.glass.card,
+    backgroundColor: t.bg.primary, borderWidth: 2, borderColor: t.glass.border,
     alignItems: 'center', justifyContent: 'center',
   },
   recoveryScoreNum: { fontSize: 22, fontWeight: '800' },
@@ -911,10 +920,10 @@ function createStyles(t: ThemeColors) {
   metricsRow: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: t.bg.primary, borderRadius: 12, padding: 14,
-    borderWidth: 1, borderColor: t.glass.card,
+    borderWidth: 1, borderColor: t.glass.border,
   },
   metricItem: { flex: 1, alignItems: 'center', gap: 3 },
-  metricDivider: { width: 1, height: 28, backgroundColor: t.glass.card },
+  metricDivider: { width: 1, height: 28, backgroundColor: t.glass.border },
   metricValue: { fontSize: 18, fontWeight: '700', color: t.text.primary },
   metricLabel: { fontSize: 10, color: t.text.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
 
@@ -960,7 +969,7 @@ function createStyles(t: ThemeColors) {
   moodScaleRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
   moodScaleLabel: { fontSize: 11, color: t.text.muted },
 
-  historyDivider: { height: 1, backgroundColor: t.glass.card, marginVertical: 10 },
+  historyDivider: { height: 1, backgroundColor: t.glass.border, marginVertical: 10 },
   historyRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   historyDate: { fontSize: 13, color: t.text.secondary, width: 56 },
   historyDots: { flexDirection: 'row', gap: 6 },
@@ -977,7 +986,7 @@ function createStyles(t: ThemeColors) {
 
   modalWrapper: { flex: 1, backgroundColor: t.bg.primary, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
   modalContent: { padding: 24, paddingBottom: 48 },
-  modalHandle: { width: 40, height: 4, backgroundColor: t.glass.card, borderRadius: 2, alignSelf: 'center', marginBottom: 24 },
+  modalHandle: { width: 40, height: 4, backgroundColor: t.bg.subtle, borderRadius: 2, alignSelf: 'center', marginBottom: 24 },
   modalTitle: { fontSize: 22, fontWeight: '700', color: t.text.primary, marginBottom: 6 },
   modalSubtitle: { fontSize: 14, color: t.text.muted, marginBottom: 28 },
   fieldRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
@@ -985,18 +994,18 @@ function createStyles(t: ThemeColors) {
   fieldLabel: { fontSize: 16, color: t.text.primary, fontWeight: '500' },
   fieldHint: { fontSize: 12, color: t.text.muted },
   stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  stepBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: t.glass.card, alignItems: 'center', justifyContent: 'center' },
+  stepBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.divider, alignItems: 'center', justifyContent: 'center' },
   stepBtnText: { fontSize: 20, color: t.text.primary, lineHeight: 24 },
   stepValue: { width: 52, height: 36, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   stepValueText: { fontSize: 14, fontWeight: '700' },
   modalFieldLabel: { fontSize: 13, color: t.text.secondary, marginBottom: 8, fontWeight: '500' },
   textArea: {
     backgroundColor: t.bg.tint, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14,
-    fontSize: 16, color: t.text.primary, borderWidth: 1, borderColor: t.glass.card,
+    fontSize: 16, color: t.text.primary, borderWidth: 1, borderColor: t.glass.border,
     minHeight: 80, textAlignVertical: 'top', marginBottom: 24,
   },
-  saveBtn: { backgroundColor: t.text.primary, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 12 },
-  saveBtnText: { color: t.bg.primary, fontSize: 16, fontWeight: '700' },
+  saveBtn: { backgroundColor: t.accent, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 12 },
+  saveBtnText: { color: t.accentInk, fontSize: 16, fontWeight: '700' },
   cancelBtn: { alignItems: 'center', paddingVertical: 12 },
   cancelBtnText: { color: t.text.secondary, fontSize: 15 },
   btnDisabled: { opacity: 0.5 },

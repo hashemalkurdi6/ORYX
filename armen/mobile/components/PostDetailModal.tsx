@@ -39,6 +39,7 @@ import {
 } from '@/services/api';
 import apiClient from '@/services/api';
 import { theme as T, type as TY, radius as R, space as SP } from '@/services/theme';
+import { useTheme } from '@/contexts/ThemeContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -217,6 +218,9 @@ export default function PostDetailModal({
   onPostDeleted,
 }: Props) {
   const insets = useSafeAreaInsets();
+  // Shadow the module-level T with the reactive theme so all colors update on
+  // light/dark switch without a restart.
+  const { theme: T } = useTheme();
 
   const [post, setPost] = useState<Post | null>(initialPost);
   const [comments, setComments] = useState<PostComment[]>([]);
@@ -905,13 +909,13 @@ export default function PostDetailModal({
                   <Ionicons
                     name={post.is_liked_by_current_user ? 'heart' : 'heart-outline'}
                     size={22}
-                    color={post.is_liked_by_current_user ? T.readiness.low : 'rgba(255,255,255,0.6)'}
+                    color={post.is_liked_by_current_user ? T.status.danger : T.text.muted}
                   />
-                  <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>{post.like_count ?? 0}</Text>
+                  <Text style={{ fontSize: 14, color: T.text.body }}>{post.like_count ?? 0}</Text>
                 </TouchableOpacity>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                  <Ionicons name="chatbubble-outline" size={20} color="rgba(255,255,255,0.6)" />
-                  <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>{post.comment_count ?? 0}</Text>
+                  <Ionicons name="chatbubble-outline" size={20} color={T.text.muted} />
+                  <Text style={{ fontSize: 13, color: T.text.muted }}>{post.comment_count ?? 0}</Text>
                 </View>
                 <View style={{ flex: 1 }} />
                 {!isOwn && (
@@ -1078,12 +1082,12 @@ export default function PostDetailModal({
           >
             <View
               style={{
-                backgroundColor: 'rgba(40,40,40,0.96)',
+                backgroundColor: T.bg.elevated,
                 borderRadius: R.pill,
                 paddingHorizontal: 18,
                 paddingVertical: 10,
                 borderWidth: 1,
-                borderColor: T.glass.rim,
+                borderColor: T.border,
               }}
             >
               <Text style={{ fontSize: 14, color: T.text.primary, textAlign: 'center' }}>{toast}</Text>
@@ -1259,11 +1263,11 @@ export default function PostDetailModal({
                     padding: 12,
                     alignItems: 'center',
                     borderRadius: R.sm,
-                    backgroundColor: T.text.body,
+                    backgroundColor: T.accent,
                     opacity: editCaptionSaving ? 0.6 : 1,
                   }}
                 >
-                  <Text style={{ fontSize: 14, fontFamily: TY.sans.semibold, color: T.bg.primary }}>
+                  <Text style={{ fontSize: 14, fontFamily: TY.sans.semibold, color: T.accentInk }}>
                     {editCaptionSaving ? 'Saving...' : 'Save'}
                   </Text>
                 </TouchableOpacity>
@@ -1344,6 +1348,7 @@ function MenuItem({
   onPress: () => void;
   destructive?: boolean;
 }) {
+  const { theme: MT } = useTheme();
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -1352,12 +1357,14 @@ function MenuItem({
         alignItems: 'center',
         gap: 12,
         padding: 14,
-        backgroundColor: T.border,
+        backgroundColor: MT.bg.elevated,
         borderRadius: R.sm,
+        borderWidth: 1,
+        borderColor: destructive ? MT.status.danger + '40' : MT.border,
       }}
     >
-      <Ionicons name={icon as any} size={18} color={destructive ? T.status.danger : T.text.primary} />
-      <Text style={{ fontSize: 15, color: destructive ? T.status.danger : T.text.primary }}>{label}</Text>
+      <Ionicons name={icon as any} size={18} color={destructive ? MT.status.danger : MT.text.primary} />
+      <Text style={{ fontSize: 15, color: destructive ? MT.status.danger : MT.text.primary, fontFamily: TY.sans.regular }}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -1365,6 +1372,7 @@ function MenuItem({
 // ── InsightRow helper ─────────────────────────────────────────────────────────
 
 function InsightRow({ icon, label, value }: { icon: string; label: string; value: number }) {
+  const { theme: IT } = useTheme();
   return (
     <View
       style={{
@@ -1372,12 +1380,12 @@ function InsightRow({ icon, label, value }: { icon: string; label: string; value
         alignItems: 'center',
         paddingVertical: 10,
         borderBottomWidth: 1,
-        borderBottomColor: T.border,
+        borderBottomColor: IT.border,
       }}
     >
       <Text style={{ fontSize: 18, marginRight: 10 }}>{icon}</Text>
-      <Text style={{ flex: 1, fontSize: 14, color: T.text.body }}>{label}</Text>
-      <Text style={{ fontSize: 15, fontFamily: TY.sans.bold, color: T.text.primary }}>{value.toLocaleString()}</Text>
+      <Text style={{ flex: 1, fontSize: 14, color: IT.text.body }}>{label}</Text>
+      <Text style={{ fontSize: 15, fontFamily: TY.sans.bold, color: IT.text.primary }}>{value.toLocaleString()}</Text>
     </View>
   );
 }

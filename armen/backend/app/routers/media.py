@@ -57,9 +57,27 @@ async def upload_media(
     Otherwise (dev fallback): returns a base64 data URL.
     Auth required to prevent abuse.
     """
+    # Validate MIME type before reading body.
+    ALLOWED_CONTENT_TYPES = {
+        "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif",
+    }
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    if content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported media type '{content_type}'. Allowed: JPEG, PNG, WEBP, HEIC.",
+        )
+
+    # Hard cap: 20 MB raw before compression. Pillow will compress further for S3.
+    MAX_UPLOAD_BYTES = 20 * 1024 * 1024
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="File too large (max 20 MB).",
+        )
 
     if settings.AWS_S3_BUCKET and _boto3_available:
         # S3 / R2 path
@@ -102,11 +120,13 @@ async def upload_media(
                 status_code=503,
                 detail="Media storage not configured. Set AWS_S3_BUCKET + creds.",
             )
-        # Cap dev fallback at 256 KB — prevents accidental large-file pollution of dev DB.
-        if len(data) > 256 * 1024:
+        # Cap dev fallback at 2 MB — enough for a Pillow-compressed JPEG at 1080px.
+        # Base64 overhead is ~33 %, so 2 MB raw → ~2.7 MB stored in the DB column,
+        # which is acceptable for a dev database. Configure S3/R2 before shipping.
+        if len(data) > 2 * 1024 * 1024:
             raise HTTPException(
                 status_code=413,
-                detail="Image too large for dev fallback (>256 KB). Configure S3 to upload.",
+                detail="Image too large for dev fallback (>2 MB). Configure S3 to upload.",
             )
         encoded = base64.b64encode(data).decode()
         return {"url": f"data:image/jpeg;base64,{encoded}"}

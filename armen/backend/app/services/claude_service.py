@@ -594,7 +594,7 @@ async def generate_hevy_autopsy(
 
 
 # ---------------------------------------------------------------------------
-# Food Photo Scan — Haiku Vision
+# Food Photo Scan — OpenAI gpt-4o-mini Vision
 # ---------------------------------------------------------------------------
 
 FOOD_SCAN_SYSTEM_PROMPT = """You are a nutrition analysis assistant. When given a food image, identify all visible food items and estimate portion sizes based on visual cues like plate size, utensils, and context. Return ONLY a JSON object with no preamble, no markdown, no backticks. The JSON must follow this exact structure:

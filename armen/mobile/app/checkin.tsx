@@ -612,11 +612,11 @@ function createStyles(t: ThemeColors) {
     bottom: 16,
     left: 16,
     right: 16,
-    backgroundColor: 'rgba(17,17,17,0.85)',
+    backgroundColor: t.glass.shade,
     borderRadius: R.sm,
     padding: 12,
     borderWidth: 1,
-    borderColor: t.border,
+    borderColor: t.glass.border,
   },
   overlayStatText: {
     fontSize: 13,

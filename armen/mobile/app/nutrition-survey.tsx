@@ -232,6 +232,8 @@ interface ChipProps {
 }
 
 function Chip({ label, selected, onPress }: ChipProps) {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   return (
     <TouchableOpacity
       style={[styles.chip, selected && styles.chipSelected]}
@@ -1036,7 +1038,7 @@ function createStyles(t: ThemeColors) {
   return StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: t.bg.elevated,
+    backgroundColor: t.bg.primary,
   },
 
   // Progress bar
@@ -1165,7 +1167,7 @@ function createStyles(t: ThemeColors) {
 
   // Large tile
   tile: {
-    backgroundColor: t.border,
+    backgroundColor: t.glass.card,
     borderRadius: R.md,
     padding: 16,
     marginBottom: 10,
@@ -1173,7 +1175,7 @@ function createStyles(t: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: t.border,
+    borderColor: t.glass.border,
   },
   tileSelected: {
     backgroundColor: t.accent,
@@ -1201,24 +1203,24 @@ function createStyles(t: ThemeColors) {
 
   // TextInput
   textInput: {
-    backgroundColor: t.border,
+    backgroundColor: t.glass.card,
     borderRadius: R.sm,
     paddingHorizontal: 14,
     paddingVertical: 12,
     color: t.text.primary,
     fontSize: 14,
     borderWidth: 1,
-    borderColor: t.border,
+    borderColor: t.glass.border,
   },
   textInputSmall: {
-    backgroundColor: t.border,
+    backgroundColor: t.glass.card,
     borderRadius: R.sm,
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: t.text.primary,
     fontSize: 14,
     borderWidth: 1,
-    borderColor: t.border,
+    borderColor: t.glass.border,
     flex: 1,
   },
 
@@ -1279,14 +1281,14 @@ function createStyles(t: ThemeColors) {
   },
   mealTimeInput: {
     flex: 1,
-    backgroundColor: t.border,
+    backgroundColor: t.glass.card,
     borderRadius: R.sm,
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: t.text.primary,
     fontSize: 14,
     borderWidth: 1,
-    borderColor: t.border,
+    borderColor: t.glass.border,
   },
 
   // Step 6 — Done
@@ -1302,11 +1304,11 @@ function createStyles(t: ThemeColors) {
     marginBottom: 28,
   },
   summaryCard: {
-    backgroundColor: t.border,
+    backgroundColor: t.glass.card,
     borderRadius: R.md,
     padding: 18,
     borderWidth: 1,
-    borderColor: t.border,
+    borderColor: t.glass.border,
   },
   summaryEmpty: {
     color: t.text.muted,
@@ -1315,7 +1317,7 @@ function createStyles(t: ThemeColors) {
   },
   summaryDivider: {
     height: 1,
-    backgroundColor: t.bg.elevated,
+    backgroundColor: t.divider,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -1352,7 +1354,7 @@ function createStyles(t: ThemeColors) {
     justifyContent: 'center',
   },
   continueButtonText: {
-    color: t.bg.elevated,
+    color: t.accentInk,
     fontSize: 16,
     fontFamily: TY.sans.bold,
   },
@@ -1392,7 +1394,7 @@ function createStyles(t: ThemeColors) {
   },
   foodChip: {
     paddingHorizontal: 12, paddingVertical: 7, borderRadius: R.lg,
-    borderWidth: 1, borderColor: t.border, marginRight: 8, marginBottom: 4,
+    borderWidth: 1, borderColor: t.glass.rim, marginRight: 8, marginBottom: 4,
   },
   foodChipLoved: { backgroundColor: t.accent, borderColor: t.accent },
   foodChipDisliked: { backgroundColor: t.status.danger + '20', borderColor: t.status.danger },
@@ -1402,14 +1404,14 @@ function createStyles(t: ThemeColors) {
   // Country dropdown styles
   countrySelectedChip: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: t.border, borderRadius: R.sm, paddingHorizontal: 14, paddingVertical: 12,
+    backgroundColor: t.glass.card, borderRadius: R.sm, paddingHorizontal: 14, paddingVertical: 12,
     borderWidth: 1, borderColor: t.glass.rim,
   },
   countrySelectedText: { color: t.text.primary, fontSize: 15, fontFamily: TY.sans.medium },
   countryChangeText: { color: t.text.muted, fontSize: 13 },
   countryPickerTrigger: {
-    backgroundColor: t.border, borderRadius: R.sm, paddingHorizontal: 14, paddingVertical: 12,
-    borderWidth: 1, borderColor: t.border,
+    backgroundColor: t.glass.card, borderRadius: R.sm, paddingHorizontal: 14, paddingVertical: 12,
+    borderWidth: 1, borderColor: t.glass.border,
   },
   countryPickerTriggerText: { color: t.text.muted, fontSize: 14 },
   countryDropdown: {
