@@ -1,11 +1,13 @@
-// ORYX — ambient readiness-color halo. A soft, persistent aurora that cycles
-// through the readiness state palette (high → mid → low → mid → high) over a
-// long, never-ending loop. Used on the landing screen behind the logo and is
-// reusable on splash / loading states / behind the home readiness ring.
+// ORYX — ambient three-band aurora. A soft, persistent radial halo that
+// crossfades through three colours over a long, never-ending loop. Used:
+//   • on the landing screen behind the logo, cycling the dusk sky bands
+//     (Ember → Bloom → Veil — see docs/design/dusk-direction.md)
+//   • inside the app behind the readiness ring, cycling readiness state
+//     colours (high → mid → low → mid → high) — the original use.
 //
-// Why it exists: a 12-second teaser of the readiness concept communicated
-// entirely through colour. Subtle enough that users don't consciously notice
-// it but it tells them visually "this app is about cycling states of the body".
+// One component, two roles. Pass `colors` to override the default semantic
+// readiness palette. Without it, falls back to theme.readiness.* so existing
+// in-app readiness usages don't change.
 //
 // Performance design:
 //   - Three Animated.Views, one per readiness colour. Each contains a fully
@@ -39,6 +41,12 @@ interface ReadinessHaloProps {
   size?: number;
   /** Loop duration in ms. Default 12000. */
   duration?: number;
+  /**
+   * 3-tuple of hex colours to crossfade through, in order. Defaults to the
+   * readiness state palette (high, mid, low). Pass an explicit triple to
+   * override (e.g. the dusk sky bands on the landing screen).
+   */
+  colors?: [string, string, string];
 }
 
 interface GradientLayerProps {
@@ -67,9 +75,17 @@ function GradientLayer({ color, size, id }: GradientLayerProps) {
 export default function ReadinessHalo({
   size = 600,
   duration = 12000,
+  colors,
 }: ReadinessHaloProps) {
   const { theme } = useTheme();
   const reduceMotion = useReducedMotion();
+
+  // Default to the readiness state palette so in-app callers behave as before.
+  const [c0, c1, c2] = colors ?? [
+    theme.readiness.high,
+    theme.readiness.mid,
+    theme.readiness.low,
+  ];
 
   // progress drives the crossfade. Reversed withRepeat means the value
   // bounces 0 → 1 → 0, so the visible cycle is high → mid → low → mid →
@@ -108,21 +124,21 @@ export default function ReadinessHalo({
         shouldRasterizeIOS
         renderToHardwareTextureAndroid
       >
-        <GradientLayer color={theme.readiness.high} size={size} id="halo-high" />
+        <GradientLayer color={c0} size={size} id="halo-c0" />
       </Animated.View>
       <Animated.View
         style={[styles.layer, midStyle]}
         shouldRasterizeIOS
         renderToHardwareTextureAndroid
       >
-        <GradientLayer color={theme.readiness.mid} size={size} id="halo-mid" />
+        <GradientLayer color={c1} size={size} id="halo-c1" />
       </Animated.View>
       <Animated.View
         style={[styles.layer, lowStyle]}
         shouldRasterizeIOS
         renderToHardwareTextureAndroid
       >
-        <GradientLayer color={theme.readiness.low} size={size} id="halo-low" />
+        <GradientLayer color={c2} size={size} id="halo-c2" />
       </Animated.View>
     </View>
   );

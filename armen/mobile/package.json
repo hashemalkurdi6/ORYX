@@ -8,6 +8,9 @@
     "ios": "expo run:ios"
   },
   "dependencies": {
+    "@expo-google-fonts/dm-mono": "^0.4.1",
+    "@expo-google-fonts/dm-sans": "^0.4.1",
+    "@expo-google-fonts/fraunces": "^0.4.1",
     "@expo-google-fonts/geist": "^0.4.1",
     "@expo-google-fonts/jetbrains-mono": "^0.4.1",
     "@expo/ngrok": "^4.1.3",

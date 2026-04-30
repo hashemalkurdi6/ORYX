@@ -1,25 +1,26 @@
-// ORYX — landing screen. First impression for unauthenticated users:
-// readiness-color halo, brand logo with self-drawing entry, wordmark + tagline
-// + context line, two equal-weight auth buttons.
+// ORYX — landing screen, Dusk Direction. First impression for unauthenticated
+// users: civil-twilight halo behind the brand mark, Fraunces wordmark, italic
+// tagline, two CTAs that hold the warm/cool tension of the moment.
+// See docs/design/dusk-direction.md.
 //
 // Entry timeline (≈ 2.6s total):
 //   t=0      bg fades in, 300ms
 //   t=200    logo paths begin drawing (1.2s ease-out, owned by <Logo />)
-//   t=600    readiness arc colour fades from desat → lime (also inside <Logo />)
+//   t=600    halo begins crossfading dusk colours (16s loop)
 //   t=1400   wordmark fades + slides up 8px, 400ms
 //   t=1700   tagline fades, 300ms
-//   t=1900   context line fades, 300ms
-//   t=2200   buttons spring up from below, 400ms
-// After t=2600: only <ReadinessHalo /> keeps moving (12s breathing loop).
+//   t=1900   subtitle fades, 300ms
+//   t=2200   buttons settle in from below, 400ms
+// After t=2600: only <ReadinessHalo /> keeps moving.
 //
 // Reduce-motion friendly: when iOS Reduce Motion is on, every shared value
-// snaps to its final state on first paint. The halo still cycles colour but
-// without the breathing motion (handled inside ReadinessHalo).
+// snaps to its final state on first paint.
 
 import React, { useEffect } from 'react';
 import { Text, TouchableOpacity, View, StyleSheet, Dimensions } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -30,18 +31,36 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useTheme } from '@/contexts/ThemeContext';
-import { type as TY, space as SP, radius as R, type ThemeColors } from '@/services/theme';
+import { type as TY, space as SP, type ThemeColors } from '@/services/theme';
 import Logo from '@/components/Logo';
 import ReadinessHalo from '@/components/ReadinessHalo';
 
 const { width: SW } = Dimensions.get('window');
 
-// Halo diameter in px. Sized so the gradient's soft falloff extends a long way
-// past the 120px logo on every side — by 100% the gradient is fully transparent
-// so there is no boundary visible regardless of how big this gets.
+// Halo diameter — fully transparent at the rim, so the warm glow has no
+// visible boundary against the indigo canvas regardless of size.
 const HALO_SIZE = Math.min(SW * 1.6, 600);
 const LOGO_SIZE = 120;
 const HALO_OFFSET = (HALO_SIZE - LOGO_SIZE) / 2;
+
+// Three sky bands of the dusk halo. Ember (warm peak) → Bloom (transition
+// rose) → Veil (mauve cool moving in). 16s loop = slower than the original
+// readiness halo because dusk does not change in 12 seconds.
+const DUSK_HALO: [string, string, string] = ['#EE9B7A', '#E08394', '#9E83BD'];
+const HALO_DURATION = 16000;
+
+// Primary CTA gradient: lighter Glow at the top edge (lit by the sky),
+// deeper Ember at the bottom (the held warmth). Reads like an object catching
+// the last light of the day.
+const PRIMARY_GRADIENT: [string, string] = ['#F5BC9A', '#EE9B7A'];
+
+// Bloom — the warm shadow colour cast around the primary CTA. Indigo would
+// kill the warmth; black would feel cheap. Bloom radiates.
+const PRIMARY_GLOW = '#E08394';
+
+// Horizon at 55% — periwinkle hairline border on the ghost CTA. Cool side
+// of the warm/cool pair.
+const GHOST_BORDER = 'rgba(126,132,194,0.55)';
 
 export default function LandingScreen() {
   const { theme } = useTheme();
@@ -55,7 +74,7 @@ export default function LandingScreen() {
   const wordmarkOp     = useSharedValue(reduceMotion ? 1 : 0);
   const wordmarkY      = useSharedValue(reduceMotion ? 0 : 8);
   const taglineOp      = useSharedValue(reduceMotion ? 1 : 0);
-  const contextOp      = useSharedValue(reduceMotion ? 1 : 0);
+  const subtitleOp     = useSharedValue(reduceMotion ? 1 : 0);
   const buttonsOp      = useSharedValue(reduceMotion ? 1 : 0);
   const buttonsY       = useSharedValue(reduceMotion ? 0 : 60);
 
@@ -68,7 +87,7 @@ export default function LandingScreen() {
     wordmarkY.value  = withDelay(1400, withTiming(0, { duration: 400, easing: Easing.out(Easing.cubic) }));
 
     taglineOp.value  = withDelay(1700, withTiming(1, { duration: 300, easing: Easing.out(Easing.quad) }));
-    contextOp.value  = withDelay(1900, withTiming(1, { duration: 300, easing: Easing.out(Easing.quad) }));
+    subtitleOp.value = withDelay(1900, withTiming(1, { duration: 300, easing: Easing.out(Easing.quad) }));
 
     buttonsOp.value  = withDelay(2200, withTiming(1, { duration: 250, easing: Easing.out(Easing.quad) }));
     buttonsY.value   = withDelay(2200, withSpring(0, { damping: 14, stiffness: 120, mass: 0.8 }));
@@ -80,7 +99,7 @@ export default function LandingScreen() {
     transform: [{ translateY: wordmarkY.value }],
   }));
   const taglineStyle  = useAnimatedStyle(() => ({ opacity: taglineOp.value }));
-  const contextStyle  = useAnimatedStyle(() => ({ opacity: contextOp.value }));
+  const subtitleStyle = useAnimatedStyle(() => ({ opacity: subtitleOp.value }));
   const buttonsStyle  = useAnimatedStyle(() => ({
     opacity: buttonsOp.value,
     transform: [{ translateY: buttonsY.value }],
@@ -90,42 +109,53 @@ export default function LandingScreen() {
     <Animated.View style={[s.root, bgStyle]}>
       <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
         {/* Logo + text block — vertically centred, slightly above the
-            absolute centre so the buttons have room below. The halo is
+            absolute centre so the buttons have room below. The dusk halo is
             anchored as an absolute child of the logo wrapper so it sits
             *behind the mark*, not behind the entire screen. */}
         <View style={s.center}>
           <View style={s.logoCluster}>
             <View pointerEvents="none" style={s.haloAbsolute}>
-              <ReadinessHalo size={HALO_SIZE} />
+              <ReadinessHalo
+                size={HALO_SIZE}
+                duration={HALO_DURATION}
+                colors={DUSK_HALO}
+              />
             </View>
-            <Logo size={120} />
+            <Logo size={LOGO_SIZE} />
           </View>
 
           <Animated.Text style={[s.wordmark, wordmarkStyle]}>ORYX</Animated.Text>
 
           <Animated.Text style={[s.tagline, taglineStyle]}>Know your body.</Animated.Text>
 
-          <Animated.Text style={[s.context, contextStyle]}>
+          <Animated.Text style={[s.subtitle, subtitleStyle]}>
             The training brain you've been missing.
           </Animated.Text>
         </View>
 
-        {/* Auth buttons — both full width, equal vertical weight. Primary lime
-            filled CTA; secondary is an outlined ghost button on the same row
-            of importance. No "or" divider. */}
+        {/* CTA pair — warm/cool dyad. Primary holds an Ember gradient with a
+            soft Bloom halo behind it; Ghost is a transparent panel with a
+            periwinkle Horizon hairline. */}
         <Animated.View style={[s.buttonStack, buttonsStyle]}>
           <TouchableOpacity
-            style={s.ctaPrimary}
             onPress={() => router.push('/(auth)/signup')}
-            activeOpacity={0.85}
+            activeOpacity={0.88}
+            style={s.ctaPrimaryShell}
           >
-            <Text style={s.ctaPrimaryText}>Create Account</Text>
+            <LinearGradient
+              colors={PRIMARY_GRADIENT}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={s.ctaPrimary}
+            >
+              <Text style={s.ctaPrimaryText}>Create Account</Text>
+            </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={s.ctaGhost}
             onPress={() => router.push('/(auth)/login')}
-            activeOpacity={0.75}
+            activeOpacity={0.78}
           >
             <Text style={s.ctaGhostText}>Log In</Text>
           </TouchableOpacity>
@@ -139,10 +169,7 @@ const styles = (t: ThemeColors) =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: t.bg.primary },
     safe: { flex: 1, paddingHorizontal: SP[7] },
-    center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: SP[4] },
-    // Wraps just the logo so the halo can be positioned absolutely against it
-    // without leaking out and pushing other content around. zIndex keeps the
-    // logo on top of the halo.
+    center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     logoCluster: {
       width: LOGO_SIZE,
       height: LOGO_SIZE,
@@ -157,23 +184,24 @@ const styles = (t: ThemeColors) =>
       height: HALO_SIZE,
     },
     wordmark: {
-      fontFamily: TY.sans.bold,
-      fontSize: 44,
-      letterSpacing: 6,
+      fontFamily: TY.serif.semibold,
+      fontSize: 46,
+      letterSpacing: 4,
       color: t.text.primary,
-      marginTop: SP[5],
+      marginTop: SP[6],
     },
     tagline: {
-      fontFamily: TY.sans.medium,
-      fontSize: 16,
-      color: t.text.secondary,
-      marginTop: SP[2],
+      fontFamily: TY.serif.regularItalic,
+      fontSize: 18,
+      color: t.text.body,
+      marginTop: SP[3],
     },
-    context: {
+    subtitle: {
       fontFamily: TY.sans.regular,
       fontSize: 13,
-      color: t.text.muted,
-      marginTop: SP[1],
+      letterSpacing: 0.1,
+      color: t.text.secondary,
+      marginTop: SP[2],
       textAlign: 'center',
       paddingHorizontal: SP[6],
     },
@@ -182,30 +210,42 @@ const styles = (t: ThemeColors) =>
       gap: SP[3],
       marginBottom: SP[5],
     },
+    // Outer shell carries the Bloom-tinted iOS shadow that radiates warm
+    // glow around the primary CTA. The inner LinearGradient carries the
+    // matching radius so the shadow path tracks correctly.
+    ctaPrimaryShell: {
+      borderRadius: 18,
+      shadowColor: PRIMARY_GLOW,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.45,
+      shadowRadius: 24,
+      elevation: 6,
+    },
     ctaPrimary: {
-      backgroundColor: t.accent,
-      borderRadius: R.lg,
+      borderRadius: 18,
       paddingVertical: 16,
       alignItems: 'center',
+      justifyContent: 'center',
     },
     ctaPrimaryText: {
       color: t.accentInk,
-      fontFamily: TY.sans.bold,
+      fontFamily: TY.sans.medium,
       fontSize: 16,
-      letterSpacing: 0.3,
+      letterSpacing: 0.2,
     },
     ctaGhost: {
-      borderRadius: R.lg,
+      borderRadius: 18,
       paddingVertical: 16,
       alignItems: 'center',
+      justifyContent: 'center',
       borderWidth: 1,
-      borderColor: t.accent,
+      borderColor: GHOST_BORDER,
       backgroundColor: 'transparent',
     },
     ctaGhostText: {
-      color: t.accent,
-      fontFamily: TY.sans.semibold,
+      color: t.text.primary,
+      fontFamily: TY.sans.medium,
       fontSize: 16,
-      letterSpacing: 0.3,
+      letterSpacing: 0.2,
     },
   });
