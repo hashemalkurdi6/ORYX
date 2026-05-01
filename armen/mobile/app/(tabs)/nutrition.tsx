@@ -70,6 +70,18 @@ function nutritionTicker(): string {
   return new Date().toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
 }
 
+// Two-letter weekday from a `YYYY-MM-DD` date string. Each weekday is unique
+// (Mo Tu We Th Fr Sa Su) so the calorie trend's day axis is readable, unlike
+// the backend's single-letter `day_label` which collides on T/T and S/S.
+const WEEKDAY_2L = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+function shortWeekday(dateStr: string): string {
+  // Parse as local midnight to avoid the date drifting under non-UTC zones.
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  const dt = new Date(y, m - 1, d);
+  return WEEKDAY_2L[dt.getDay()] ?? '';
+}
+
 // ── Micronutrient metadata ────────────────────────────────────────────────────
 
 interface MicroDef {
@@ -422,11 +434,13 @@ function WeeklyCalorieTrend({ days }: WeeklyCalorieTrendProps) {
           })}
         </View>
 
-        {/* Day labels */}
+        {/* Day labels — two-letter abbreviations derived from date so each
+            weekday is visually unique. The backend's `day_label` is a single
+            letter (M T W T F S S) which collides on Tue/Thu and Sat/Sun. */}
         <View style={{ flexDirection: 'row', gap: 4, marginTop: 4 }}>
           {days.map((d, i) => (
             <View key={i} style={{ flex: 1, alignItems: 'center' }}>
-              <Text style={{ fontSize: 10, color: theme.text.muted }}>{d.day_label}</Text>
+              <Text style={{ fontSize: 10, color: theme.text.muted }}>{shortWeekday(d.date)}</Text>
             </View>
           ))}
         </View>

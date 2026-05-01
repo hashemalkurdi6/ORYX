@@ -845,7 +845,6 @@ function createStyles(t: ThemeColors) {
     rowDivider: { height: 1, backgroundColor: t.border, marginLeft: 46 },
     appRowDivider: { height: 1, backgroundColor: t.border, marginLeft: 52 },
     logoutText: { flex: 1, fontFamily: TY.sans.medium, fontSize: TY.size.body + 1, color: t.status.danger },
-    footerNote: { fontFamily: TY.sans.regular, fontSize: TY.size.tick, color: t.text.muted, lineHeight: 16, textAlign: 'center', paddingHorizontal: SP[2], marginBottom: SP[2] },
     bottomPadding: { height: SP[6] },
 
     // Modal

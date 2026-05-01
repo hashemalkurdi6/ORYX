@@ -103,17 +103,17 @@ Quality drag. Won't kill the launch, will hurt reviews and word of mouth.
 - Macro targets computed twice (home vs nutrition_service); ACWR computed 3 ways — **Open (un-swept — needs targeted review)**
 
 **Small but visible**:
-- Weekly trend day labels `M T W T F S S` (two Ts, two Ss) — **Open (un-swept — needs targeted review)**
-- Count-up animation replays on every Home mount — **Open (un-swept — needs targeted review)**
+- Weekly trend day labels `M T W T F S S` (two Ts, two Ss) — **Closed 2026-05-01 (nutrition.tsx — backend `day_label` ignored; mobile derives unique `Mo Tu We Th Fr Sa Su` from `d.date`)**
+- Count-up animation replays on every Home mount — **Closed (audit stale — verified all home count-ups already pass `cacheKey` to `useCountUp`)**
 - RPE badge stored but not rendered on journal cards — **Closed 2026-04-21 (86878ed — verified rendered at activity.tsx:1168-1172)**
 - Sport breakdown is bars; spec says donut — **Open (un-swept — needs targeted review)**
 - Dead code: weekly volume chart + activity heatmap computed, never rendered — **Closed 2026-04-21 (86878ed — verified rendered at activity.tsx:2372 + :2396)**
 - "Load Earlier Sessions" button shows even when no more data — **Closed 2026-04-21 (86878ed — `hasMoreStrava` flag gates button)**
 - Grocery list check state client-only, lost on refresh — **Open (un-swept — needs targeted review)**
-- Water glass presets (200/250/330/400/500) — spec calls for 100–1000 ml range — **Open (un-swept — needs targeted review)**
+- Water glass presets (200/250/330/400/500) — spec calls for 100–1000 ml range — **Closed (audit stale — `nutrition.tsx:1414` already offers full `[100, 200, 250, 330, 400, 500, 600, 700, 750, 800, 900, 1000]` range)**
 - Ask ORYX has no "X messages left today" UI — **Open (un-swept — needs targeted review)**
-- `settings/index.tsx` footer leaks a developer URL — **Open (un-swept — needs targeted review)**
-- "Club feed coming soon" placeholder at `community.tsx:1472` — **Open (un-swept — needs targeted review)**
+- `settings/index.tsx` footer leaks a developer URL — **Closed 2026-05-01 (visible leak removed in c43f394; orphan `footerNote` style swept this pass)**
+- "Club feed coming soon" placeholder at `community.tsx:1472` — **Closed (audit stale — placeholder removed; club detail modal now renders `members` + `leaderboard` tabs only)**
 - Profile heatmap reuses 20-activity badge fetch instead of `/activities/heatmap?days=365` — **Open (un-swept — needs targeted review)**
 - Forgot Password link visible on login, opens Coming Soon alert — **Closed (2.3 closeout + 7c63390 fallback fix — forgot-password flow wired end-to-end)**
 - Check-in photo POSTed as base64 JSON — iOS photos can exceed FastAPI's 1 MB default body limit — **Open (un-swept — needs targeted review)**
