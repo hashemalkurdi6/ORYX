@@ -600,6 +600,9 @@ CREATE TABLE IF NOT EXISTS rate_limit_events (
     # Email verification
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_sent_at TIMESTAMP",
+    # Snapshot of the readiness score (0-100) at the time the diagnosis was generated,
+    # used by the dashboard for trend comparisons.
+    "ALTER TABLE diagnoses ADD COLUMN IF NOT EXISTS readiness_score INTEGER",
 ]
 
 
