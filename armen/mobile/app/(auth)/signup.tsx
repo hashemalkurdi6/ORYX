@@ -18,7 +18,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
   Dimensions,
   Keyboard,
   KeyboardAvoidingView,
@@ -39,16 +38,50 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Reanimated, {
   Easing,
+  interpolateColor,
+  runOnJS,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withDelay,
+  withSequence,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ThemeColors, type as TY, radius as R, space as SP } from '@/services/theme';
 import { signupComplete, checkUsername, getMe } from '@/services/api';
 import { useAuthStore } from '@/services/authStore';
+
+// Soft-import expo-haptics — no-op if not yet installed. The plan asks for
+// haptics throughout; wiring them now means they activate the moment the dep
+// lands (`npx expo install expo-haptics`) without further code changes. Same
+// soft-require pattern GlassCard uses for expo-blur.
+let HapticsModule: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  HapticsModule = require('expo-haptics');
+} catch {
+  HapticsModule = null;
+}
+function tap(kind: 'light' | 'medium' | 'success' = 'light') {
+  if (!HapticsModule) return;
+  try {
+    if (kind === 'success') {
+      HapticsModule.notificationAsync?.(HapticsModule.NotificationFeedbackType?.Success);
+    } else {
+      HapticsModule.impactAsync?.(
+        kind === 'medium'
+          ? HapticsModule.ImpactFeedbackStyle?.Medium
+          : HapticsModule.ImpactFeedbackStyle?.Light
+      );
+    }
+  } catch {
+    /* haptics are nice-to-have; never let them break the flow */
+  }
+}
+
+const ReanimatedTextInput = Reanimated.createAnimatedComponent(TextInput);
 
 // Entry-stagger primitive — fades + slides up on mount. Respects OS reduced-motion.
 // One instance per element you want staggered. Re-mounts when the parent step
@@ -84,6 +117,258 @@ function FadeSlideIn({
   }));
 
   return <Reanimated.View style={[animStyle, style]}>{children}</Reanimated.View>;
+}
+
+// Selection chip with scale-bump on toggle and animated bg/border between
+// glass-pill and lime-fill states. Used for the multi-select sport tiles.
+function SportChip({
+  label, icon, selected, onToggle, s, theme,
+}: {
+  label: string;
+  icon: string;
+  selected: boolean;
+  onToggle: () => void;
+  s: any;
+  theme: ThemeColors;
+}) {
+  const scale = useSharedValue(1);
+  const sel = useSharedValue(selected ? 1 : 0);
+  const reduced = useReducedMotion();
+
+  useEffect(() => {
+    sel.value = reduced
+      ? (selected ? 1 : 0)
+      : withTiming(selected ? 1 : 0, { duration: 200, easing: Easing.out(Easing.cubic) });
+  }, [selected, reduced, sel]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    backgroundColor: interpolateColor(sel.value, [0, 1], [theme.glass.pill, theme.accent]),
+    borderColor: interpolateColor(sel.value, [0, 1], [theme.glass.border, theme.accent]),
+  }));
+
+  const handlePress = () => {
+    tap('light');
+    if (!reduced) {
+      scale.value = withSequence(
+        withTiming(1.04, { duration: 110, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: 130, easing: Easing.out(Easing.quad) }),
+      );
+    }
+    onToggle();
+  };
+
+  return (
+    <TouchableOpacity onPress={handlePress} activeOpacity={1}>
+      <Reanimated.View style={[s.tile, animStyle]}>
+        <Ionicons name={icon as any} size={22} color={selected ? theme.accentInk : theme.text.secondary} />
+        <Text style={[s.tileLabel, selected && s.tileLabelOn]}>{label}</Text>
+      </Reanimated.View>
+    </TouchableOpacity>
+  );
+}
+
+// Stacked option card with scale-bump on tap, animated lift to cardHi when
+// selected, and animated dim to 60% when a sibling is the active choice.
+function GoalRow({
+  selected, dim, onPress, s, theme, children,
+}: {
+  selected: boolean;
+  dim: boolean;
+  onPress: () => void;
+  s: any;
+  theme: ThemeColors;
+  children: React.ReactNode;
+}) {
+  const scale = useSharedValue(1);
+  const sel = useSharedValue(selected ? 1 : 0);
+  const opacity = useSharedValue(dim ? 0.6 : 1);
+  const reduced = useReducedMotion();
+
+  useEffect(() => {
+    sel.value = reduced
+      ? (selected ? 1 : 0)
+      : withTiming(selected ? 1 : 0, { duration: 200, easing: Easing.out(Easing.cubic) });
+  }, [selected, reduced, sel]);
+
+  useEffect(() => {
+    opacity.value = reduced
+      ? (dim ? 0.6 : 1)
+      : withTiming(dim ? 0.6 : 1, { duration: 200, easing: Easing.out(Easing.cubic) });
+  }, [dim, reduced, opacity]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+    backgroundColor: interpolateColor(sel.value, [0, 1], [theme.glass.card, theme.glass.cardHi]),
+    borderColor: interpolateColor(sel.value, [0, 1], [theme.glass.border, theme.accent]),
+  }));
+
+  const handlePress = () => {
+    tap('light');
+    if (!reduced) {
+      scale.value = withSequence(
+        withTiming(1.02, { duration: 100, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: 130, easing: Easing.out(Easing.quad) }),
+      );
+    }
+    onPress();
+  };
+
+  return (
+    <TouchableOpacity onPress={handlePress} activeOpacity={1}>
+      <Reanimated.View style={[s.row, animStyle]}>{children}</Reanimated.View>
+    </TouchableOpacity>
+  );
+}
+
+// Primary CTA with press-scale, plus a one-shot pulse when state flips from
+// disabled → enabled (the button noticing it's now actionable).
+function PrimaryCTA({
+  label, onPress, disabled, saving, s, theme,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  saving?: boolean;
+  s: any;
+  theme: ThemeColors;
+}) {
+  const scale = useSharedValue(1);
+  const pulse = useSharedValue(0);
+  const prevDisabled = useRef<boolean>(!!disabled);
+  const reduced = useReducedMotion();
+
+  useEffect(() => {
+    if (prevDisabled.current && !disabled && !reduced) {
+      pulse.value = withSequence(
+        withTiming(1, { duration: 180, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: 320, easing: Easing.in(Easing.quad) }),
+      );
+    }
+    prevDisabled.current = !!disabled;
+  }, [disabled, reduced, pulse]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value * (1 + pulse.value * 0.025) }],
+  }));
+
+  const handlePressIn = () => {
+    if (!reduced && !disabled) scale.value = withSpring(0.98, { damping: 22, stiffness: 380 });
+  };
+  const handlePressOut = () => {
+    if (!reduced) scale.value = withSpring(1, { damping: 18, stiffness: 320 });
+  };
+
+  return (
+    <Reanimated.View style={animStyle}>
+      <TouchableOpacity
+        style={[s.cta, disabled && s.ctaDim]}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        disabled={disabled || saving}
+        activeOpacity={1}
+      >
+        {saving
+          ? <ActivityIndicator color={theme.accentInk} size="small" />
+          : <Text style={s.ctaText}>{label}</Text>}
+      </TouchableOpacity>
+    </Reanimated.View>
+  );
+}
+
+// Input with focus-state animation: border lerps from glass.border to lime
+// over 150ms and a faint lime glow appears beneath. iOS draws the glow via
+// shadow*; Android falls back to just the border (RN can't tint elevation).
+function GlassInput({
+  s, theme, style, ...props
+}: {
+  s: any;
+  theme: ThemeColors;
+} & React.ComponentProps<typeof TextInput>) {
+  const focused = useSharedValue(0);
+  const reduced = useReducedMotion();
+
+  const animStyle = useAnimatedStyle(() => ({
+    borderColor: interpolateColor(focused.value, [0, 1], [theme.glass.border, theme.accent]),
+    shadowOpacity: focused.value * 0.35,
+    shadowRadius: 4 + focused.value * 6,
+  }));
+
+  const handleFocus = (e: any) => {
+    focused.value = reduced ? 1 : withTiming(1, { duration: 150, easing: Easing.out(Easing.cubic) });
+    props.onFocus?.(e);
+  };
+  const handleBlur = (e: any) => {
+    focused.value = reduced ? 0 : withTiming(0, { duration: 150, easing: Easing.out(Easing.cubic) });
+    props.onBlur?.(e);
+  };
+
+  return (
+    <ReanimatedTextInput
+      {...props}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      style={[
+        s.input,
+        // iOS shadow is the lime glow; harmless no-op on Android.
+        { shadowColor: theme.accent, shadowOffset: { width: 0, height: 0 } },
+        animStyle,
+        style,
+      ]}
+    />
+  );
+}
+
+// Animated username availability indicator. Crossfades between idle (empty),
+// checking (amber pulse), available (lime check), and taken (red X).
+function UsernameStatus({
+  status, theme,
+}: {
+  status: 'idle' | 'checking' | 'available' | 'taken';
+  theme: ThemeColors;
+}) {
+  const reduced = useReducedMotion();
+  const pulse = useSharedValue(0.5);
+
+  useEffect(() => {
+    if (status === 'checking' && !reduced) {
+      pulse.value = withSequence(
+        withTiming(1, { duration: 600, easing: Easing.inOut(Easing.quad) }),
+        withTiming(0.4, { duration: 600, easing: Easing.inOut(Easing.quad) }),
+      );
+    } else {
+      pulse.value = 1;
+    }
+  }, [status, reduced, pulse]);
+
+  const checkingStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
+
+  if (status === 'idle') return <View style={{ width: 18 }} />;
+
+  if (status === 'checking') {
+    return (
+      <Reanimated.View style={checkingStyle}>
+        <ActivityIndicator size="small" color={theme.status.warn} />
+      </Reanimated.View>
+    );
+  }
+
+  // FadeSlideIn re-fires on each status flip because the icon component remounts
+  // (different children pass through the conditional below).
+  if (status === 'available') {
+    return (
+      <FadeSlideIn delay={0}>
+        <Ionicons name="checkmark-circle" size={18} color={theme.status.success} />
+      </FadeSlideIn>
+    );
+  }
+  return (
+    <FadeSlideIn delay={0}>
+      <Ionicons name="close-circle" size={18} color={theme.status.danger} />
+    </FadeSlideIn>
+  );
 }
 
 const { width: SW } = Dimensions.get('window');
@@ -234,8 +519,12 @@ export default function SignupFlow() {
   const [saving, setSaving] = useState(false);
   const [finishError, setFinishError] = useState<string | null>(null);
 
-  // — Animation
-  const slideAnim = useRef(new Animated.Value(0)).current;
+  // — Animation. Reanimated spring physics for the inter-screen slide; the
+  // legacy Animated.Value version was a linear timing tween, which felt brittle
+  // on a multi-step flow. Light damping = a settle, not a snap.
+  const slideX = useSharedValue(0);
+  const slideOpacity = useSharedValue(1);
+  const reducedMotion = useReducedMotion();
 
   // ── Derived ──────────────────────────────────────────────────────────────────
   const weightKg = weightUnit === 'kg'
@@ -264,14 +553,37 @@ export default function SignupFlow() {
 
   // ── Navigation ────────────────────────────────────────────────────────────────
   const navigate = (next: number) => {
-    Animated.timing(slideAnim, {
-      toValue: next > step ? -SW : SW, duration: 220, useNativeDriver: true,
-    }).start(() => {
+    // Medium haptic on every step advance (forward, back, or skip). Lighter
+    // taps on selections/buttons get layered separately via the per-component
+    // tap() calls.
+    tap('medium');
+    if (reducedMotion) {
       setStep(next);
-      slideAnim.setValue(next > step ? SW : -SW);
-      Animated.timing(slideAnim, { toValue: 0, duration: 220, useNativeDriver: true }).start();
-    });
+      return;
+    }
+    const dirOut = next > step ? -SW : SW;
+    const dirIn = next > step ? SW : -SW;
+    slideOpacity.value = withTiming(0, { duration: 140, easing: Easing.in(Easing.quad) });
+    slideX.value = withTiming(
+      dirOut,
+      { duration: 180, easing: Easing.in(Easing.quad) },
+      (finished) => {
+        'worklet';
+        if (!finished) return;
+        runOnJS(setStep)(next);
+        slideX.value = dirIn;
+        slideOpacity.value = 0;
+        slideX.value = withSpring(0, { damping: 22, stiffness: 220, mass: 0.6 });
+        slideOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
+      }
+    );
   };
+
+  const slideStyle = useAnimatedStyle(() => ({
+    flex: 1,
+    transform: [{ translateX: slideX.value }],
+    opacity: slideOpacity.value,
+  }));
 
   const goNext = () => navigate(step + 1);
   // On step 1, back exits the signup stack and lands the user on the landing
@@ -384,6 +696,19 @@ export default function SignupFlow() {
   const canSkip = step !== 1 && step !== 7 && step !== 8 && step !== 11;
   const progress = step / TOTAL;
 
+  // Animate the progress bar fill smoothly between steps. Width as a percentage
+  // doesn't natively animate via Reanimated (no interpolatable shorthand), but
+  // we can spring a shared value 0..1 and convert in the animated style.
+  const progressValue = useSharedValue(progress);
+  useEffect(() => {
+    progressValue.value = reducedMotion
+      ? progress
+      : withTiming(progress, { duration: 380, easing: Easing.out(Easing.cubic) });
+  }, [progress, reducedMotion, progressValue]);
+  const progressFillStyle = useAnimatedStyle(() => ({
+    width: `${Math.round(progressValue.value * 100)}%`,
+  }));
+
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       {/* Progress bar row */}
@@ -400,7 +725,7 @@ export default function SignupFlow() {
             </TouchableOpacity>
           ) : <View style={s.backBtnPlaceholder} />}
           <View style={s.progressTrack}>
-            <View style={[s.progressFill, { width: `${Math.round(progress * 100)}%` as any }]} />
+            <Reanimated.View style={[s.progressFill, progressFillStyle]} />
           </View>
           {canSkip ? (
             <TouchableOpacity onPress={skip} style={s.skipBtn}>
@@ -410,7 +735,7 @@ export default function SignupFlow() {
         </View>
       )}
 
-      <Animated.View style={[s.screenWrap, { transform: [{ translateX: slideAnim }] }]}>
+      <Reanimated.View style={[s.screenWrap, slideStyle]}>
         {step === 1 && (
           <S2Account
             fullName={fullName} setFullName={setFullName}
@@ -460,7 +785,7 @@ export default function SignupFlow() {
             onFinish={handleFinish} s={s} theme={theme}
           />
         )}
-      </Animated.View>
+      </Reanimated.View>
     </SafeAreaView>
   );
 }
@@ -472,11 +797,6 @@ function S2Account({
   email, setEmail, password, setPassword, confirmPassword, setConfirmPassword,
   error, onContinue, s, theme,
 }: any) {
-  const statusIcon = usernameStatus === 'checking' ? null
-    : usernameStatus === 'available' ? <Ionicons name="checkmark-circle" size={18} color={theme.status.success} />
-    : usernameStatus === 'taken' ? <Ionicons name="close-circle" size={18} color={theme.status.danger} />
-    : null;
-
   return (
     <KeyboardAvoidingView style={s.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
@@ -495,8 +815,9 @@ function S2Account({
 
         <FadeSlideIn delay={150}>
           <Text style={s.label}>Full Name</Text>
-          <TextInput
-            style={s.input} value={fullName} onChangeText={setFullName}
+          <GlassInput
+            s={s} theme={theme}
+            value={fullName} onChangeText={setFullName}
             placeholder="Your full name" placeholderTextColor={theme.text.muted}
             autoCapitalize="words" returnKeyType="next"
           />
@@ -512,17 +833,16 @@ function S2Account({
               autoCapitalize="none" autoCorrect={false} returnKeyType="next"
             />
             <View style={{ width: 24, alignItems: 'center' }}>
-              {usernameStatus === 'checking'
-                ? <ActivityIndicator size="small" color={theme.text.muted} />
-                : statusIcon}
+              <UsernameStatus status={usernameStatus} theme={theme} />
             </View>
           </View>
         </FadeSlideIn>
 
         <FadeSlideIn delay={250}>
           <Text style={s.label}>Email</Text>
-          <TextInput
-            style={s.input} value={email} onChangeText={setEmail}
+          <GlassInput
+            s={s} theme={theme}
+            value={email} onChangeText={setEmail}
             placeholder="you@example.com" placeholderTextColor={theme.text.muted}
             keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
             autoComplete="email" returnKeyType="next"
@@ -531,8 +851,9 @@ function S2Account({
 
         <FadeSlideIn delay={300}>
           <Text style={s.label}>Password</Text>
-          <TextInput
-            style={s.input} value={password} onChangeText={setPassword}
+          <GlassInput
+            s={s} theme={theme}
+            value={password} onChangeText={setPassword}
             placeholder="8+ chars, with a letter and a number" placeholderTextColor={theme.text.muted}
             secureTextEntry autoComplete="new-password" returnKeyType="next"
           />
@@ -540,8 +861,9 @@ function S2Account({
 
         <FadeSlideIn delay={350}>
           <Text style={s.label}>Confirm Password</Text>
-          <TextInput
-            style={s.input} value={confirmPassword} onChangeText={setConfirmPassword}
+          <GlassInput
+            s={s} theme={theme}
+            value={confirmPassword} onChangeText={setConfirmPassword}
             placeholder="Re-enter your password" placeholderTextColor={theme.text.muted}
             secureTextEntry autoComplete="new-password" returnKeyType="done"
             onSubmitEditing={onContinue}
@@ -549,9 +871,7 @@ function S2Account({
         </FadeSlideIn>
 
         <FadeSlideIn delay={420}>
-          <TouchableOpacity style={s.cta} onPress={onContinue} activeOpacity={0.85}>
-            <Text style={s.ctaText}>Continue</Text>
-          </TouchableOpacity>
+          <PrimaryCTA label="Continue" onPress={onContinue} s={s} theme={theme} />
         </FadeSlideIn>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -593,22 +913,26 @@ function S4Sports({ sportTags, setSportTags, onNext, s, theme }: any) {
         <Text style={s.subtitle}>Select all that apply.</Text>
       </FadeSlideIn>
       <View style={s.tileGrid}>
-        {SPORTS.map(({ label, icon }, i) => {
-          const sel = sportTags.includes(label);
-          return (
-            <FadeSlideIn key={label} delay={200 + i * 50}>
-              <TouchableOpacity style={[s.tile, sel && s.tileOn]} onPress={() => toggle(label)} activeOpacity={0.8}>
-                <Ionicons name={icon as any} size={22} color={sel ? theme.accentInk : theme.text.secondary} />
-                <Text style={[s.tileLabel, sel && s.tileLabelOn]}>{label}</Text>
-              </TouchableOpacity>
-            </FadeSlideIn>
-          );
-        })}
+        {SPORTS.map(({ label, icon }, i) => (
+          <FadeSlideIn key={label} delay={200 + i * 50}>
+            <SportChip
+              label={label}
+              icon={icon}
+              selected={sportTags.includes(label)}
+              onToggle={() => toggle(label)}
+              s={s}
+              theme={theme}
+            />
+          </FadeSlideIn>
+        ))}
       </View>
       <FadeSlideIn delay={420}>
-        <TouchableOpacity style={s.cta} onPress={onNext} activeOpacity={0.85}>
-          <Text style={s.ctaText}>{sportTags.length > 0 ? 'Continue' : 'Skip for now'}</Text>
-        </TouchableOpacity>
+        <PrimaryCTA
+          label={sportTags.length > 0 ? 'Continue' : 'Skip for now'}
+          onPress={onNext}
+          s={s}
+          theme={theme}
+        />
       </FadeSlideIn>
     </ScrollView>
   );
@@ -618,7 +942,7 @@ function S4Sports({ sportTags, setSportTags, onNext, s, theme }: any) {
 
 function S5Goal({ primaryGoal, setPrimaryGoal, fatLossRate, setFatLossRate, onNext, s, theme }: any) {
   const needsCutRate = primaryGoal === 'Lose Fat';
-  const canContinue = primaryGoal && (!needsCutRate || fatLossRate);
+  const canContinue = !!primaryGoal && (!needsCutRate || !!fatLossRate);
   return (
     <ScrollView contentContainerStyle={s.content}>
       <FadeSlideIn delay={0}>
@@ -631,13 +955,15 @@ function S5Goal({ primaryGoal, setPrimaryGoal, fatLossRate, setFatLossRate, onNe
           const sel = primaryGoal === label;
           // Sibling-dim: when something is picked, fade the un-picked options
           // back to 60% so the active choice reads as the focus of the screen.
-          const dim = primaryGoal && !sel;
+          const dim = !!primaryGoal && !sel;
           return (
             <FadeSlideIn key={label} delay={200 + i * 50}>
-              <TouchableOpacity
-                style={[s.row, sel && s.rowOn, dim && s.rowDim]}
+              <GoalRow
+                selected={sel}
+                dim={dim}
                 onPress={() => { setPrimaryGoal(label); if (label !== 'Lose Fat') setFatLossRate(''); }}
-                activeOpacity={0.8}
+                s={s}
+                theme={theme}
               >
                 <Ionicons
                   name={icon as any}
@@ -647,7 +973,7 @@ function S5Goal({ primaryGoal, setPrimaryGoal, fatLossRate, setFatLossRate, onNe
                 />
                 <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
                 {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} style={{ marginLeft: 'auto' as any }} />}
-              </TouchableOpacity>
+              </GoalRow>
             </FadeSlideIn>
           );
         })}
@@ -661,20 +987,22 @@ function S5Goal({ primaryGoal, setPrimaryGoal, fatLossRate, setFatLossRate, onNe
           <View style={[s.list, { marginTop: 10, marginBottom: 0 }]}>
             {FAT_LOSS_RATES.map(({ label, sub }, i) => {
               const sel = fatLossRate === label;
-              const dim = fatLossRate && !sel;
+              const dim = !!fatLossRate && !sel;
               return (
                 <FadeSlideIn key={label} delay={180 + i * 50}>
-                  <TouchableOpacity
-                    style={[s.row, sel && s.rowOn, dim && s.rowDim]}
+                  <GoalRow
+                    selected={sel}
+                    dim={dim}
                     onPress={() => setFatLossRate(label)}
-                    activeOpacity={0.8}
+                    s={s}
+                    theme={theme}
                   >
                     <View style={{ flex: 1 }}>
                       <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
                       <Text style={[s.rowSub, sel && s.rowSubOn]}>{sub}</Text>
                     </View>
                     {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
-                  </TouchableOpacity>
+                  </GoalRow>
                 </FadeSlideIn>
               );
             })}
@@ -683,9 +1011,7 @@ function S5Goal({ primaryGoal, setPrimaryGoal, fatLossRate, setFatLossRate, onNe
       )}
 
       <FadeSlideIn delay={500}>
-        <TouchableOpacity style={[s.cta, !canContinue && s.ctaDim]} onPress={onNext} disabled={!canContinue} activeOpacity={0.85}>
-          <Text style={s.ctaText}>Continue</Text>
-        </TouchableOpacity>
+        <PrimaryCTA label="Continue" onPress={onNext} disabled={!canContinue} s={s} theme={theme} />
       </FadeSlideIn>
     </ScrollView>
   );
