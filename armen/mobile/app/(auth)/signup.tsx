@@ -50,7 +50,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ThemeColors, type as TY, radius as R, space as SP } from '@/services/theme';
-import { signupComplete, checkUsername, getMe } from '@/services/api';
+import { signupComplete, checkUsername, getMe, patchOnboarding } from '@/services/api';
 import { useAuthStore } from '@/services/authStore';
 
 // Soft-import expo-haptics — no-op if not yet installed. The plan asks for
@@ -510,7 +510,11 @@ export default function SignupFlow() {
   const [bdYear, setBdYear] = useState('');
   const [weightStr, setWeightStr] = useState('');
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
+  // Height inputs split by unit: cm uses a single value, ft uses two whole-number
+  // fields so 5'11" can never be entered as 5.11 ft (audit 1.1).
   const [heightStr, setHeightStr] = useState('');
+  const [heightFeet, setHeightFeet] = useState('');
+  const [heightInches, setHeightInches] = useState('');
   const [heightUnit, setHeightUnit] = useState<'cm' | 'ft'>('cm');
   const [biologicalSex, setBiologicalSex] = useState('');
   const [trainingTime, setTrainingTime] = useState('');
@@ -530,16 +534,15 @@ export default function SignupFlow() {
   const weightKg = weightUnit === 'kg'
     ? parseFloat(weightStr) || 0
     : (parseFloat(weightStr) || 0) * 0.453592;
-  // Parse "5.11" as 5 feet 11 inches (not 5.11 feet). Decimal part = inches, capped at 11.
-  const parseFtIn = (s: string): number => {
-    const [ftStr, inStr] = s.trim().split('.');
-    const feet = parseInt(ftStr || '0') || 0;
-    const inches = Math.min(11, parseInt(inStr || '0') || 0);
-    return (feet * 12 + inches) * 2.54;
-  };
+  // ft mode now uses two separate whole-number inputs (feet + inches), so the
+  // ambiguous "5.11" decimal entry is gone (audit 1.1). Inches clamped to 0–11.
   const heightCm = heightUnit === 'cm'
     ? parseFloat(heightStr) || 0
-    : parseFtIn(heightStr);
+    : (() => {
+        const ft = parseInt(heightFeet || '0') || 0;
+        const inches = Math.min(11, Math.max(0, parseInt(heightInches || '0') || 0));
+        return (ft * 12 + inches) * 2.54;
+      })();
   const age = calcAgeFromBirthday(bdDay, bdMonth, bdYear);
   const dateOfBirth = (parseInt(bdYear) >= 1900 && parseInt(bdMonth) >= 1 && parseInt(bdDay) >= 1)
     ? `${bdYear.padStart(4, '0')}-${bdMonth.padStart(2, '0')}-${bdDay.padStart(2, '0')}`
@@ -641,7 +644,10 @@ export default function SignupFlow() {
     setSaving(true);
     setFinishError(null);
     try {
-      // TODO BUG (audit 1.10): signup auto-sets onboarding_complete=True; should be False until onboarding finishes.
+      // Backend creates the user with onboarding_complete=False (audit 1.10);
+      // we only flip it true after the full flow lands successfully via
+      // patchOnboarding below. Without that follow-up call, the (tabs) gate
+      // in app/index.tsx would bounce the user right back into signup.
       const tokenResp = await signupComplete({
         email: email.trim().toLowerCase(),
         password,
@@ -662,6 +668,20 @@ export default function SignupFlow() {
         preferred_training_time: trainingTime || undefined,
       });
       useAuthStore.setState({ token: tokenResp.access_token });
+      // Mark onboarding complete server-side. If this PATCH fails the user
+      // surfaces an error and stays on the Done screen — they can retry
+      // without losing their account.
+      try {
+        await patchOnboarding({ onboarding_complete: true });
+      } catch (patchErr: any) {
+        const detail = patchErr?.response?.data?.detail;
+        const msg = typeof detail === 'string'
+          ? detail
+          : 'Could not finalise your profile. Please try again.';
+        setFinishError(msg);
+        setSaving(false);
+        return;
+      }
       const user = await getMe();
       setAuth(tokenResp.access_token, user);
       // Auto-join default clubs matching sport_tags so the community tab isn't
@@ -764,7 +784,10 @@ export default function SignupFlow() {
             bdMonth={bdMonth} setBdMonth={setBdMonth}
             bdYear={bdYear} setBdYear={setBdYear}
             weightStr={weightStr} setWeightStr={setWeightStr} weightUnit={weightUnit} setWeightUnit={setWeightUnit}
-            heightStr={heightStr} setHeightStr={setHeightStr} heightUnit={heightUnit} setHeightUnit={setHeightUnit}
+            heightStr={heightStr} setHeightStr={setHeightStr}
+            heightFeet={heightFeet} setHeightFeet={setHeightFeet}
+            heightInches={heightInches} setHeightInches={setHeightInches}
+            heightUnit={heightUnit} setHeightUnit={setHeightUnit}
             biologicalSex={biologicalSex} setBiologicalSex={setBiologicalSex}
             onNext={goNext} s={s} theme={theme}
           />
@@ -1080,14 +1103,26 @@ function S7Frequency({ weeklyDays, setWeeklyDays, onNext, s, theme }: any) {
 function S8Body({
   bdDay, setBdDay, bdMonth, setBdMonth, bdYear, setBdYear,
   weightStr, setWeightStr, weightUnit, setWeightUnit,
-  heightStr, setHeightStr, heightUnit, setHeightUnit, biologicalSex, setBiologicalSex,
+  heightStr, setHeightStr,
+  heightFeet, setHeightFeet, heightInches, setHeightInches,
+  heightUnit, setHeightUnit, biologicalSex, setBiologicalSex,
   onNext, s, theme,
 }: any) {
   const dayN = parseInt(bdDay), monthN = parseInt(bdMonth), yearN = parseInt(bdYear);
   const currentYear = new Date().getFullYear();
   const bdValid = dayN >= 1 && dayN <= 31 && monthN >= 1 && monthN <= 12
     && yearN >= 1900 && yearN <= currentYear - 13;
-  const valid = bdValid && weightStr.trim() && heightStr.trim() && biologicalSex;
+  const heightValid = heightUnit === 'cm'
+    ? heightStr.trim().length > 0
+    : heightFeet.trim().length > 0; // inches optional (e.g. exactly 5'0")
+  const valid = bdValid && weightStr.trim() && heightValid && biologicalSex;
+  // Clamp inches input live so "13" → "11" without waiting for blur.
+  const handleInchesChange = (raw: string) => {
+    const cleaned = raw.replace(/[^0-9]/g, '');
+    if (cleaned === '') { setHeightInches(''); return; }
+    const n = parseInt(cleaned);
+    setHeightInches(String(Math.min(11, Math.max(0, n))));
+  };
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <KeyboardAvoidingView style={s.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -1142,14 +1177,50 @@ function S8Body({
               ))}
             </View>
           </View>
-          {/* TODO BUG (audit 1.1): single "ft" input causes 5'11" to be stored as 5'1". Needs separate feet + inches inputs. */}
-          <TextInput
-            style={s.input}
-            placeholder={heightUnit === 'cm' ? 'e.g. 180' : 'e.g. 5.11'}
-            placeholderTextColor={theme.text.muted} keyboardType="decimal-pad"
-            value={heightStr} onChangeText={setHeightStr}
-            returnKeyType="done" onSubmitEditing={Keyboard.dismiss}
-          />
+          {heightUnit === 'cm' ? (
+            <TextInput
+              style={s.input}
+              placeholder="e.g. 180"
+              placeholderTextColor={theme.text.muted}
+              keyboardType="decimal-pad"
+              value={heightStr}
+              onChangeText={setHeightStr}
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
+            />
+          ) : (
+            // Two whole-number inputs eliminate the 5.11 ambiguity from the
+            // single-decimal field (audit 1.1).
+            <View style={s.heightFtRow}>
+              <View style={s.heightFtCell}>
+                <TextInput
+                  style={[s.input, s.heightFtInput]}
+                  placeholder="5"
+                  placeholderTextColor={theme.text.muted}
+                  keyboardType="number-pad"
+                  maxLength={1}
+                  value={heightFeet}
+                  onChangeText={(v: string) => setHeightFeet(v.replace(/[^0-9]/g, ''))}
+                  returnKeyType="next"
+                />
+                <Text style={s.heightFtUnit}>ft</Text>
+              </View>
+              <View style={s.heightFtCell}>
+                <TextInput
+                  style={[s.input, s.heightFtInput]}
+                  placeholder="11"
+                  placeholderTextColor={theme.text.muted}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  value={heightInches}
+                  onChangeText={handleInchesChange}
+                  returnKeyType="done"
+                  onSubmitEditing={Keyboard.dismiss}
+                />
+                <Text style={s.heightFtUnit}>in</Text>
+              </View>
+            </View>
+          )}
 
           <Text style={s.label}>Biological Sex</Text>
           <View style={s.sexRow}>
@@ -1433,6 +1504,15 @@ function styles(t: ThemeColors) {
     bdRow: { flexDirection: 'row', gap: 10, marginBottom: 4 },
     bdInput: { flex: 1, textAlign: 'center' },
     bdInputYear: { flex: 1.6, textAlign: 'center' },
+
+    // Height (ft) — two whole-number cells with trailing unit labels.
+    heightFtRow: { flexDirection: 'row', gap: 10 },
+    heightFtCell: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+    heightFtInput: { flex: 1, textAlign: 'center' },
+    heightFtUnit: {
+      fontSize: 13, color: t.text.muted, fontFamily: TY.sans.semibold,
+      width: 22,
+    },
 
     // Body stats helpers
     unitRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

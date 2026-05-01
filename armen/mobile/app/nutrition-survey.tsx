@@ -3,7 +3,7 @@
  * Collects nutrition preferences and PATCHes /nutrition/profile on completion.
  */
 
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -156,7 +156,7 @@ const COUNTRIES: Array<{ name: string; flag: string }> = [
 
 interface SurveyData {
   // Step 1
-  cuisines_enjoyed: string[];
+  cuisines_liked: string[];
   foods_loved: string[];
   foods_disliked: string[];
   diet_type: string;
@@ -187,7 +187,7 @@ interface SurveyData {
 }
 
 const DEFAULT_SURVEY: SurveyData = {
-  cuisines_enjoyed: [],
+  cuisines_liked: [],
   foods_loved: [],
   foods_disliked: [],
   diet_type: '',
@@ -330,7 +330,10 @@ export default function NutritionSurveyScreen() {
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [step, setStep] = useState(1);
-  // TODO BUG (audit 1.3): edit flow resets to DEFAULT_SURVEY instead of hydrating from backend. Wipes user prefs on every edit.
+  // Survey is seeded with DEFAULT_SURVEY but immediately hydrated from the
+  // saved profile below. The hydration error path (audit 1.2/1.3) surfaces a
+  // retry-able error block instead of swallowing — without that the edit flow
+  // would PATCH empty fields and wipe the user's stored preferences.
   const [surveyData, setSurveyData] = useState<SurveyData>(DEFAULT_SURVEY);
   const [saving, setSaving] = useState(false);
   const [foodMode, setFoodMode] = useState<'love' | 'dislike'>('love');
@@ -338,8 +341,15 @@ export default function NutritionSurveyScreen() {
   const [countryListOpen, setCountryListOpen] = useState(false);
   const [profileData, setProfileData] = useState<NutritionProfile | null>(null);
   const [dietChangeNotice, setDietChangeNotice] = useState(false);
+  // Hydration state — separate from saving so the gear-edit flow can show a
+  // retry button if the backend GET fails. While `loading` is true the bottom
+  // CTA stays disabled so the user can't PATCH empty defaults over their data.
+  const [hydrating, setHydrating] = useState(true);
+  const [hydrationError, setHydrationError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadProfile = useCallback(() => {
+    setHydrating(true);
+    setHydrationError(null);
     getNutritionProfile()
       .then((profile) => {
         setProfileData(profile);
@@ -354,10 +364,31 @@ export default function NutritionSurveyScreen() {
           });
           return next;
         });
+        setHydrating(false);
       })
-      // TODO BUG (audit 1.2): errors swallowed via .catch(() => {}). Surface to user with retry.
-      .catch(() => {});
+      .catch((err: any) => {
+        // 404 = first-time user with no profile yet. Fall through silently to
+        // DEFAULT_SURVEY since there's nothing to hydrate.
+        if (err?.response?.status === 404) {
+          setHydrating(false);
+          return;
+        }
+        if (!err?.response) {
+          setHydrationError('Cannot reach the server. Check your connection and try again.');
+        } else {
+          const detail = err?.response?.data?.detail;
+          const msg = typeof detail === 'string'
+            ? detail
+            : `Could not load your nutrition profile (${err.response.status}).`;
+          setHydrationError(msg);
+        }
+        setHydrating(false);
+      });
   }, []);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
 
   // ── Navigation ──────────────────────────────────────────────────────────────
 
@@ -429,7 +460,7 @@ export default function NutritionSurveyScreen() {
     });
   }
 
-  function toggleMulti(key: 'cuisines_enjoyed' | 'allergies', value: string) {
+  function toggleMulti(key: 'cuisines_liked' | 'allergies', value: string) {
     setSurveyData((prev) => {
       const arr = prev[key] as string[];
       if (arr.includes(value)) {
@@ -519,7 +550,7 @@ export default function NutritionSurveyScreen() {
         <Text style={styles.sectionLabel}>Cuisines enjoyed</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
           {CUISINES.map((c) => (
-            <Chip key={c} label={c} selected={surveyData.cuisines_enjoyed.includes(c)} onPress={() => toggleMulti('cuisines_enjoyed', c)} />
+            <Chip key={c} label={c} selected={surveyData.cuisines_liked.includes(c)} onPress={() => toggleMulti('cuisines_liked', c)} />
           ))}
         </ScrollView>
 
@@ -908,7 +939,7 @@ export default function NutritionSurveyScreen() {
     const budget = pd?.weekly_budget || sd.weekly_budget;
     const cookTime = pd?.time_per_meal || sd.time_per_meal;
     const skill = pd?.cooking_skill || sd.cooking_skill;
-    const cuisines = (pd?.cuisines_enjoyed as string[] | null) || sd.cuisines_enjoyed;
+    const cuisines = (pd?.cuisines_liked as string[] | null) || sd.cuisines_liked;
 
     if (goal) rows.push({ label: 'Goal', value: goal });
     if (diet) rows.push({ label: 'Diet', value: allergies?.length ? `${diet} · no ${allergies.join(', ').toLowerCase()}` : diet });
@@ -970,12 +1001,16 @@ export default function NutritionSurveyScreen() {
   // ── Bottom button ───────────────────────────────────────────────────────────
 
   function renderBottomButton() {
+    // Block forward progress while hydrating or if hydration failed — without
+    // this, a user editing an existing profile could PATCH empty defaults
+    // over their saved data (audit 1.2 / 1.3).
+    const blocked = hydrating || !!hydrationError;
     if (step === TOTAL_STEPS) {
       return (
         <TouchableOpacity
-          style={[styles.continueButton, styles.submitButton]}
+          style={[styles.continueButton, styles.submitButton, blocked && styles.continueButtonDisabled]}
           onPress={handleSubmit}
-          disabled={saving}
+          disabled={saving || blocked}
           activeOpacity={0.85}
         >
           {saving ? (
@@ -988,8 +1023,9 @@ export default function NutritionSurveyScreen() {
     }
     return (
       <TouchableOpacity
-        style={styles.continueButton}
+        style={[styles.continueButton, blocked && styles.continueButtonDisabled]}
         onPress={handleContinue}
+        disabled={blocked}
         activeOpacity={0.85}
       >
         <Text style={styles.continueButtonText}>Continue</Text>
@@ -1020,6 +1056,25 @@ export default function NutritionSurveyScreen() {
           <View style={styles.headerButton} />
         )}
       </View>
+
+      {/* Hydration error — surfaced instead of swallowed (audit 1.2 / 1.3).
+          Survey content stays mounted underneath; user can retry without
+          losing the navigation state they have. */}
+      {hydrationError && (
+        <View style={styles.hydrationErrorBox}>
+          <Text style={styles.hydrationErrorText}>{hydrationError}</Text>
+          <TouchableOpacity
+            onPress={loadProfile}
+            style={styles.hydrationRetryBtn}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading nutrition profile"
+          >
+            <Ionicons name="refresh" size={14} color={theme.text.primary} />
+            <Text style={styles.hydrationRetryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Step content */}
       <View style={styles.contentArea}>
@@ -1355,10 +1410,46 @@ function createStyles(t: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
   },
+  continueButtonDisabled: { opacity: 0.4 },
   continueButtonText: {
     color: t.accentInk,
     fontSize: 16,
     fontFamily: TY.sans.bold,
+  },
+
+  // Hydration error block (audit 1.2 / 1.3) — same pattern as signup's
+  // errorBox: dangerSoft fill, danger left rim, retry button.
+  hydrationErrorBox: {
+    marginHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: R.sm,
+    backgroundColor: t.status.dangerSoft,
+    borderLeftWidth: 3,
+    borderLeftColor: t.status.danger,
+  },
+  hydrationErrorText: {
+    flex: 1,
+    color: t.status.danger,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  hydrationRetryBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderRadius: R.xs,
+    backgroundColor: t.glass.card,
+    borderWidth: 1,
+    borderColor: t.glass.border,
+  },
+  hydrationRetryText: {
+    color: t.text.primary,
+    fontSize: 13,
+    fontFamily: TY.sans.semibold,
   },
   submitButton: {
     backgroundColor: t.signal.load,
