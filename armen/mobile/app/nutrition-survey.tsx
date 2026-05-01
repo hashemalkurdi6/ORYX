@@ -330,6 +330,7 @@ export default function NutritionSurveyScreen() {
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [step, setStep] = useState(1);
+  // TODO BUG (audit 1.3): edit flow resets to DEFAULT_SURVEY instead of hydrating from backend. Wipes user prefs on every edit.
   const [surveyData, setSurveyData] = useState<SurveyData>(DEFAULT_SURVEY);
   const [saving, setSaving] = useState(false);
   const [foodMode, setFoodMode] = useState<'love' | 'dislike'>('love');
@@ -354,6 +355,7 @@ export default function NutritionSurveyScreen() {
           return next;
         });
       })
+      // TODO BUG (audit 1.2): errors swallowed via .catch(() => {}). Surface to user with retry.
       .catch(() => {});
   }, []);
 

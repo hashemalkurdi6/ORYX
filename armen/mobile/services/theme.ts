@@ -62,6 +62,7 @@ export interface ThemeColors {
     success: string;
     warn: string;
     danger: string;
+    dangerSoft: string;   // translucent danger tint, for error-box backgrounds
   };
 }
 
@@ -120,9 +121,10 @@ export const themeDark: ThemeColors = {
   },
 
   status: {
-    success: '#A8EF3A',
-    warn:    '#FFD04A',
-    danger:  '#FF6B4A',
+    success:    '#A8EF3A',
+    warn:       '#FFD04A',
+    danger:     '#FF6B4A',
+    dangerSoft: 'rgba(255,107,74,0.12)',
   },
 };
 
@@ -190,9 +192,10 @@ export const themeLight: ThemeColors = {
   },
 
   status: {
-    success: '#4A9600',
-    warn:    '#C07800',
-    danger:  '#C03A18',
+    success:    '#4A9600',
+    warn:       '#C07800',
+    danger:     '#C03A18',
+    dangerSoft: 'rgba(192,58,24,0.10)',
   },
 };
 

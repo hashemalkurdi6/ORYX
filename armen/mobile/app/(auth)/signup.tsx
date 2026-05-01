@@ -15,7 +15,7 @@
  * Screen 12 — All set → single API call creates account + saves onboarding
  */
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -30,15 +30,61 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
+  ViewStyle,
+  StyleProp,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import Reanimated, {
+  Easing,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from 'react-native-reanimated';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ThemeColors, type as TY, radius as R, space as SP } from '@/services/theme';
 import { signupComplete, checkUsername, getMe } from '@/services/api';
 import { useAuthStore } from '@/services/authStore';
+
+// Entry-stagger primitive — fades + slides up on mount. Respects OS reduced-motion.
+// One instance per element you want staggered. Re-mounts when the parent step
+// changes (the conditional `step === N && <Screen />` block remounts on switch),
+// so the animation re-fires per screen advance with no extra wiring.
+function FadeSlideIn({
+  delay = 0,
+  style,
+  children,
+}: {
+  delay?: number;
+  style?: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+}) {
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(12);
+  const reduced = useReducedMotion();
+
+  useEffect(() => {
+    if (reduced) {
+      opacity.value = 1;
+      translateY.value = 0;
+      return;
+    }
+    opacity.value = withDelay(delay, withTiming(1, { duration: 380, easing: Easing.out(Easing.cubic) }));
+    translateY.value = withDelay(delay, withTiming(0, { duration: 380, easing: Easing.out(Easing.cubic) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  return <Reanimated.View style={[animStyle, style]}>{children}</Reanimated.View>;
+}
 
 const { width: SW } = Dimensions.get('window');
 // Welcome screen is now its own route at /(auth)/landing — signup proper
@@ -232,8 +278,10 @@ export default function SignupFlow() {
   // screen. The Welcome step that used to live at step 1 has been promoted to
   // its own route (app/(auth)/landing.tsx).
   const goBack = () => {
-    if (step <= 1) router.back();
-    else navigate(step - 1);
+    if (step <= 1) {
+      if (router.canGoBack()) router.back();
+      else router.replace('/(auth)/landing');
+    } else navigate(step - 1);
   };
   const skip = () => navigate(step + 1);
 
@@ -281,6 +329,7 @@ export default function SignupFlow() {
     setSaving(true);
     setFinishError(null);
     try {
+      // TODO BUG (audit 1.10): signup auto-sets onboarding_complete=True; should be False until onboarding finishes.
       const tokenResp = await signupComplete({
         email: email.trim().toLowerCase(),
         password,
@@ -341,10 +390,15 @@ export default function SignupFlow() {
       {showProgress && (
         <View style={s.progressRow}>
           {showBack ? (
-            <TouchableOpacity onPress={goBack} style={s.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="chevron-back" size={22} color={theme.text.primary} />
+            <TouchableOpacity
+              onPress={goBack}
+              activeOpacity={0.75}
+              style={s.backBtn}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="chevron-back" size={20} color={theme.text.primary} />
             </TouchableOpacity>
-          ) : <View style={s.backBtn} />}
+          ) : <View style={s.backBtnPlaceholder} />}
           <View style={s.progressTrack}>
             <View style={[s.progressFill, { width: `${Math.round(progress * 100)}%` as any }]} />
           </View>
@@ -426,63 +480,79 @@ function S2Account({
   return (
     <KeyboardAvoidingView style={s.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-        <Text style={s.stepLabel}>01 / {TOTAL}</Text>
-        <Text style={s.title}>Create your account.</Text>
+        <FadeSlideIn delay={0}>
+          <Text style={s.stepLabel}>01 / {TOTAL}</Text>
+          <Text style={s.title}>Create your account.</Text>
+        </FadeSlideIn>
 
         {error && (
-          <View style={s.errorBox}>
-            <Text style={s.errorText}>{error}</Text>
-          </View>
+          <FadeSlideIn delay={80}>
+            <View style={s.errorBox}>
+              <Text style={s.errorText}>{error}</Text>
+            </View>
+          </FadeSlideIn>
         )}
 
-        <Text style={s.label}>Full Name</Text>
-        <TextInput
-          style={s.input} value={fullName} onChangeText={setFullName}
-          placeholder="Your full name" placeholderTextColor={theme.text.muted}
-          autoCapitalize="words" returnKeyType="next"
-        />
-
-        <Text style={s.label}>Username</Text>
-        <View style={s.usernameRow}>
-          <Text style={s.usernameAt}>@</Text>
+        <FadeSlideIn delay={150}>
+          <Text style={s.label}>Full Name</Text>
           <TextInput
-            style={s.usernameInput} value={username} onChangeText={onUsernameChange}
-            placeholder="yourhandle" placeholderTextColor={theme.text.muted}
-            autoCapitalize="none" autoCorrect={false} returnKeyType="next"
+            style={s.input} value={fullName} onChangeText={setFullName}
+            placeholder="Your full name" placeholderTextColor={theme.text.muted}
+            autoCapitalize="words" returnKeyType="next"
           />
-          <View style={{ width: 24, alignItems: 'center' }}>
-            {usernameStatus === 'checking'
-              ? <ActivityIndicator size="small" color={theme.text.muted} />
-              : statusIcon}
+        </FadeSlideIn>
+
+        <FadeSlideIn delay={200}>
+          <Text style={s.label}>Username</Text>
+          <View style={s.usernameRow}>
+            <Text style={s.usernameAt}>@</Text>
+            <TextInput
+              style={s.usernameInput} value={username} onChangeText={onUsernameChange}
+              placeholder="yourhandle" placeholderTextColor={theme.text.muted}
+              autoCapitalize="none" autoCorrect={false} returnKeyType="next"
+            />
+            <View style={{ width: 24, alignItems: 'center' }}>
+              {usernameStatus === 'checking'
+                ? <ActivityIndicator size="small" color={theme.text.muted} />
+                : statusIcon}
+            </View>
           </View>
-        </View>
+        </FadeSlideIn>
 
-        <Text style={s.label}>Email</Text>
-        <TextInput
-          style={s.input} value={email} onChangeText={setEmail}
-          placeholder="you@example.com" placeholderTextColor={theme.text.muted}
-          keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
-          autoComplete="email" returnKeyType="next"
-        />
+        <FadeSlideIn delay={250}>
+          <Text style={s.label}>Email</Text>
+          <TextInput
+            style={s.input} value={email} onChangeText={setEmail}
+            placeholder="you@example.com" placeholderTextColor={theme.text.muted}
+            keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
+            autoComplete="email" returnKeyType="next"
+          />
+        </FadeSlideIn>
 
-        <Text style={s.label}>Password</Text>
-        <TextInput
-          style={s.input} value={password} onChangeText={setPassword}
-          placeholder="8+ chars, with a letter and a number" placeholderTextColor={theme.text.muted}
-          secureTextEntry autoComplete="new-password" returnKeyType="next"
-        />
+        <FadeSlideIn delay={300}>
+          <Text style={s.label}>Password</Text>
+          <TextInput
+            style={s.input} value={password} onChangeText={setPassword}
+            placeholder="8+ chars, with a letter and a number" placeholderTextColor={theme.text.muted}
+            secureTextEntry autoComplete="new-password" returnKeyType="next"
+          />
+        </FadeSlideIn>
 
-        <Text style={s.label}>Confirm Password</Text>
-        <TextInput
-          style={s.input} value={confirmPassword} onChangeText={setConfirmPassword}
-          placeholder="Re-enter your password" placeholderTextColor={theme.text.muted}
-          secureTextEntry autoComplete="new-password" returnKeyType="done"
-          onSubmitEditing={onContinue}
-        />
+        <FadeSlideIn delay={350}>
+          <Text style={s.label}>Confirm Password</Text>
+          <TextInput
+            style={s.input} value={confirmPassword} onChangeText={setConfirmPassword}
+            placeholder="Re-enter your password" placeholderTextColor={theme.text.muted}
+            secureTextEntry autoComplete="new-password" returnKeyType="done"
+            onSubmitEditing={onContinue}
+          />
+        </FadeSlideIn>
 
-        <TouchableOpacity style={s.cta} onPress={onContinue} activeOpacity={0.85}>
-          <Text style={s.ctaText}>Continue</Text>
-        </TouchableOpacity>
+        <FadeSlideIn delay={420}>
+          <TouchableOpacity style={s.cta} onPress={onContinue} activeOpacity={0.85}>
+            <Text style={s.ctaText}>Continue</Text>
+          </TouchableOpacity>
+        </FadeSlideIn>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -517,23 +587,29 @@ function S4Sports({ sportTags, setSportTags, onNext, s, theme }: any) {
     setSportTags((p: string[]) => p.includes(label) ? p.filter((x: string) => x !== label) : [...p, label]);
   return (
     <ScrollView contentContainerStyle={s.content}>
-      <Text style={s.stepLabel}>03 / {TOTAL}</Text>
-      <Text style={s.title}>What is your main sport or activity?</Text>
-      <Text style={s.subtitle}>Select all that apply.</Text>
+      <FadeSlideIn delay={0}>
+        <Text style={s.stepLabel}>03 / {TOTAL}</Text>
+        <Text style={s.title}>What is your main sport or activity?</Text>
+        <Text style={s.subtitle}>Select all that apply.</Text>
+      </FadeSlideIn>
       <View style={s.tileGrid}>
-        {SPORTS.map(({ label, icon }) => {
+        {SPORTS.map(({ label, icon }, i) => {
           const sel = sportTags.includes(label);
           return (
-            <TouchableOpacity key={label} style={[s.tile, sel && s.tileOn]} onPress={() => toggle(label)} activeOpacity={0.8}>
-              <Ionicons name={icon as any} size={22} color={sel ? theme.accent : theme.text.secondary} />
-              <Text style={[s.tileLabel, sel && s.tileLabelOn]}>{label}</Text>
-            </TouchableOpacity>
+            <FadeSlideIn key={label} delay={200 + i * 50}>
+              <TouchableOpacity style={[s.tile, sel && s.tileOn]} onPress={() => toggle(label)} activeOpacity={0.8}>
+                <Ionicons name={icon as any} size={22} color={sel ? theme.accentInk : theme.text.secondary} />
+                <Text style={[s.tileLabel, sel && s.tileLabelOn]}>{label}</Text>
+              </TouchableOpacity>
+            </FadeSlideIn>
           );
         })}
       </View>
-      <TouchableOpacity style={s.cta} onPress={onNext} activeOpacity={0.85}>
-        <Text style={s.ctaText}>{sportTags.length > 0 ? 'Continue' : 'Skip for now'}</Text>
-      </TouchableOpacity>
+      <FadeSlideIn delay={420}>
+        <TouchableOpacity style={s.cta} onPress={onNext} activeOpacity={0.85}>
+          <Text style={s.ctaText}>{sportTags.length > 0 ? 'Continue' : 'Skip for now'}</Text>
+        </TouchableOpacity>
+      </FadeSlideIn>
     </ScrollView>
   );
 }
@@ -545,52 +621,72 @@ function S5Goal({ primaryGoal, setPrimaryGoal, fatLossRate, setFatLossRate, onNe
   const canContinue = primaryGoal && (!needsCutRate || fatLossRate);
   return (
     <ScrollView contentContainerStyle={s.content}>
-      <Text style={s.stepLabel}>04 / {TOTAL}</Text>
-      <Text style={s.title}>What is your main goal?</Text>
-      <Text style={s.subtitle}>ORYX frames all recommendations around this.</Text>
+      <FadeSlideIn delay={0}>
+        <Text style={s.stepLabel}>04 / {TOTAL}</Text>
+        <Text style={s.title}>What is your main goal?</Text>
+        <Text style={s.subtitle}>ORYX frames all recommendations around this.</Text>
+      </FadeSlideIn>
       <View style={s.list}>
-        {GOALS.map(({ label, icon }) => {
+        {GOALS.map(({ label, icon }, i) => {
           const sel = primaryGoal === label;
+          // Sibling-dim: when something is picked, fade the un-picked options
+          // back to 60% so the active choice reads as the focus of the screen.
+          const dim = primaryGoal && !sel;
           return (
-            <TouchableOpacity
-              key={label}
-              style={[s.row, sel && s.rowOn]}
-              onPress={() => { setPrimaryGoal(label); if (label !== 'Lose Fat') setFatLossRate(''); }}
-              activeOpacity={0.8}
-            >
-              <Ionicons name={icon as any} size={20} color={sel ? theme.accent : theme.text.secondary} style={{ marginRight: 12 }} />
-              <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
-              {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} style={{ marginLeft: 'auto' as any }} />}
-            </TouchableOpacity>
+            <FadeSlideIn key={label} delay={200 + i * 50}>
+              <TouchableOpacity
+                style={[s.row, sel && s.rowOn, dim && s.rowDim]}
+                onPress={() => { setPrimaryGoal(label); if (label !== 'Lose Fat') setFatLossRate(''); }}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={icon as any}
+                  size={20}
+                  color={sel ? theme.accent : theme.text.secondary}
+                  style={{ marginRight: 12 }}
+                />
+                <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
+                {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} style={{ marginLeft: 'auto' as any }} />}
+              </TouchableOpacity>
+            </FadeSlideIn>
           );
         })}
       </View>
 
       {needsCutRate && (
         <View style={{ marginBottom: 24 }}>
-          <Text style={[s.label, { marginTop: 4 }]}>How aggressively do you want to cut?</Text>
+          <FadeSlideIn delay={120}>
+            <Text style={[s.label, { marginTop: 4 }]}>How aggressively do you want to cut?</Text>
+          </FadeSlideIn>
           <View style={[s.list, { marginTop: 10, marginBottom: 0 }]}>
-            {FAT_LOSS_RATES.map(({ label, sub }) => {
+            {FAT_LOSS_RATES.map(({ label, sub }, i) => {
               const sel = fatLossRate === label;
+              const dim = fatLossRate && !sel;
               return (
-                <TouchableOpacity key={label} style={[s.row, sel && s.rowOn]} onPress={() => setFatLossRate(label)} activeOpacity={0.8}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
-                    <Text style={[s.rowSub, sel && s.rowSubOn]}>
-                      {sub}
-                    </Text>
-                  </View>
-                  {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
-                </TouchableOpacity>
+                <FadeSlideIn key={label} delay={180 + i * 50}>
+                  <TouchableOpacity
+                    style={[s.row, sel && s.rowOn, dim && s.rowDim]}
+                    onPress={() => setFatLossRate(label)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
+                      <Text style={[s.rowSub, sel && s.rowSubOn]}>{sub}</Text>
+                    </View>
+                    {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
+                  </TouchableOpacity>
+                </FadeSlideIn>
               );
             })}
           </View>
         </View>
       )}
 
-      <TouchableOpacity style={[s.cta, !canContinue && s.ctaDim]} onPress={onNext} disabled={!canContinue} activeOpacity={0.85}>
-        <Text style={s.ctaText}>Continue</Text>
-      </TouchableOpacity>
+      <FadeSlideIn delay={500}>
+        <TouchableOpacity style={[s.cta, !canContinue && s.ctaDim]} onPress={onNext} disabled={!canContinue} activeOpacity={0.85}>
+          <Text style={s.ctaText}>Continue</Text>
+        </TouchableOpacity>
+      </FadeSlideIn>
     </ScrollView>
   );
 }
@@ -720,6 +816,7 @@ function S8Body({
               ))}
             </View>
           </View>
+          {/* TODO BUG (audit 1.1): single "ft" input causes 5'11" to be stored as 5'1". Needs separate feet + inches inputs. */}
           <TextInput
             style={s.input}
             placeholder={heightUnit === 'cm' ? 'e.g. 180' : 'e.g. 5.11'}
@@ -920,12 +1017,18 @@ function styles(t: ThemeColors) {
 
     progressRow: {
       flexDirection: 'row', alignItems: 'center',
-      paddingHorizontal: 16, paddingVertical: 12, gap: 10,
+      paddingHorizontal: 16, paddingVertical: 12, gap: 12,
     },
-    backBtn: { width: 32, alignItems: 'center' },
-    progressTrack: { flex: 1, height: 4, backgroundColor: t.border, borderRadius: 2, overflow: 'hidden' },
+    // Circular glass back button — sits at top-left on every step.
+    backBtn: {
+      width: 36, height: 36, borderRadius: 18,
+      alignItems: 'center', justifyContent: 'center',
+      backgroundColor: t.glass.card, borderWidth: 1, borderColor: t.glass.border,
+    },
+    backBtnPlaceholder: { width: 36, height: 36 },
+    progressTrack: { flex: 1, height: 4, backgroundColor: t.glass.cardLo, borderRadius: 2, overflow: 'hidden' },
     progressFill: { height: '100%', backgroundColor: t.accent, borderRadius: 2 },
-    skipBtn: { width: 40, alignItems: 'flex-end' },
+    skipBtn: { minWidth: 40, alignItems: 'flex-end' },
     skipText: { fontSize: 13, color: t.text.muted, fontFamily: TY.sans.medium },
 
     screenWrap: { flex: 1 },
@@ -939,55 +1042,61 @@ function styles(t: ThemeColors) {
     title: { fontSize: 26, fontFamily: TY.sans.bold, color: t.text.primary, marginBottom: 8, lineHeight: 34 },
     subtitle: { fontSize: 14, color: t.text.muted, lineHeight: 20, marginBottom: 24 },
 
-    // Form
+    // Form — glass-tinted input surfaces with rim border. The translucent fill
+    // reads as "premium" against the dark slate bg; on light mode it falls back
+    // to solid white via the theme tokens.
     label: { fontSize: 13, color: t.text.secondary, fontFamily: TY.sans.semibold, marginBottom: 8, marginTop: 14 },
     input: {
-      backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border,
-      borderRadius: R.sm, paddingHorizontal: 16, paddingVertical: 14,
+      backgroundColor: t.glass.card, borderWidth: 1, borderColor: t.glass.border,
+      borderRadius: R.md, paddingHorizontal: 16, paddingVertical: 14,
       fontSize: 16, color: t.text.primary,
     },
     usernameRow: {
       flexDirection: 'row', alignItems: 'center',
-      backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border,
-      borderRadius: R.sm, paddingHorizontal: 16,
+      backgroundColor: t.glass.card, borderWidth: 1, borderColor: t.glass.border,
+      borderRadius: R.md, paddingHorizontal: 16,
     },
-    usernameAt: { fontSize: 16, color: t.text.secondary, marginRight: 4 },
+    usernameAt: { fontSize: 16, color: t.text.secondary, marginRight: 4, fontFamily: TY.sans.medium },
     usernameInput: { flex: 1, paddingVertical: 14, fontSize: 16, color: t.text.primary },
     bigInput: {
-      backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border, borderRadius: R.md,
+      backgroundColor: t.glass.cardHi, borderWidth: 1, borderColor: t.glass.border, borderRadius: R.lg,
       paddingHorizontal: 20, paddingVertical: 18,
       fontSize: 22, fontFamily: TY.sans.bold, color: t.text.primary,
       marginBottom: 28, textAlign: 'center',
     },
     errorBox: {
-      backgroundColor: 'rgba(192,57,43,0.12)', borderLeftWidth: 3, borderLeftColor: t.status.danger,
+      backgroundColor: t.status.dangerSoft, borderLeftWidth: 3, borderLeftColor: t.status.danger,
       borderRadius: R.sm, padding: 14, marginBottom: 16,
     },
     errorText: { color: t.status.danger, fontSize: 14, lineHeight: 20 },
 
-    // Tiles (2-col grid)
+    // Tiles (2-col chip grid). Glass pill when unselected; lime fill with dark
+    // ink when selected — the standard chip pattern across the app.
     tileGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 },
     tile: {
       width: (SW - 48 - 12) / 2 - 6,
-      backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border,
+      backgroundColor: t.glass.pill, borderWidth: 1, borderColor: t.glass.border,
       borderRadius: R.md, padding: 16, alignItems: 'center', gap: 8,
     },
-    tileOn: { borderColor: t.accent, backgroundColor: t.bg.tint },
-    tileLabel: { fontSize: 13, fontFamily: TY.sans.semibold, color: t.text.secondary, textAlign: 'center' },
-    tileLabelOn: { color: t.accent },
+    tileOn: { borderColor: t.accent, backgroundColor: t.accent },
+    tileLabel: { fontSize: 13, fontFamily: TY.sans.semibold, color: t.text.body, textAlign: 'center' },
+    tileLabelOn: { color: t.accentInk },
 
-    // List options
+    // Stacked option cards. Glass surface; selected card lifts to cardHi + lime
+    // accent border. Siblings dim to 60% opacity when one is picked (applied
+    // inline at the call site).
     list: { gap: 10, marginBottom: 24 },
     row: {
       flexDirection: 'row', alignItems: 'center',
-      backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border,
-      borderRadius: R.sm, padding: 16,
+      backgroundColor: t.glass.card, borderWidth: 1, borderColor: t.glass.border,
+      borderRadius: R.md, padding: 16,
     },
-    rowOn: { borderColor: t.accent, backgroundColor: t.bg.tint },
+    rowOn: { borderColor: t.accent, backgroundColor: t.glass.cardHi },
     rowText: { fontSize: 15, fontFamily: TY.sans.semibold, color: t.text.primary },
-    rowTextOn: { color: t.accent },
+    rowTextOn: { color: t.text.primary },
     rowSub: { fontSize: 12, color: t.text.muted, marginTop: 2 },
     rowSubOn: { color: t.text.secondary },
+    rowDim: { opacity: 0.6 },
 
     // CTA
     cta: { backgroundColor: t.accent, borderRadius: R.sm, paddingVertical: SP[4], alignItems: 'center' },
