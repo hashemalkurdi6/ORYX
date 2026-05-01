@@ -36,3 +36,8 @@ npm-debug.log*
 
 # Obsidian (docs vault local UI state)
 docs/.obsidian/
+
+# Claude Code — machine-local config and per-agent conversation memory.
+# Team-shared content (settings.json, agents/, skills/, hooks/) is committed.
+.claude/settings.local.json
+.claude/agent-memory/
