@@ -34,8 +34,11 @@ expo-env.d.ts
 *.log
 npm-debug.log*
 
-# Obsidian (docs vault local UI state)
-docs/.obsidian/
+# Obsidian — vault config is committed; per-session workspace state stays local
+# (workspace.json churns every time you open/close a pane and would constantly
+# conflict between contributors).
+docs/.obsidian/workspace.json
+docs/.obsidian/workspace-mobile.json
 
 # Claude Code — machine-local config and per-agent conversation memory.
 # Team-shared content (settings.json, agents/, skills/, hooks/) is committed.
