@@ -98,10 +98,8 @@ export default function ReadinessHalo({
       return;
     }
     progress.value = 0;
-    // Sine in-out — true breath shape. Built-in `Easing.inOut(Easing.ease)`
-    // is too weak for a 16s loop; sin gives a held dwell on each colour.
     progress.value = withRepeat(
-      withTiming(1, { duration, easing: Easing.inOut(Easing.sin) }),
+      withTiming(1, { duration, easing: Easing.inOut(Easing.ease) }),
       -1,
       true,
     );

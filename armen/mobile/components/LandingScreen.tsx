@@ -17,7 +17,7 @@
 // snaps to its final state on first paint.
 
 import React, { useEffect } from 'react';
-import { Text, Pressable, View, StyleSheet, Dimensions } from 'react-native';
+import { Text, TouchableOpacity, View, StyleSheet, Dimensions } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -27,6 +27,7 @@ import Animated, {
   useReducedMotion,
   useSharedValue,
   withDelay,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -61,21 +62,6 @@ const PRIMARY_GLOW = '#E08394';
 // of the warm/cool pair.
 const GHOST_BORDER = 'rgba(126,132,194,0.55)';
 
-// Strong ease-out — punchier than Easing.out(Easing.cubic). Used across
-// every entry beat so the timeline feels like one orchestrated reveal.
-// Curve from easings.dev / Sonner.
-const STRONG_OUT = Easing.bezier(0.23, 1, 0.32, 1);
-
-// Even stronger settle for the button-stack arrival — slightly later peak
-// gives a more pronounced "lands and stops" feel than STRONG_OUT.
-const SETTLE_OUT = Easing.bezier(0.16, 1, 0.3, 1);
-
-// Press feedback: snappy down, gentle up. Asymmetric on purpose — the
-// system responds instantly when touched and releases smoothly.
-const PRESS_DOWN_SCALE = 0.97;
-const PRESS_DOWN = { duration: 100, easing: STRONG_OUT };
-const PRESS_UP   = { duration: 200, easing: STRONG_OUT };
-
 export default function LandingScreen() {
   const { theme } = useTheme();
   const s = styles(theme);
@@ -95,24 +81,17 @@ export default function LandingScreen() {
   useEffect(() => {
     if (reduceMotion) return;
 
-    bgOpacity.value = withTiming(1, { duration: 300, easing: STRONG_OUT });
+    bgOpacity.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.quad) });
 
-    wordmarkOp.value = withDelay(1400, withTiming(1, { duration: 400, easing: STRONG_OUT }));
-    wordmarkY.value  = withDelay(1400, withTiming(0, { duration: 400, easing: STRONG_OUT }));
+    wordmarkOp.value = withDelay(1400, withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) }));
+    wordmarkY.value  = withDelay(1400, withTiming(0, { duration: 400, easing: Easing.out(Easing.cubic) }));
 
-    taglineOp.value  = withDelay(1700, withTiming(1, { duration: 300, easing: STRONG_OUT }));
-    subtitleOp.value = withDelay(1900, withTiming(1, { duration: 300, easing: STRONG_OUT }));
+    taglineOp.value  = withDelay(1700, withTiming(1, { duration: 300, easing: Easing.out(Easing.quad) }));
+    subtitleOp.value = withDelay(1900, withTiming(1, { duration: 300, easing: Easing.out(Easing.quad) }));
 
-    // Settle by timing instead of spring — replaces a noticeable bounce
-    // (damping ratio ≈ 0.71) with a long, strong ease-out that reads as
-    // "the buttons arrive and stop." Brief: no bounce, summer breeze.
-    buttonsOp.value = withDelay(2200, withTiming(1, { duration: 320, easing: STRONG_OUT }));
-    buttonsY.value  = withDelay(2200, withTiming(0, { duration: 500, easing: SETTLE_OUT }));
+    buttonsOp.value  = withDelay(2200, withTiming(1, { duration: 250, easing: Easing.out(Easing.quad) }));
+    buttonsY.value   = withDelay(2200, withSpring(0, { damping: 14, stiffness: 120, mass: 0.8 }));
   }, [reduceMotion]);
-
-  // Press-scale shared values — one per CTA. Pressable handlers mutate them.
-  const primaryScale = useSharedValue(1);
-  const ghostScale   = useSharedValue(1);
 
   const bgStyle       = useAnimatedStyle(() => ({ opacity: bgOpacity.value }));
   const wordmarkStyle = useAnimatedStyle(() => ({
@@ -124,12 +103,6 @@ export default function LandingScreen() {
   const buttonsStyle  = useAnimatedStyle(() => ({
     opacity: buttonsOp.value,
     transform: [{ translateY: buttonsY.value }],
-  }));
-  const primaryScaleStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: primaryScale.value }],
-  }));
-  const ghostScaleStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: ghostScale.value }],
   }));
 
   return (
@@ -162,37 +135,30 @@ export default function LandingScreen() {
 
         {/* CTA pair — warm/cool dyad. Primary holds an Ember gradient with a
             soft Bloom halo behind it; Ghost is a transparent panel with a
-            periwinkle Horizon hairline. Both press-scale to 0.97 for
-            instant tactile feedback (Sonner / Emil principle). */}
+            periwinkle Horizon hairline. */}
         <Animated.View style={[s.buttonStack, buttonsStyle]}>
-          <Animated.View style={primaryScaleStyle}>
-            <Pressable
-              onPress={() => router.push('/(auth)/signup')}
-              onPressIn={() => { primaryScale.value = withTiming(PRESS_DOWN_SCALE, PRESS_DOWN); }}
-              onPressOut={() => { primaryScale.value = withTiming(1, PRESS_UP); }}
-              style={s.ctaPrimaryShell}
+          <TouchableOpacity
+            onPress={() => router.push('/(auth)/signup')}
+            activeOpacity={0.88}
+            style={s.ctaPrimaryShell}
+          >
+            <LinearGradient
+              colors={PRIMARY_GRADIENT}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={s.ctaPrimary}
             >
-              <LinearGradient
-                colors={PRIMARY_GRADIENT}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={s.ctaPrimary}
-              >
-                <Text style={s.ctaPrimaryText}>Create Account</Text>
-              </LinearGradient>
-            </Pressable>
-          </Animated.View>
+              <Text style={s.ctaPrimaryText}>Create Account</Text>
+            </LinearGradient>
+          </TouchableOpacity>
 
-          <Animated.View style={ghostScaleStyle}>
-            <Pressable
-              onPress={() => router.push('/(auth)/login')}
-              onPressIn={() => { ghostScale.value = withTiming(PRESS_DOWN_SCALE, PRESS_DOWN); }}
-              onPressOut={() => { ghostScale.value = withTiming(1, PRESS_UP); }}
-              style={s.ctaGhost}
-            >
-              <Text style={s.ctaGhostText}>Log In</Text>
-            </Pressable>
-          </Animated.View>
+          <TouchableOpacity
+            style={s.ctaGhost}
+            onPress={() => router.push('/(auth)/login')}
+            activeOpacity={0.78}
+          >
+            <Text style={s.ctaGhostText}>Log In</Text>
+          </TouchableOpacity>
         </Animated.View>
       </SafeAreaView>
     </Animated.View>
