@@ -1,22 +1,12 @@
-// ORYX Design System — "Dusk Direction" (2026-04, dark mode).
+// ORYX Design System — dark-first, soft-glass cards, electric lime accent.
 // Canonical token source. constants/theme.ts re-exports these for legacy imports.
 //
-// The dark palette is a single specific moment: civil twilight in summer,
-// warm afterglow against an indigo sky that hasn't gone black yet. See
-// docs/design/dusk-direction.md for the rationale and palette names.
-// Color anchors:
-//   Vesper    #161A2E   base canvas (cobalt-indigo, never black)
-//   Halflight #232846   one step lifted (cards, sheets)
-//   Ember     #EE9B7A   primary accent (sun-warmed coral-peach)
-//   Bloom     #E08394   warm/active (success / readiness peak)
-//   Glow      #F5BC9A   soft warm highlight / readiness mid
-//   Smoulder  #C66457   warm-but-darker (danger / readiness low)
-//   Horizon   #7E84C2   periwinkle (cool side / signal.load / ghost border)
-//   Veil      #9E83BD   dusty mauve transition tone
-//   Ivory     #F1E7D5   primary text (warm off-white, not pure white)
-//   Mist      #B8B8D2   secondary text (cool periwinkle gray)
-//   Shadow    #6E7396   muted text
-// Light mode is unchanged in this pass.
+// Spec alignment notes (Home screen redesign, 2026-04):
+// - App bg is near-black with a subtle radial glow behind the readiness ring.
+// - "Glass" cards here are LIGHT translucent washes over the dark bg
+//   (rgba(255,255,255,0.03)), NOT dark tinted glass. Paired with a thin
+//   rgba(255,255,255,0.07) border and a subtle top-edge inner highlight.
+// - Accent is a single lime/chartreuse. Used sparingly.
 
 export interface ThemeColors {
   bg: {
@@ -76,67 +66,63 @@ export interface ThemeColors {
 }
 
 // ── Dark palette ─────────────────────────────────────────────────────────────
-// Dusk Direction — see docs/design/dusk-direction.md.
-// The base is Vesper (a deep cobalt-indigo). Borders / hairlines / text take
-// their hue from Ivory (warm) or Mist (cool periwinkle) — never neutral gray.
-// Shadows are Nightfall, never black.
+// Design v2 — deep slate / vivid glass. App bg is NOT pitch-black; it's a
+// warm blue-charcoal so the radial ambient gradients read properly.
 export const themeDark: ThemeColors = {
   bg: {
-    primary:  '#161A2E',                     // Vesper — base canvas
-    tint:     '#1A1F36',                     // a hair lifted
-    secondary:'#1A1F36',
-    elevated: '#232846',                     // Halflight
-    subtle:   'rgba(241,231,213,0.07)',      // Ivory hairline at 7%
-    ringHalo: '#1F2440',                     // slightly warmer indigo behind the readiness ring
+    primary:  '#141820',
+    tint:     '#1A1F2A',
+    secondary:'#1A1F2A',
+    elevated: '#1C222E',
+    subtle:   'rgba(255,255,255,0.06)',
+    ringHalo: '#1A1F2A',
   },
 
-  // Indigo-tinted glass — warm Ivory borders/highlights so surfaces feel lit
-  // by dusk, not by neutral white. Shade is Nightfall, not black.
+  // Tinted glass surfaces — 72%+ opacity so they feel like solid panels,
+  // not a barely-there wash. This is the biggest jump from v1.
   glass: {
-    card:      'rgba(35,40,70,0.72)',        // Halflight-tone
-    cardHi:    'rgba(45,52,82,0.80)',        // lifted indigo
-    cardLo:    'rgba(22,26,46,0.65)',        // recessed Vesper
-    chrome:    'rgba(15,18,38,0.72)',        // Nightfall-tone for nav / top bars
-    pill:      'rgba(55,62,92,0.85)',
-    border:    'rgba(241,231,213,0.10)',     // Ivory at 10%
-    highlight: 'rgba(241,231,213,0.12)',
-    rim:       'rgba(241,231,213,0.18)',
-    shade:     'rgba(15,18,38,0.45)',        // Nightfall at 45%, never #000
+    card:      'rgba(28,34,46,0.72)',
+    cardHi:    'rgba(36,44,60,0.80)',
+    cardLo:    'rgba(20,26,38,0.65)',
+    chrome:    'rgba(18,22,32,0.70)',
+    pill:      'rgba(44,54,72,0.85)',
+    border:    'rgba(255,255,255,0.10)',
+    highlight: 'rgba(255,255,255,0.12)',
+    rim:       'rgba(255,255,255,0.18)',
+    shade:     'rgba(0,0,0,0.40)',
   },
 
-  border:   'rgba(241,231,213,0.10)',
-  hairline: 'rgba(241,231,213,0.08)',
-  divider:  'rgba(241,231,213,0.12)',
+  border:   'rgba(255,255,255,0.10)',
+  hairline: 'rgba(255,255,255,0.09)',
+  divider:  'rgba(255,255,255,0.12)',
 
   text: {
-    primary:   '#F1E7D5',                    // Ivory
-    body:      '#D8D2BD',                    // dimmer ivory
-    secondary: '#B8B8D2',                    // Mist
-    muted:     '#6E7396',                    // Shadow
-    label:     '#B8B8D2',                    // Mist
+    primary:   '#F0F2F6',
+    body:      '#CED4E0',
+    secondary: '#8B95A8',
+    muted:     '#525E72',
+    label:     '#8B95A8',
   },
 
-  // Lime is gone. Ember replaces it as the single brand accent.
-  // accentInk on Ember reads as Vesper — deep indigo on warm fill, not black.
-  accent:    '#EE9B7A',                      // Ember
-  accentDim: 'rgba(238,155,122,0.20)',
-  accentInk: '#161A2E',                      // Vesper text on Ember fills
+  accent:    '#DEFF47',
+  accentDim: 'rgba(222,255,71,0.20)',
+  accentInk: '#0E1400',
 
   readiness: {
-    high: '#E08394',                         // Bloom — warm peak
-    mid:  '#F5BC9A',                         // Glow
-    low:  '#C66457',                         // Smoulder
+    high: '#A8EF3A',
+    mid:  '#FFD04A',
+    low:  '#FF6B4A',
   },
 
   signal: {
-    load: '#7E84C2',                         // Horizon — cool periwinkle
-    ai:   '#EE9B7A',                         // Ember — AI moves to warm
+    load: '#5BA8FF',
+    ai:   '#DEFF47',
   },
 
   status: {
-    success: '#E08394',                      // Bloom
-    warn:    '#F5BC9A',                      // Glow
-    danger:  '#C66457',                      // Smoulder
+    success: '#A8EF3A',
+    warn:    '#FFD04A',
+    danger:  '#FF6B4A',
   },
 };
 
@@ -251,35 +237,21 @@ export function resolveTheme(
 }
 
 // ── Typography ──────────────────────────────────────────────────────────────
-// Dusk Direction stack:
-//   serif (Fraunces) = display moments — wordmark, hero headlines, the
-//     occasional italic accent. Used sparingly; carries the editorial register.
-//   sans  (DM Sans)  = body / UI / buttons / labels. Humanist-geometric,
-//     readable at small sizes, warmer than Inter or Geist.
-//   mono  (DM Mono)  = numeric readouts, timestamps, metric tickers.
-//
-// Font family names below MUST match the keys registered in
-// app/_layout.tsx's useFonts() call.
+// Geist = UI / headlines / body. JetBrains Mono = labels, tickers, timestamps,
+// and large metric numbers. Font family names below MUST match the keys
+// registered in app/_layout.tsx's useFonts() call.
 export const type = {
   sans: {
-    regular:  'DMSans_400Regular',
-    medium:   'DMSans_500Medium',
-    semibold: 'DMSans_600SemiBold',
-    bold:     'DMSans_700Bold',
-  },
-  serif: {
-    regular:       'Fraunces_400Regular',
-    regularItalic: 'Fraunces_400Regular_Italic',
-    medium:        'Fraunces_500Medium',
-    semibold:      'Fraunces_600SemiBold',
+    regular:  'Geist_400Regular',
+    medium:   'Geist_500Medium',
+    semibold: 'Geist_600SemiBold',
+    bold:     'Geist_700Bold',
   },
   mono: {
-    regular:  'DMMono_400Regular',
-    medium:   'DMMono_500Medium',
-    // DM Mono ships Light / Regular / Medium only. semibold/bold map to
-    // Medium so existing call sites (`TY.mono.bold`) don't break.
-    semibold: 'DMMono_500Medium',
-    bold:     'DMMono_500Medium',
+    regular:  'JetBrainsMono_400Regular',
+    medium:   'JetBrainsMono_500Medium',
+    semibold: 'JetBrainsMono_600SemiBold',
+    bold:     'JetBrainsMono_700Bold',
   },
   size: {
     display:   96,   // hero readiness number
