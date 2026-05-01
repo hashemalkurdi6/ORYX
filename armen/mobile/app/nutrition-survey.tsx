@@ -3,24 +3,99 @@
  * Collects nutrition preferences and PATCHes /nutrition/profile on completion.
  */
 
-import { useCallback, useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   ScrollView,
+  StyleProp,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import Reanimated, {
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import apiClient, { getNutritionProfile, NutritionProfile } from '@/services/api';
-import { ThemeColors, type as TY, radius as R, space as SP } from '@/services/theme';
+import { ThemeColors, type as TY, radius as R } from '@/services/theme';
 
 import { useTheme } from '@/contexts/ThemeContext';
+
+// Soft-import expo-haptics — same pattern signup.tsx uses. No-op until the
+// dependency lands; the moment it does, every tap below activates.
+let HapticsModule: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  HapticsModule = require('expo-haptics');
+} catch {
+  HapticsModule = null;
+}
+function tap(kind: 'light' | 'medium' | 'success' = 'light') {
+  if (!HapticsModule) return;
+  try {
+    if (kind === 'success') {
+      HapticsModule.notificationAsync?.(HapticsModule.NotificationFeedbackType?.Success);
+    } else {
+      HapticsModule.impactAsync?.(
+        kind === 'medium'
+          ? HapticsModule.ImpactFeedbackStyle?.Medium
+          : HapticsModule.ImpactFeedbackStyle?.Light
+      );
+    }
+  } catch { /* haptics are nice-to-have; never let them break the flow */ }
+}
+
+const { width: SW } = Dimensions.get('window');
+
+// Entry-stagger primitive — same component the signup flow uses. Mirrors the
+// signup motion language so a returning user editing their nutrition profile
+// gets the exact same cadence they saw at signup.
+function FadeSlideIn({
+  delay = 0,
+  style,
+  children,
+}: {
+  delay?: number;
+  style?: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+}) {
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(12);
+  const reduced = useReducedMotion();
+
+  useEffect(() => {
+    if (reduced) {
+      opacity.value = 1;
+      translateY.value = 0;
+      return;
+    }
+    opacity.value = withDelay(delay, withTiming(1, { duration: 380, easing: Easing.out(Easing.cubic) }));
+    translateY.value = withDelay(delay, withTiming(0, { duration: 380, easing: Easing.out(Easing.cubic) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  return <Reanimated.View style={[animStyle, style]}>{children}</Reanimated.View>;
+}
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const TOTAL_STEPS = 6;
@@ -234,16 +309,34 @@ interface ChipProps {
 function Chip({ label, selected, onPress }: ChipProps) {
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const scale = useSharedValue(1);
+  const reduced = useReducedMotion();
+  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const handlePress = () => {
+    tap('light');
+    if (!reduced) {
+      scale.value = withSequence(
+        withTiming(1.04, { duration: 110, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: 130, easing: Easing.out(Easing.quad) }),
+      );
+    }
+    onPress();
+  };
   return (
-    <TouchableOpacity
-      style={[styles.chip, selected && styles.chipSelected]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
+    <Reanimated.View style={animStyle}>
+      <TouchableOpacity
+        style={[styles.chip, selected && styles.chipSelected]}
+        onPress={handlePress}
+        activeOpacity={1}
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
+        accessibilityLabel={label}
+      >
+        <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+          {label}
+        </Text>
+      </TouchableOpacity>
+    </Reanimated.View>
   );
 }
 
@@ -259,16 +352,34 @@ interface PillProps {
 function Pill({ label, selected, onPress }: PillProps) {
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const scale = useSharedValue(1);
+  const reduced = useReducedMotion();
+  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const handlePress = () => {
+    tap('light');
+    if (!reduced) {
+      scale.value = withSequence(
+        withTiming(1.04, { duration: 110, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: 130, easing: Easing.out(Easing.quad) }),
+      );
+    }
+    onPress();
+  };
   return (
-    <TouchableOpacity
-      style={[styles.pill, selected && styles.pillSelected]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <Text style={[styles.pillText, selected && styles.pillTextSelected]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
+    <Reanimated.View style={animStyle}>
+      <TouchableOpacity
+        style={[styles.pill, selected && styles.pillSelected]}
+        onPress={handlePress}
+        activeOpacity={1}
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
+        accessibilityLabel={label}
+      >
+        <Text style={[styles.pillText, selected && styles.pillTextSelected]}>
+          {label}
+        </Text>
+      </TouchableOpacity>
+    </Reanimated.View>
   );
 }
 
@@ -282,26 +393,44 @@ interface LargeTileProps {
 function LargeTile({ label, sub, selected, onPress }: LargeTileProps) {
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const scale = useSharedValue(1);
+  const reduced = useReducedMotion();
+  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const handlePress = () => {
+    tap('light');
+    if (!reduced) {
+      scale.value = withSequence(
+        withTiming(1.02, { duration: 100, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: 130, easing: Easing.out(Easing.quad) }),
+      );
+    }
+    onPress();
+  };
   return (
-    <TouchableOpacity
-      style={[styles.tile, selected && styles.tileSelected]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={styles.tileContent}>
-        <Text style={[styles.tileLabel, selected && styles.tileLabelSelected]}>
-          {label}
-        </Text>
-        {sub ? (
-          <Text style={[styles.tileSub, selected && styles.tileSubSelected]}>
-            {sub}
+    <Reanimated.View style={animStyle}>
+      <TouchableOpacity
+        style={[styles.tile, selected && styles.tileSelected]}
+        onPress={handlePress}
+        activeOpacity={1}
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
+        accessibilityLabel={sub ? `${label}, ${sub}` : label}
+      >
+        <View style={styles.tileContent}>
+          <Text style={[styles.tileLabel, selected && styles.tileLabelSelected]}>
+            {label}
           </Text>
-        ) : null}
-      </View>
-      {selected && (
-        <Ionicons name="checkmark-circle" size={22} color={theme.accentInk} />
-      )}
-    </TouchableOpacity>
+          {sub ? (
+            <Text style={[styles.tileSub, selected && styles.tileSubSelected]}>
+              {sub}
+            </Text>
+          ) : null}
+        </View>
+        {selected && (
+          <Ionicons name="checkmark-circle" size={22} color={theme.accentInk} />
+        )}
+      </TouchableOpacity>
+    </Reanimated.View>
   );
 }
 
@@ -311,16 +440,59 @@ function FoodChip({ food, loved, disliked, onPress }: FoodChipProps) {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const isLoved = loved.includes(food);
   const isDisliked = disliked.includes(food);
+  const scale = useSharedValue(1);
+  const reduced = useReducedMotion();
+  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const handlePress = () => {
+    tap('light');
+    if (!reduced) {
+      scale.value = withSequence(
+        withTiming(1.05, { duration: 100, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: 130, easing: Easing.out(Easing.quad) }),
+      );
+    }
+    onPress();
+  };
   return (
-    <TouchableOpacity
-      style={[styles.foodChip, isLoved && styles.foodChipLoved, isDisliked && styles.foodChipDisliked]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <Text style={[styles.foodChipText, isLoved && styles.foodChipTextLoved, isDisliked && styles.foodChipTextDisliked]}>
-        {food}
-      </Text>
-    </TouchableOpacity>
+    <Reanimated.View style={animStyle}>
+      <TouchableOpacity
+        style={[styles.foodChip, isLoved && styles.foodChipLoved, isDisliked && styles.foodChipDisliked]}
+        onPress={handlePress}
+        activeOpacity={1}
+        accessibilityRole="button"
+        accessibilityState={{ selected: isLoved || isDisliked }}
+        accessibilityLabel={food}
+      >
+        <Text style={[styles.foodChipText, isLoved && styles.foodChipTextLoved, isDisliked && styles.foodChipTextDisliked]}>
+          {food}
+        </Text>
+      </TouchableOpacity>
+    </Reanimated.View>
+  );
+}
+
+// Spring-in checkmark for the survey-complete summary screen. Same physics
+// signup's S12Done uses so the two flows feel like one.
+function DoneIcon({ theme, style }: { theme: ThemeColors; style?: StyleProp<ViewStyle> }) {
+  const reduced = useReducedMotion();
+  const scale = useSharedValue(reduced ? 1 : 0.6);
+  const opacity = useSharedValue(reduced ? 1 : 0);
+  useEffect(() => {
+    if (reduced) return;
+    opacity.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.cubic) });
+    scale.value = withSequence(
+      withSpring(1.08, { damping: 14, stiffness: 220, mass: 0.7 }),
+      withSpring(1, { damping: 18, stiffness: 220 }),
+    );
+  }, [reduced, opacity, scale]);
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
+  return (
+    <Reanimated.View style={[style, animStyle]}>
+      <Ionicons name="checkmark-circle" size={64} color={theme.signal.load} />
+    </Reanimated.View>
   );
 }
 
@@ -391,30 +563,64 @@ export default function NutritionSurveyScreen() {
   }, [loadProfile]);
 
   // ── Navigation ──────────────────────────────────────────────────────────────
+  // Reanimated spring transition between steps — same physics signup uses
+  // (damping 22 / stiffness 220 / mass 0.6) so the two flows feel like one
+  // continuous experience.
+  const slideX = useSharedValue(0);
+  const slideOpacity = useSharedValue(1);
+  const reducedMotion = useReducedMotion();
+
+  function navigate(next: number) {
+    tap('medium');
+    if (reducedMotion) {
+      setStep(next);
+      return;
+    }
+    const dirOut = next > step ? -SW : SW;
+    const dirIn = next > step ? SW : -SW;
+    slideOpacity.value = withTiming(0, { duration: 140, easing: Easing.in(Easing.quad) });
+    slideX.value = withTiming(
+      dirOut,
+      { duration: 180, easing: Easing.in(Easing.quad) },
+      (finished) => {
+        'worklet';
+        if (!finished) return;
+        runOnJS(setStep)(next);
+        slideX.value = dirIn;
+        slideOpacity.value = 0;
+        slideX.value = withSpring(0, { damping: 22, stiffness: 220, mass: 0.6 });
+        slideOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
+      }
+    );
+  }
 
   function handleBack() {
     if (step === 1) {
+      tap('medium');
       router.back();
     } else {
-      setStep((s) => s - 1);
+      navigate(step - 1);
     }
   }
 
   function handleSkip() {
-    if (step < TOTAL_STEPS) {
-      setStep((s) => s + 1);
-    }
+    if (step < TOTAL_STEPS) navigate(step + 1);
   }
 
   function handleContinue() {
-    if (step < TOTAL_STEPS) {
-      setStep((s) => s + 1);
-    }
+    if (step < TOTAL_STEPS) navigate(step + 1);
   }
+
+  const slideStyle = useAnimatedStyle(() => ({
+    flex: 1,
+    transform: [{ translateX: slideX.value }],
+    opacity: slideOpacity.value,
+  }));
 
   // ── Patch handler ───────────────────────────────────────────────────────────
 
   async function handleSubmit() {
+    tap('medium');
     setSaving(true);
     try {
       await apiClient.patch('/nutrition/profile', {
@@ -431,6 +637,7 @@ export default function NutritionSurveyScreen() {
         const { recalculateNutritionTargets } = await import('@/services/api');
         await recalculateNutritionTargets();
       } catch { /* non-fatal — backend already recomputed during the patch */ }
+      tap('success');
       router.replace('/(tabs)/nutrition');
     } catch {
       Alert.alert('Error', 'Could not save your profile. Please try again.');
@@ -502,6 +709,17 @@ export default function NutritionSurveyScreen() {
   // ── Progress bar ────────────────────────────────────────────────────────────
 
   const progress = step / TOTAL_STEPS;
+  // Smoothly animate the bar fill on every step change. Same 380ms ease-out
+  // signup uses.
+  const progressValue = useSharedValue(progress);
+  useEffect(() => {
+    progressValue.value = reducedMotion
+      ? progress
+      : withTiming(progress, { duration: 380, easing: Easing.out(Easing.cubic) });
+  }, [progress, reducedMotion, progressValue]);
+  const progressFillStyle = useAnimatedStyle(() => ({
+    width: `${Math.round(progressValue.value * 100)}%`,
+  }));
 
   // ── Summary lines for Step 6 ────────────────────────────────────────────────
 
@@ -522,75 +740,87 @@ export default function NutritionSurveyScreen() {
 
     return (
       <ScrollView style={styles.stepContainer} showsVerticalScrollIndicator={false}>
-        <Text style={styles.stepTitle}>What do you love eating?</Text>
+        <FadeSlideIn delay={0}>
+          <Text style={styles.stepTitle}>What do you love eating?</Text>
+        </FadeSlideIn>
 
         {/* Diet type — first so filtering applies immediately */}
-        <Text style={styles.sectionLabel}>Diet type</Text>
-        <View style={styles.pillRow}>
-          {DIET_TYPES.map((d) => (
-            <Pill key={d} label={d} selected={surveyData.diet_type === d} onPress={() => selectDietType(d)} />
-          ))}
-        </View>
-
-        {/* Halal / Kosher contextual notes */}
-        {surveyData.diet_type === 'Halal' && (
-          <Text style={styles.dietNote}>All meat selections will be assumed Halal sourced.</Text>
-        )}
-        {surveyData.diet_type === 'Kosher' && (
-          <Text style={styles.dietNote}>Kosher meal plans will avoid mixing meat and dairy in the same meal.</Text>
-        )}
-
-        {/* Amber notice when selections were removed */}
-        {dietChangeNotice && (
-          <Text style={styles.dietChangeNotice}>
-            Some of your previous selections were removed because they don't match your diet type.
-          </Text>
-        )}
-
-        <Text style={styles.sectionLabel}>Cuisines enjoyed</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-          {CUISINES.map((c) => (
-            <Chip key={c} label={c} selected={surveyData.cuisines_liked.includes(c)} onPress={() => toggleMulti('cuisines_liked', c)} />
-          ))}
-        </ScrollView>
-
-        <Text style={styles.sectionLabel}>Foods you love & dislike</Text>
-        <Text style={styles.foodModeHint}>Tap to mark as loved or disliked</Text>
-
-        {/* Love / Dislike toggle */}
-        <View style={styles.foodModeToggle}>
-          <TouchableOpacity
-            style={[styles.foodModeBtn, foodMode === 'love' && styles.foodModeBtnActive]}
-            onPress={() => setFoodMode('love')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.foodModeBtnText, foodMode === 'love' && styles.foodModeBtnTextActive]}>Love</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.foodModeBtn, foodMode === 'dislike' && styles.foodModeBtnDislike, foodMode === 'dislike' && styles.foodModeBtnActive]}
-            onPress={() => setFoodMode('dislike')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.foodModeBtnText, foodMode === 'dislike' && styles.foodModeBtnTextActive]}>Dislike</Text>
-          </TouchableOpacity>
-        </View>
-
-        {filteredCategories.map((category) => (
-          <View key={category.label}>
-            <Text style={styles.foodCategoryLabel}>{category.label}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-              {category.items.map((food) => (
-                <FoodChip
-                  key={food}
-                  food={food}
-                  loved={surveyData.foods_loved}
-                  disliked={surveyData.foods_disliked}
-                  onPress={() => toggleFood(food)}
-                />
-              ))}
-            </ScrollView>
+        <FadeSlideIn delay={120}>
+          <Text style={styles.sectionLabel}>Diet type</Text>
+          <View style={styles.pillRow}>
+            {DIET_TYPES.map((d) => (
+              <Pill key={d} label={d} selected={surveyData.diet_type === d} onPress={() => selectDietType(d)} />
+            ))}
           </View>
-        ))}
+
+          {/* Halal / Kosher contextual notes */}
+          {surveyData.diet_type === 'Halal' && (
+            <Text style={styles.dietNote}>All meat selections will be assumed Halal sourced.</Text>
+          )}
+          {surveyData.diet_type === 'Kosher' && (
+            <Text style={styles.dietNote}>Kosher meal plans will avoid mixing meat and dairy in the same meal.</Text>
+          )}
+
+          {/* Amber notice when selections were removed */}
+          {dietChangeNotice && (
+            <Text style={styles.dietChangeNotice}>
+              Some of your previous selections were removed because they don't match your diet type.
+            </Text>
+          )}
+        </FadeSlideIn>
+
+        <FadeSlideIn delay={200}>
+          <Text style={styles.sectionLabel}>Cuisines enjoyed</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+            {CUISINES.map((c) => (
+              <Chip key={c} label={c} selected={surveyData.cuisines_liked.includes(c)} onPress={() => toggleMulti('cuisines_liked', c)} />
+            ))}
+          </ScrollView>
+        </FadeSlideIn>
+
+        <FadeSlideIn delay={280}>
+          <Text style={styles.sectionLabel}>Foods you love & dislike</Text>
+          <Text style={styles.foodModeHint}>Tap to mark as loved or disliked</Text>
+
+          {/* Love / Dislike toggle */}
+          <View style={styles.foodModeToggle}>
+            <TouchableOpacity
+              style={[styles.foodModeBtn, foodMode === 'love' && styles.foodModeBtnActive]}
+              onPress={() => { tap('light'); setFoodMode('love'); }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityState={{ selected: foodMode === 'love' }}
+            >
+              <Text style={[styles.foodModeBtnText, foodMode === 'love' && styles.foodModeBtnTextActive]}>Love</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.foodModeBtn, foodMode === 'dislike' && styles.foodModeBtnDislike, foodMode === 'dislike' && styles.foodModeBtnActive]}
+              onPress={() => { tap('light'); setFoodMode('dislike'); }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityState={{ selected: foodMode === 'dislike' }}
+            >
+              <Text style={[styles.foodModeBtnText, foodMode === 'dislike' && styles.foodModeBtnTextActive]}>Dislike</Text>
+            </TouchableOpacity>
+          </View>
+
+          {filteredCategories.map((category) => (
+            <View key={category.label}>
+              <Text style={styles.foodCategoryLabel}>{category.label}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                {category.items.map((food) => (
+                  <FoodChip
+                    key={food}
+                    food={food}
+                    loved={surveyData.foods_loved}
+                    disliked={surveyData.foods_disliked}
+                    onPress={() => toggleFood(food)}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          ))}
+        </FadeSlideIn>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -600,53 +830,63 @@ export default function NutritionSurveyScreen() {
   function renderStep2() {
     return (
       <ScrollView style={styles.stepContainer} showsVerticalScrollIndicator={false}>
-        <Text style={styles.stepTitle}>Any restrictions?</Text>
+        <FadeSlideIn delay={0}>
+          <Text style={styles.stepTitle}>Any restrictions?</Text>
+        </FadeSlideIn>
 
-        <Text style={styles.sectionLabel}>Allergies</Text>
-        <View style={styles.chipWrap}>
-          {ALLERGIES.map((a) => (
-            <Chip
-              key={a}
-              label={a}
-              selected={surveyData.allergies.includes(a)}
-              onPress={() => toggleMulti('allergies', a)}
+        <FadeSlideIn delay={120}>
+          <Text style={styles.sectionLabel}>Allergies</Text>
+          <View style={styles.chipWrap}>
+            {ALLERGIES.map((a) => (
+              <Chip
+                key={a}
+                label={a}
+                selected={surveyData.allergies.includes(a)}
+                onPress={() => toggleMulti('allergies', a)}
+              />
+            ))}
+          </View>
+        </FadeSlideIn>
+
+        <FadeSlideIn delay={200}>
+          <Text style={styles.sectionLabel}>Primary nutrition goal</Text>
+          {NUTRITION_GOALS.map((g) => (
+            <LargeTile
+              key={g}
+              label={g}
+              selected={surveyData.nutrition_goal === g}
+              onPress={() => update('nutrition_goal', g)}
             />
           ))}
-        </View>
+        </FadeSlideIn>
 
-        <Text style={styles.sectionLabel}>Primary nutrition goal</Text>
-        {NUTRITION_GOALS.map((g) => (
-          <LargeTile
-            key={g}
-            label={g}
-            selected={surveyData.nutrition_goal === g}
-            onPress={() => update('nutrition_goal', g)}
-          />
-        ))}
+        <FadeSlideIn delay={280}>
+          <Text style={styles.sectionLabel}>How strict?</Text>
+          <View style={styles.pillRow}>
+            {STRICTNESS_LEVELS.map((s) => (
+              <Pill
+                key={s}
+                label={s}
+                selected={surveyData.strictness_level === s}
+                onPress={() => update('strictness_level', s)}
+              />
+            ))}
+          </View>
+        </FadeSlideIn>
 
-        <Text style={styles.sectionLabel}>How strict?</Text>
-        <View style={styles.pillRow}>
-          {STRICTNESS_LEVELS.map((s) => (
-            <Pill
-              key={s}
-              label={s}
-              selected={surveyData.strictness_level === s}
-              onPress={() => update('strictness_level', s)}
-            />
-          ))}
-        </View>
-
-        <Text style={styles.sectionLabel}>Cheat days?</Text>
-        <View style={styles.pillRow}>
-          {CHEAT_DAY_OPTIONS.map((o) => (
-            <Pill
-              key={o}
-              label={o}
-              selected={surveyData.cheat_day_preference === o}
-              onPress={() => update('cheat_day_preference', o)}
-            />
-          ))}
-        </View>
+        <FadeSlideIn delay={360}>
+          <Text style={styles.sectionLabel}>Cheat days?</Text>
+          <View style={styles.pillRow}>
+            {CHEAT_DAY_OPTIONS.map((o) => (
+              <Pill
+                key={o}
+                label={o}
+                selected={surveyData.cheat_day_preference === o}
+                onPress={() => update('cheat_day_preference', o)}
+              />
+            ))}
+          </View>
+        </FadeSlideIn>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -656,66 +896,74 @@ export default function NutritionSurveyScreen() {
   function renderStep3() {
     return (
       <ScrollView style={styles.stepContainer} showsVerticalScrollIndicator={false}>
-        <Text style={styles.stepTitle}>How do you approach sugar and carbs?</Text>
+        <FadeSlideIn delay={0}>
+          <Text style={styles.stepTitle}>How do you approach sugar and carbs?</Text>
+        </FadeSlideIn>
 
-        <Text style={styles.sectionLabel}>Sugar preference</Text>
-        {SUGAR_PREFERENCES.map((s) => (
-          <LargeTile
-            key={s}
-            label={s}
-            selected={surveyData.sugar_preference === s}
-            onPress={() => update('sugar_preference', s)}
-          />
-        ))}
-
-        <Text style={styles.sectionLabel}>Carb approach</Text>
-        {CARB_APPROACHES.map((c) => (
-          <LargeTile
-            key={c}
-            label={c}
-            selected={surveyData.carb_approach === c}
-            onPress={() => update('carb_approach', c)}
-          />
-        ))}
-
-        <Text style={styles.sectionLabel}>Intermittent fasting</Text>
-        <View style={styles.pillRow}>
-          {IF_OPTIONS.map((o) => (
-            <Pill
-              key={o}
-              label={o}
-              selected={surveyData.intermittent_fasting === o}
-              onPress={() => update('intermittent_fasting', o)}
+        <FadeSlideIn delay={120}>
+          <Text style={styles.sectionLabel}>Sugar preference</Text>
+          {SUGAR_PREFERENCES.map((s) => (
+            <LargeTile
+              key={s}
+              label={s}
+              selected={surveyData.sugar_preference === s}
+              onPress={() => update('sugar_preference', s)}
             />
           ))}
-        </View>
+        </FadeSlideIn>
 
-        {surveyData.intermittent_fasting === 'Custom' && (
-          <View style={styles.ifCustomRow}>
-            <View style={styles.ifCustomField}>
-              <Text style={styles.ifCustomLabel}>Fast start (HH:MM)</Text>
-              <TextInput
-                style={styles.textInputSmall}
-                placeholder="e.g. 20:00"
-                placeholderTextColor={theme.text.muted}
-                value={surveyData.fasting_start_time}
-                onChangeText={(v) => update('fasting_start_time', v)}
-                keyboardType="numbers-and-punctuation"
+        <FadeSlideIn delay={200}>
+          <Text style={styles.sectionLabel}>Carb approach</Text>
+          {CARB_APPROACHES.map((c) => (
+            <LargeTile
+              key={c}
+              label={c}
+              selected={surveyData.carb_approach === c}
+              onPress={() => update('carb_approach', c)}
+            />
+          ))}
+        </FadeSlideIn>
+
+        <FadeSlideIn delay={280}>
+          <Text style={styles.sectionLabel}>Intermittent fasting</Text>
+          <View style={styles.pillRow}>
+            {IF_OPTIONS.map((o) => (
+              <Pill
+                key={o}
+                label={o}
+                selected={surveyData.intermittent_fasting === o}
+                onPress={() => update('intermittent_fasting', o)}
               />
-            </View>
-            <View style={styles.ifCustomField}>
-              <Text style={styles.ifCustomLabel}>Fast end (HH:MM)</Text>
-              <TextInput
-                style={styles.textInputSmall}
-                placeholder="e.g. 12:00"
-                placeholderTextColor={theme.text.muted}
-                value={surveyData.fasting_end_time}
-                onChangeText={(v) => update('fasting_end_time', v)}
-                keyboardType="numbers-and-punctuation"
-              />
-            </View>
+            ))}
           </View>
-        )}
+
+          {surveyData.intermittent_fasting === 'Custom' && (
+            <View style={styles.ifCustomRow}>
+              <View style={styles.ifCustomField}>
+                <Text style={styles.ifCustomLabel}>Fast start (HH:MM)</Text>
+                <TextInput
+                  style={styles.textInputSmall}
+                  placeholder="e.g. 20:00"
+                  placeholderTextColor={theme.text.muted}
+                  value={surveyData.fasting_start_time}
+                  onChangeText={(v) => update('fasting_start_time', v)}
+                  keyboardType="numbers-and-punctuation"
+                />
+              </View>
+              <View style={styles.ifCustomField}>
+                <Text style={styles.ifCustomLabel}>Fast end (HH:MM)</Text>
+                <TextInput
+                  style={styles.textInputSmall}
+                  placeholder="e.g. 12:00"
+                  placeholderTextColor={theme.text.muted}
+                  value={surveyData.fasting_end_time}
+                  onChangeText={(v) => update('fasting_end_time', v)}
+                  keyboardType="numbers-and-punctuation"
+                />
+              </View>
+            </View>
+          )}
+        </FadeSlideIn>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -725,88 +973,101 @@ export default function NutritionSurveyScreen() {
   function renderStep4() {
     return (
       <ScrollView style={styles.stepContainer} showsVerticalScrollIndicator={false}>
-        <Text style={styles.stepTitle}>How do you like to eat?</Text>
+        <FadeSlideIn delay={0}>
+          <Text style={styles.stepTitle}>How do you like to eat?</Text>
+        </FadeSlideIn>
 
-        <Text style={styles.sectionLabel}>Meals per day</Text>
-        <View style={styles.numberSelectorRow}>
-          {[2, 3, 4, 5, 6].map((n) => (
-            <TouchableOpacity
-              key={n}
-              style={[styles.numberButton, surveyData.meals_per_day === n && styles.numberButtonSelected]}
-              onPress={() => updateMealsPerDay(n)}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.numberButtonText, surveyData.meals_per_day === n && styles.numberButtonTextSelected]}>
-                {n}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={styles.sectionLabel}>Do you eat breakfast?</Text>
-        <View style={styles.pillRow}>
-          {BREAKFAST_OPTIONS.map((o) => (
-            <Pill
-              key={o}
-              label={o}
-              selected={surveyData.eats_breakfast === o}
-              onPress={() => update('eats_breakfast', o)}
-            />
-          ))}
-        </View>
-
-        <Text style={styles.sectionLabel}>Preferred meal times</Text>
-        {Array.from({ length: surveyData.meals_per_day }, (_, i) => (
-          <View key={i} style={styles.mealTimeRow}>
-            <Text style={styles.mealTimeLabel}>
-              {getMealLabel(i, surveyData.meals_per_day)}
-            </Text>
-            <TextInput
-              style={styles.mealTimeInput}
-              placeholder="HH:MM"
-              placeholderTextColor={theme.text.muted}
-              value={surveyData.meal_times[i] ?? ''}
-              onChangeText={(v) => updateMealTime(i, v)}
-              keyboardType="numbers-and-punctuation"
-            />
+        <FadeSlideIn delay={120}>
+          <Text style={styles.sectionLabel}>Meals per day</Text>
+          <View style={styles.numberSelectorRow}>
+            {[2, 3, 4, 5, 6].map((n) => (
+              <TouchableOpacity
+                key={n}
+                style={[styles.numberButton, surveyData.meals_per_day === n && styles.numberButtonSelected]}
+                onPress={() => { tap('light'); updateMealsPerDay(n); }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityState={{ selected: surveyData.meals_per_day === n }}
+                accessibilityLabel={`${n} meals per day`}
+              >
+                <Text style={[styles.numberButtonText, surveyData.meals_per_day === n && styles.numberButtonTextSelected]}>
+                  {n}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-        ))}
+        </FadeSlideIn>
 
-        <Text style={styles.sectionLabel}>Pre-workout nutrition</Text>
-        <View style={styles.pillRow}>
-          {PRE_WORKOUT_OPTIONS.map((o) => (
-            <Pill
-              key={o}
-              label={o}
-              selected={surveyData.pre_workout_nutrition === o}
-              onPress={() => update('pre_workout_nutrition', o)}
-            />
-          ))}
-        </View>
+        <FadeSlideIn delay={200}>
+          <Text style={styles.sectionLabel}>Do you eat breakfast?</Text>
+          <View style={styles.pillRow}>
+            {BREAKFAST_OPTIONS.map((o) => (
+              <Pill
+                key={o}
+                label={o}
+                selected={surveyData.eats_breakfast === o}
+                onPress={() => update('eats_breakfast', o)}
+              />
+            ))}
+          </View>
+        </FadeSlideIn>
 
-        <Text style={styles.sectionLabel}>Post-workout nutrition</Text>
-        <View style={styles.pillRow}>
-          {POST_WORKOUT_OPTIONS.map((o) => (
-            <Pill
-              key={o}
-              label={o}
-              selected={surveyData.post_workout_nutrition === o}
-              onPress={() => update('post_workout_nutrition', o)}
-            />
+        <FadeSlideIn delay={280}>
+          <Text style={styles.sectionLabel}>Preferred meal times</Text>
+          {Array.from({ length: surveyData.meals_per_day }, (_, i) => (
+            <View key={i} style={styles.mealTimeRow}>
+              <Text style={styles.mealTimeLabel}>
+                {getMealLabel(i, surveyData.meals_per_day)}
+              </Text>
+              <TextInput
+                style={styles.mealTimeInput}
+                placeholder="HH:MM"
+                placeholderTextColor={theme.text.muted}
+                value={surveyData.meal_times[i] ?? ''}
+                onChangeText={(v) => updateMealTime(i, v)}
+                keyboardType="numbers-and-punctuation"
+              />
+            </View>
           ))}
-        </View>
+        </FadeSlideIn>
 
-        <Text style={styles.sectionLabel}>Meal prep</Text>
-        <View style={styles.pillRow}>
-          {MEAL_PREP_OPTIONS.map((o) => (
-            <Pill
-              key={o}
-              label={o}
-              selected={surveyData.meal_prep === o}
-              onPress={() => update('meal_prep', o)}
-            />
-          ))}
-        </View>
+        <FadeSlideIn delay={360}>
+          <Text style={styles.sectionLabel}>Pre-workout nutrition</Text>
+          <View style={styles.pillRow}>
+            {PRE_WORKOUT_OPTIONS.map((o) => (
+              <Pill
+                key={o}
+                label={o}
+                selected={surveyData.pre_workout_nutrition === o}
+                onPress={() => update('pre_workout_nutrition', o)}
+              />
+            ))}
+          </View>
+
+          <Text style={styles.sectionLabel}>Post-workout nutrition</Text>
+          <View style={styles.pillRow}>
+            {POST_WORKOUT_OPTIONS.map((o) => (
+              <Pill
+                key={o}
+                label={o}
+                selected={surveyData.post_workout_nutrition === o}
+                onPress={() => update('post_workout_nutrition', o)}
+              />
+            ))}
+          </View>
+
+          <Text style={styles.sectionLabel}>Meal prep</Text>
+          <View style={styles.pillRow}>
+            {MEAL_PREP_OPTIONS.map((o) => (
+              <Pill
+                key={o}
+                label={o}
+                selected={surveyData.meal_prep === o}
+                onPress={() => update('meal_prep', o)}
+              />
+            ))}
+          </View>
+        </FadeSlideIn>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -816,100 +1077,112 @@ export default function NutritionSurveyScreen() {
   function renderStep5() {
     return (
       <ScrollView style={styles.stepContainer} showsVerticalScrollIndicator={false}>
-        <Text style={styles.stepTitle}>Tell us about your kitchen.</Text>
+        <FadeSlideIn delay={0}>
+          <Text style={styles.stepTitle}>Tell us about your kitchen.</Text>
+        </FadeSlideIn>
 
-        <Text style={styles.sectionLabel}>Cooking skill</Text>
-        {COOKING_SKILLS.map((s) => (
-          <LargeTile
-            key={s.label}
-            label={s.label}
-            sub={s.sub}
-            selected={surveyData.cooking_skill === s.label}
-            onPress={() => update('cooking_skill', s.label)}
-          />
-        ))}
-
-        <Text style={styles.sectionLabel}>Time per meal</Text>
-        <View style={styles.pillRow}>
-          {TIME_PER_MEAL_OPTIONS.map((o) => (
-            <Pill
-              key={o}
-              label={o}
-              selected={surveyData.time_per_meal === o}
-              onPress={() => update('time_per_meal', o)}
+        <FadeSlideIn delay={120}>
+          <Text style={styles.sectionLabel}>Cooking skill</Text>
+          {COOKING_SKILLS.map((s) => (
+            <LargeTile
+              key={s.label}
+              label={s.label}
+              sub={s.sub}
+              selected={surveyData.cooking_skill === s.label}
+              onPress={() => update('cooking_skill', s.label)}
             />
           ))}
-        </View>
+        </FadeSlideIn>
 
-        <Text style={styles.sectionLabel}>Weekly grocery budget</Text>
-        <View style={styles.pillRow}>
-          {BUDGET_OPTIONS.map((o) => (
-            <Pill
-              key={o}
-              label={o}
-              selected={surveyData.weekly_budget === o}
-              onPress={() => update('weekly_budget', o)}
-            />
-          ))}
-        </View>
-
-        <Text style={styles.sectionLabel}>Kitchen access</Text>
-        <View style={styles.pillRow}>
-          {KITCHEN_OPTIONS.map((o) => (
-            <Pill
-              key={o}
-              label={o}
-              selected={surveyData.kitchen_access === o}
-              onPress={() => update('kitchen_access', o)}
-            />
-          ))}
-        </View>
-
-        <Text style={styles.sectionLabel}>Country / Region</Text>
-        {surveyData.region ? (
-          <TouchableOpacity
-            style={styles.countrySelectedChip}
-            onPress={() => { setCountryListOpen(true); setCountrySearch(''); }}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.countrySelectedText}>
-              {COUNTRIES.find(c => c.name === surveyData.region)?.flag ?? '🌍'} {surveyData.region}
-            </Text>
-            <Text style={styles.countryChangeText}>Change</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={styles.countryPickerTrigger}
-            onPress={() => setCountryListOpen(true)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.countryPickerTriggerText}>Select your country</Text>
-          </TouchableOpacity>
-        )}
-        {countryListOpen && (
-          <View style={styles.countryDropdown}>
-            <TextInput
-              style={styles.countrySearchInput}
-              placeholder="Search country..."
-              placeholderTextColor={theme.text.muted}
-              value={countrySearch}
-              onChangeText={setCountrySearch}
-              autoFocus
-            />
-            <ScrollView style={styles.countryScrollList} nestedScrollEnabled keyboardShouldPersistTaps="handled">
-              {COUNTRIES.filter(c => c.name.toLowerCase().includes(countrySearch.toLowerCase())).map((country) => (
-                <TouchableOpacity
-                  key={country.name}
-                  style={styles.countryItem}
-                  onPress={() => { update('region', country.name); setCountryListOpen(false); setCountrySearch(''); }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.countryItemText}>{country.flag} {country.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+        <FadeSlideIn delay={200}>
+          <Text style={styles.sectionLabel}>Time per meal</Text>
+          <View style={styles.pillRow}>
+            {TIME_PER_MEAL_OPTIONS.map((o) => (
+              <Pill
+                key={o}
+                label={o}
+                selected={surveyData.time_per_meal === o}
+                onPress={() => update('time_per_meal', o)}
+              />
+            ))}
           </View>
-        )}
+
+          <Text style={styles.sectionLabel}>Weekly grocery budget</Text>
+          <View style={styles.pillRow}>
+            {BUDGET_OPTIONS.map((o) => (
+              <Pill
+                key={o}
+                label={o}
+                selected={surveyData.weekly_budget === o}
+                onPress={() => update('weekly_budget', o)}
+              />
+            ))}
+          </View>
+
+          <Text style={styles.sectionLabel}>Kitchen access</Text>
+          <View style={styles.pillRow}>
+            {KITCHEN_OPTIONS.map((o) => (
+              <Pill
+                key={o}
+                label={o}
+                selected={surveyData.kitchen_access === o}
+                onPress={() => update('kitchen_access', o)}
+              />
+            ))}
+          </View>
+        </FadeSlideIn>
+
+        <FadeSlideIn delay={280}>
+          <Text style={styles.sectionLabel}>Country / Region</Text>
+          {surveyData.region ? (
+            <TouchableOpacity
+              style={styles.countrySelectedChip}
+              onPress={() => { tap('light'); setCountryListOpen(true); setCountrySearch(''); }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Country: ${surveyData.region}, tap to change`}
+            >
+              <Text style={styles.countrySelectedText}>
+                {COUNTRIES.find(c => c.name === surveyData.region)?.flag ?? '🌍'} {surveyData.region}
+              </Text>
+              <Text style={styles.countryChangeText}>Change</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.countryPickerTrigger}
+              onPress={() => { tap('light'); setCountryListOpen(true); }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Select your country"
+            >
+              <Text style={styles.countryPickerTriggerText}>Select your country</Text>
+            </TouchableOpacity>
+          )}
+          {countryListOpen && (
+            <View style={styles.countryDropdown}>
+              <TextInput
+                style={styles.countrySearchInput}
+                placeholder="Search country..."
+                placeholderTextColor={theme.text.muted}
+                value={countrySearch}
+                onChangeText={setCountrySearch}
+                autoFocus
+              />
+              <ScrollView style={styles.countryScrollList} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                {COUNTRIES.filter(c => c.name.toLowerCase().includes(countrySearch.toLowerCase())).map((country) => (
+                  <TouchableOpacity
+                    key={country.name}
+                    style={styles.countryItem}
+                    onPress={() => { tap('light'); update('region', country.name); setCountryListOpen(false); setCountrySearch(''); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.countryItemText}>{country.flag} {country.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </FadeSlideIn>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -957,29 +1230,33 @@ export default function NutritionSurveyScreen() {
 
     return (
       <ScrollView style={styles.stepContainer} showsVerticalScrollIndicator={false}>
-        <View style={styles.doneIconWrap}>
-          <Ionicons name="checkmark-circle" size={64} color={theme.signal.load} />
-        </View>
-        <Text style={styles.stepTitle}>Your Nutrition Profile</Text>
-        <Text style={styles.doneSubtitle}>
-          ORYX generates daily meal plans tailored to these preferences. Your plan refreshes every morning.
-        </Text>
+        <DoneIcon theme={theme} style={styles.doneIconWrap} />
+        <FadeSlideIn delay={150}>
+          <Text style={styles.stepTitle}>Your Nutrition Profile</Text>
+        </FadeSlideIn>
+        <FadeSlideIn delay={220}>
+          <Text style={styles.doneSubtitle}>
+            ORYX generates daily meal plans tailored to these preferences. Your plan refreshes every morning.
+          </Text>
+        </FadeSlideIn>
 
-        <View style={styles.summaryCard}>
-          {rows.length === 0 ? (
-            <Text style={styles.summaryEmpty}>No preferences saved yet.</Text>
-          ) : (
-            rows.map((row, i) => (
-              <View key={row.label}>
-                {i > 0 && <View style={styles.summaryDivider} />}
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>{row.label}</Text>
-                  <Text style={styles.summaryValue}>{row.value}</Text>
+        <FadeSlideIn delay={300}>
+          <View style={styles.summaryCard}>
+            {rows.length === 0 ? (
+              <Text style={styles.summaryEmpty}>No preferences saved yet.</Text>
+            ) : (
+              rows.map((row, i) => (
+                <View key={row.label}>
+                  {i > 0 && <View style={styles.summaryDivider} />}
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>{row.label}</Text>
+                    <Text style={styles.summaryValue}>{row.value}</Text>
+                  </View>
                 </View>
-              </View>
-            ))
-          )}
-        </View>
+              ))
+            )}
+          </View>
+        </FadeSlideIn>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -1000,36 +1277,66 @@ export default function NutritionSurveyScreen() {
 
   // ── Bottom button ───────────────────────────────────────────────────────────
 
+  // Block forward progress while hydrating or if hydration failed — without
+  // this, a user editing an existing profile could PATCH empty defaults
+  // over their saved data (audit 1.2 / 1.3).
+  const blocked = hydrating || !!hydrationError;
+  const isFinalStep = step === TOTAL_STEPS;
+  const ctaDisabled = blocked || saving;
+
+  // Press-scale + pulse-on-enable, mirrored from signup's <PrimaryCTA>.
+  const ctaScale = useSharedValue(1);
+  const ctaPulse = useSharedValue(0);
+  const prevDisabled = useRef<boolean>(ctaDisabled);
+  useEffect(() => {
+    if (prevDisabled.current && !ctaDisabled && !reducedMotion) {
+      ctaPulse.value = withSequence(
+        withTiming(1, { duration: 180, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: 320, easing: Easing.in(Easing.quad) }),
+      );
+    }
+    prevDisabled.current = ctaDisabled;
+  }, [ctaDisabled, reducedMotion, ctaPulse]);
+  const ctaAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: ctaScale.value * (1 + ctaPulse.value * 0.025) }],
+  }));
+  const handleCtaPressIn = () => {
+    if (!reducedMotion && !ctaDisabled) {
+      ctaScale.value = withSpring(0.98, { damping: 22, stiffness: 380 });
+    }
+  };
+  const handleCtaPressOut = () => {
+    if (!reducedMotion) {
+      ctaScale.value = withSpring(1, { damping: 18, stiffness: 320 });
+    }
+  };
+
   function renderBottomButton() {
-    // Block forward progress while hydrating or if hydration failed — without
-    // this, a user editing an existing profile could PATCH empty defaults
-    // over their saved data (audit 1.2 / 1.3).
-    const blocked = hydrating || !!hydrationError;
-    if (step === TOTAL_STEPS) {
-      return (
+    return (
+      <Reanimated.View style={ctaAnimStyle}>
         <TouchableOpacity
-          style={[styles.continueButton, styles.submitButton, blocked && styles.continueButtonDisabled]}
-          onPress={handleSubmit}
-          disabled={saving || blocked}
-          activeOpacity={0.85}
+          style={[
+            styles.continueButton,
+            isFinalStep && styles.submitButton,
+            ctaDisabled && styles.continueButtonDisabled,
+          ]}
+          onPress={isFinalStep ? handleSubmit : handleContinue}
+          onPressIn={handleCtaPressIn}
+          onPressOut={handleCtaPressOut}
+          disabled={ctaDisabled}
+          activeOpacity={1}
+          accessibilityRole="button"
+          accessibilityLabel={isFinalStep ? 'Start my meal plan' : 'Continue to next step'}
         >
           {saving ? (
             <ActivityIndicator color={theme.text.primary} />
           ) : (
-            <Text style={styles.submitButtonText}>Start My Meal Plan</Text>
+            <Text style={isFinalStep ? styles.submitButtonText : styles.continueButtonText}>
+              {isFinalStep ? 'Start My Meal Plan' : 'Continue'}
+            </Text>
           )}
         </TouchableOpacity>
-      );
-    }
-    return (
-      <TouchableOpacity
-        style={[styles.continueButton, blocked && styles.continueButtonDisabled]}
-        onPress={handleContinue}
-        disabled={blocked}
-        activeOpacity={0.85}
-      >
-        <Text style={styles.continueButtonText}>Continue</Text>
-      </TouchableOpacity>
+      </Reanimated.View>
     );
   }
 
@@ -1037,23 +1344,35 @@ export default function NutritionSurveyScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      {/* Progress bar */}
-      <View style={styles.progressBarTrack}>
-        <View style={[styles.progressBarFill, { width: `${progress * 100}%` }]} />
-      </View>
-
-      {/* Header row */}
+      {/* Header row — circular glass back button matches the signup flow.
+          Progress lives on the same row as the back/skip controls so the
+          glass affordance reads as part of the chrome, not an extra layer. */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleBack} style={styles.headerButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="chevron-back" size={24} color={theme.text.primary} />
+        <TouchableOpacity
+          onPress={handleBack}
+          style={styles.backBtn}
+          activeOpacity={0.75}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="chevron-back" size={20} color={theme.text.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerStepText}>{step} / {TOTAL_STEPS}</Text>
+        <View style={styles.progressTrack}>
+          <Reanimated.View style={[styles.progressFill, progressFillStyle]} />
+        </View>
         {step < TOTAL_STEPS ? (
-          <TouchableOpacity onPress={handleSkip} style={styles.headerButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <TouchableOpacity
+            onPress={handleSkip}
+            style={styles.skipBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel="Skip step"
+          >
             <Text style={styles.skipText}>Skip</Text>
           </TouchableOpacity>
         ) : (
-          <View style={styles.headerButton} />
+          <View style={styles.skipBtn} />
         )}
       </View>
 
@@ -1076,10 +1395,13 @@ export default function NutritionSurveyScreen() {
         </View>
       )}
 
-      {/* Step content */}
-      <View style={styles.contentArea}>
+      {/* Step content — wrapped in the same Reanimated slide / fade as
+          signup so step-to-step navigation feels coherent across the two
+          flows. The conditional re-render of renderCurrentStep() inside the
+          Reanimated.View ensures FadeSlideIn re-fires on every step. */}
+      <Reanimated.View style={[styles.contentArea, slideStyle]}>
         {renderCurrentStep()}
-      </View>
+      </Reanimated.View>
 
       {/* Bottom button */}
       <View style={styles.bottomButtonContainer}>
@@ -1098,41 +1420,38 @@ function createStyles(t: ThemeColors) {
     backgroundColor: t.bg.primary,
   },
 
-  // Progress bar
-  progressBarTrack: {
-    height: 3,
-    backgroundColor: t.border,
-    width: '100%',
-  },
-  progressBarFill: {
-    height: 3,
-    backgroundColor: t.accent,
-    borderRadius: 2,
-  },
-
-  // Header
+  // Header — chrome row mirroring the signup chrome: 36×36 circular glass
+  // back button, animated progress bar, right-aligned skip text.
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    gap: 12,
   },
-  headerButton: {
-    minWidth: 48,
-    alignItems: 'flex-start',
+  backBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: t.glass.card,
+    borderWidth: 1, borderColor: t.glass.border,
   },
-  headerStepText: {
-    color: t.text.secondary,
+  progressTrack: {
+    flex: 1,
+    height: 4,
+    backgroundColor: t.glass.cardLo,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: t.accent,
+    borderRadius: 2,
+  },
+  skipBtn: { minWidth: 40, alignItems: 'flex-end' },
+  skipText: {
+    color: t.text.muted,
     fontSize: 13,
     fontFamily: TY.sans.medium,
-  },
-  skipText: {
-    color: t.text.secondary,
-    fontSize: 14,
-    fontFamily: TY.sans.medium,
-    textAlign: 'right',
-    minWidth: 48,
   },
 
   // Content
