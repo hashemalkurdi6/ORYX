@@ -113,6 +113,18 @@ Mobile `armen/mobile/.env`:
 EXPO_PUBLIC_API_URL=http://<local-ip>:8000
 ```
 
+## Weekly planning system
+
+Before doing any work, read the current week's plan in `docs/weekly/`. The active
+file is the one with `Status: Active` (or the most recent dated file if none is
+marked active). It tells you what's critical this week, what's explicitly NOT
+being worked on, and what coordination is expected. The audit
+(`docs/audit/consolidated-priority-list-2026-04-20.md`) remains source of truth
+for individual items; the weekly file is a view onto current priority.
+
+If your task isn't on this week's plan, surface that to the user before starting —
+don't quietly expand scope.
+
 ## Skill routing
 
 When the user's request matches an available skill, ALWAYS invoke it using the Skill

@@ -130,14 +130,36 @@ The consolidated audit is a living document. As items get completed, mark them c
 
 The audit should always reflect the current state of the project. If it's stale, fix it. If it gets too long or reorganized, fork it into a new dated version (`docs/audit/consolidated-priority-list-[new-date].md`) and link forward from the old one. Never lose history.
 
-## 6. Weekly reviews
+## 6. Weekly planning files (Mondays + Fridays + during the week)
 
-Every Friday end-of-day, write a weekly review at `docs/weekly/[YYYY-WW]-week-of-[Mon-DD].md`:
-- What shipped (with commit hashes)
-- What got cut or deferred (with reasoning)
-- Lessons (what worked, what didn't)
-- Next week's priorities
-- Honest assessment: on track, behind, or ahead — and why
+The weekly files at `docs/weekly/[YYYY-WW]-week-of-[Mon-DD].md` are the project's
+living view onto current priority. They are read by every agent at session start
+(per CLAUDE.md). You own them. Three rhythms:
+
+**Monday morning (or first session of any new week):** generate the new week's
+file. Inputs: the consolidated audit, `docs/prompts/master-9-week-plan.md`, the
+previous week's file, and recent ADRs in `docs/decisions/`. Before generating
+the new file, fill in the previous week's "Last week's review" section with what
+actually shipped (commit hashes), what got cut or deferred with reasoning,
+lessons, and an honest on-track/behind/ahead assessment. Mark the previous week
+`Status: Complete` and the new week `Status: Active`.
+
+**Friday EOD (or last session of any week):** review the week's plan against
+what shipped. Items still open Friday EOD must either move to next week's file
+with a one-line carryover note, or be cut with a written reason in
+`docs/decisions/`. Don't leave items silently rotting in a "Future" file.
+
+**During the week:** agents reference the file. You update it only when (a) a
+critical task completes — mark with commit hash, (b) a new critical issue
+surfaces and belongs in this week's scope, (c) something gets blocked or
+unblocked. Not on every commit — the file is a priority view, not a log.
+
+**Drift discipline:** if the week's plan starts diverging from the master
+9-week plan (work shipping early, scope expanding, items quietly added that
+weren't in the master plan), flag it explicitly in the week's file using a
+blockquote `> Drift: ...`. Drift is information. Do not silently rewrite the
+master plan to match reality, and do not silently rewrite the week to match the
+master plan — record the gap and let the user decide.
 
 ## 7. Bug tracking
 
