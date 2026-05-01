@@ -907,17 +907,28 @@ function S3Name({ displayName, setDisplayName, onNext, s, theme }: any) {
   return (
     <KeyboardAvoidingView style={s.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-        <Text style={s.stepLabel}>02 / {TOTAL}</Text>
-        <Text style={s.title}>What should we call you?</Text>
-        <Text style={s.subtitle}>Your first name personalises all AI insights in ORYX.</Text>
-        <TextInput
-          style={s.bigInput} placeholder="First name" placeholderTextColor={theme.text.muted}
-          value={displayName} onChangeText={setDisplayName}
-          autoFocus autoCapitalize="words" returnKeyType="done" onSubmitEditing={onNext}
-        />
-        <TouchableOpacity style={s.cta} onPress={onNext} activeOpacity={0.85}>
-          <Text style={s.ctaText}>Continue</Text>
-        </TouchableOpacity>
+        <FadeSlideIn delay={0}>
+          <Text style={s.stepLabel}>02 / {TOTAL}</Text>
+          <Text style={s.title}>What should we call you?</Text>
+          <Text style={s.subtitle}>Your first name personalises all AI insights in ORYX.</Text>
+        </FadeSlideIn>
+        <FadeSlideIn delay={150}>
+          <GlassInput
+            s={s} theme={theme}
+            style={s.bigInput}
+            placeholder="First name"
+            placeholderTextColor={theme.text.muted}
+            value={displayName}
+            onChangeText={setDisplayName}
+            autoFocus
+            autoCapitalize="words"
+            returnKeyType="done"
+            onSubmitEditing={onNext}
+          />
+        </FadeSlideIn>
+        <FadeSlideIn delay={250}>
+          <PrimaryCTA label="Continue" onPress={onNext} disabled={!displayName.trim()} s={s} theme={theme} />
+        </FadeSlideIn>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -1045,26 +1056,37 @@ function S5Goal({ primaryGoal, setPrimaryGoal, fatLossRate, setFatLossRate, onNe
 function S6Level({ fitnessLevel, setFitnessLevel, onNext, s, theme }: any) {
   return (
     <ScrollView contentContainerStyle={s.content}>
-      <Text style={s.stepLabel}>05 / {TOTAL}</Text>
-      <Text style={s.title}>How would you describe your fitness level?</Text>
-      <Text style={s.subtitle}>Affects strength standards and AI coaching tone.</Text>
+      <FadeSlideIn delay={0}>
+        <Text style={s.stepLabel}>05 / {TOTAL}</Text>
+        <Text style={s.title}>How would you describe your fitness level?</Text>
+        <Text style={s.subtitle}>Affects strength standards and AI coaching tone.</Text>
+      </FadeSlideIn>
       <View style={s.list}>
-        {FITNESS_LEVELS.map(({ label, sub }) => {
+        {FITNESS_LEVELS.map(({ label, sub }, i) => {
           const sel = fitnessLevel === label;
+          const dim = !!fitnessLevel && !sel;
           return (
-            <TouchableOpacity key={label} style={[s.row, sel && s.rowOn]} onPress={() => setFitnessLevel(label)} activeOpacity={0.8}>
-              <View style={{ flex: 1 }}>
-                <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
-                <Text style={[s.rowSub, sel && s.rowSubOn]}>{sub}</Text>
-              </View>
-              {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
-            </TouchableOpacity>
+            <FadeSlideIn key={label} delay={200 + i * 50}>
+              <GoalRow
+                selected={sel}
+                dim={dim}
+                onPress={() => setFitnessLevel(label)}
+                s={s}
+                theme={theme}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
+                  <Text style={[s.rowSub, sel && s.rowSubOn]}>{sub}</Text>
+                </View>
+                {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
+              </GoalRow>
+            </FadeSlideIn>
           );
         })}
       </View>
-      <TouchableOpacity style={[s.cta, !fitnessLevel && s.ctaDim]} onPress={onNext} activeOpacity={0.85}>
-        <Text style={s.ctaText}>Continue</Text>
-      </TouchableOpacity>
+      <FadeSlideIn delay={420}>
+        <PrimaryCTA label="Continue" onPress={onNext} disabled={!fitnessLevel} s={s} theme={theme} />
+      </FadeSlideIn>
     </ScrollView>
   );
 }
@@ -1074,26 +1096,37 @@ function S6Level({ fitnessLevel, setFitnessLevel, onNext, s, theme }: any) {
 function S7Frequency({ weeklyDays, setWeeklyDays, onNext, s, theme }: any) {
   return (
     <ScrollView contentContainerStyle={s.content}>
-      <Text style={s.stepLabel}>06 / {TOTAL}</Text>
-      <Text style={s.title}>How many days per week do you train?</Text>
-      <Text style={s.subtitle}>Used for deload detection and recovery recommendations.</Text>
+      <FadeSlideIn delay={0}>
+        <Text style={s.stepLabel}>06 / {TOTAL}</Text>
+        <Text style={s.title}>How many days per week do you train?</Text>
+        <Text style={s.subtitle}>Used for deload detection and recovery recommendations.</Text>
+      </FadeSlideIn>
       <View style={s.list}>
-        {TRAINING_DAYS.map(({ label, sub }) => {
+        {TRAINING_DAYS.map(({ label, sub }, i) => {
           const sel = weeklyDays === label;
+          const dim = !!weeklyDays && !sel;
           return (
-            <TouchableOpacity key={label} style={[s.row, sel && s.rowOn]} onPress={() => setWeeklyDays(label)} activeOpacity={0.8}>
-              <View style={{ flex: 1 }}>
-                <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
-                <Text style={[s.rowSub, sel && s.rowSubOn]}>{sub}</Text>
-              </View>
-              {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
-            </TouchableOpacity>
+            <FadeSlideIn key={label} delay={200 + i * 50}>
+              <GoalRow
+                selected={sel}
+                dim={dim}
+                onPress={() => setWeeklyDays(label)}
+                s={s}
+                theme={theme}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
+                  <Text style={[s.rowSub, sel && s.rowSubOn]}>{sub}</Text>
+                </View>
+                {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
+              </GoalRow>
+            </FadeSlideIn>
           );
         })}
       </View>
-      <TouchableOpacity style={[s.cta, !weeklyDays && s.ctaDim]} onPress={onNext} activeOpacity={0.85}>
-        <Text style={s.ctaText}>Continue</Text>
-      </TouchableOpacity>
+      <FadeSlideIn delay={420}>
+        <PrimaryCTA label="Continue" onPress={onNext} disabled={!weeklyDays} s={s} theme={theme} />
+      </FadeSlideIn>
     </ScrollView>
   );
 }
@@ -1123,117 +1156,165 @@ function S8Body({
     const n = parseInt(cleaned);
     setHeightInches(String(Math.min(11, Math.max(0, n))));
   };
+  const handleSexPress = (opt: string) => {
+    tap('light');
+    setBiologicalSex(opt);
+  };
+  const handleUnitPress = (next: () => void) => {
+    tap('light');
+    next();
+  };
+
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <KeyboardAvoidingView style={s.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-          <Text style={s.stepLabel}>07 / {TOTAL}</Text>
-          <Text style={s.title}>Tell us about your body.</Text>
-          <Text style={s.subtitle}>Required for calorie calculations and strength standards.</Text>
+          <FadeSlideIn delay={0}>
+            <Text style={s.stepLabel}>07 / {TOTAL}</Text>
+            <Text style={s.title}>Tell us about your body.</Text>
+            <Text style={s.subtitle}>Required for calorie calculations and strength standards.</Text>
+          </FadeSlideIn>
 
-          <Text style={s.label}>Date of Birth</Text>
-          <View style={s.bdRow}>
-            <TextInput
-              style={[s.input, s.bdInput]}
-              placeholder="DD" placeholderTextColor={theme.text.muted}
-              keyboardType="number-pad" maxLength={2}
-              value={bdDay} onChangeText={setBdDay} returnKeyType="next"
-            />
-            <TextInput
-              style={[s.input, s.bdInput]}
-              placeholder="MM" placeholderTextColor={theme.text.muted}
-              keyboardType="number-pad" maxLength={2}
-              value={bdMonth} onChangeText={setBdMonth} returnKeyType="next"
-            />
-            <TextInput
-              style={[s.input, s.bdInputYear]}
-              placeholder="YYYY" placeholderTextColor={theme.text.muted}
-              keyboardType="number-pad" maxLength={4}
-              value={bdYear} onChangeText={setBdYear} returnKeyType="next"
-            />
-          </View>
-
-          <View style={s.unitRow}>
-            <Text style={s.label}>Weight</Text>
-            <View style={s.unitToggle}>
-              {(['kg', 'lbs'] as const).map((u) => (
-                <TouchableOpacity key={u} style={[s.unitBtn, weightUnit === u && s.unitBtnOn]} onPress={() => setWeightUnit(u)}>
-                  <Text style={[s.unitBtnTxt, weightUnit === u && s.unitBtnTxtOn]}>{u}</Text>
-                </TouchableOpacity>
-              ))}
+          <FadeSlideIn delay={150}>
+            <Text style={s.label}>Date of Birth</Text>
+            <View style={s.bdRow}>
+              <GlassInput
+                s={s} theme={theme}
+                style={s.bdInput}
+                placeholder="DD" placeholderTextColor={theme.text.muted}
+                keyboardType="number-pad" maxLength={2}
+                value={bdDay} onChangeText={setBdDay} returnKeyType="next"
+              />
+              <GlassInput
+                s={s} theme={theme}
+                style={s.bdInput}
+                placeholder="MM" placeholderTextColor={theme.text.muted}
+                keyboardType="number-pad" maxLength={2}
+                value={bdMonth} onChangeText={setBdMonth} returnKeyType="next"
+              />
+              <GlassInput
+                s={s} theme={theme}
+                style={s.bdInputYear}
+                placeholder="YYYY" placeholderTextColor={theme.text.muted}
+                keyboardType="number-pad" maxLength={4}
+                value={bdYear} onChangeText={setBdYear} returnKeyType="next"
+              />
             </View>
-          </View>
-          <TextInput style={s.input} placeholder={weightUnit === 'kg' ? 'e.g. 80' : 'e.g. 176'}
-            placeholderTextColor={theme.text.muted} keyboardType="decimal-pad"
-            value={weightStr} onChangeText={setWeightStr} returnKeyType="next" />
+          </FadeSlideIn>
 
-          <View style={s.unitRow}>
-            <Text style={s.label}>Height</Text>
-            <View style={s.unitToggle}>
-              {(['cm', 'ft'] as const).map((u) => (
-                <TouchableOpacity key={u} style={[s.unitBtn, heightUnit === u && s.unitBtnOn]} onPress={() => setHeightUnit(u)}>
-                  <Text style={[s.unitBtnTxt, heightUnit === u && s.unitBtnTxtOn]}>{u}</Text>
-                </TouchableOpacity>
-              ))}
+          <FadeSlideIn delay={220}>
+            <View style={s.unitRow}>
+              <Text style={s.label}>Weight</Text>
+              <View style={s.unitToggle}>
+                {(['kg', 'lbs'] as const).map((u) => (
+                  <TouchableOpacity
+                    key={u}
+                    style={[s.unitBtn, weightUnit === u && s.unitBtnOn]}
+                    onPress={() => handleUnitPress(() => setWeightUnit(u))}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Weight in ${u}`}
+                  >
+                    <Text style={[s.unitBtnTxt, weightUnit === u && s.unitBtnTxtOn]}>{u}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
-          </View>
-          {heightUnit === 'cm' ? (
-            <TextInput
-              style={s.input}
-              placeholder="e.g. 180"
+            <GlassInput
+              s={s} theme={theme}
+              placeholder={weightUnit === 'kg' ? 'e.g. 80' : 'e.g. 176'}
               placeholderTextColor={theme.text.muted}
               keyboardType="decimal-pad"
-              value={heightStr}
-              onChangeText={setHeightStr}
-              returnKeyType="done"
-              onSubmitEditing={Keyboard.dismiss}
+              value={weightStr}
+              onChangeText={setWeightStr}
+              returnKeyType="next"
             />
-          ) : (
-            // Two whole-number inputs eliminate the 5.11 ambiguity from the
-            // single-decimal field (audit 1.1).
-            <View style={s.heightFtRow}>
-              <View style={s.heightFtCell}>
-                <TextInput
-                  style={[s.input, s.heightFtInput]}
-                  placeholder="5"
-                  placeholderTextColor={theme.text.muted}
-                  keyboardType="number-pad"
-                  maxLength={1}
-                  value={heightFeet}
-                  onChangeText={(v: string) => setHeightFeet(v.replace(/[^0-9]/g, ''))}
-                  returnKeyType="next"
-                />
-                <Text style={s.heightFtUnit}>ft</Text>
-              </View>
-              <View style={s.heightFtCell}>
-                <TextInput
-                  style={[s.input, s.heightFtInput]}
-                  placeholder="11"
-                  placeholderTextColor={theme.text.muted}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                  value={heightInches}
-                  onChangeText={handleInchesChange}
-                  returnKeyType="done"
-                  onSubmitEditing={Keyboard.dismiss}
-                />
-                <Text style={s.heightFtUnit}>in</Text>
+          </FadeSlideIn>
+
+          <FadeSlideIn delay={290}>
+            <View style={s.unitRow}>
+              <Text style={s.label}>Height</Text>
+              <View style={s.unitToggle}>
+                {(['cm', 'ft'] as const).map((u) => (
+                  <TouchableOpacity
+                    key={u}
+                    style={[s.unitBtn, heightUnit === u && s.unitBtnOn]}
+                    onPress={() => handleUnitPress(() => setHeightUnit(u))}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Height in ${u}`}
+                  >
+                    <Text style={[s.unitBtnTxt, heightUnit === u && s.unitBtnTxtOn]}>{u}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             </View>
-          )}
+            {heightUnit === 'cm' ? (
+              <GlassInput
+                s={s} theme={theme}
+                placeholder="e.g. 180"
+                placeholderTextColor={theme.text.muted}
+                keyboardType="decimal-pad"
+                value={heightStr}
+                onChangeText={setHeightStr}
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
+              />
+            ) : (
+              // Two whole-number inputs eliminate the 5.11 ambiguity from the
+              // single-decimal field (audit 1.1).
+              <View style={s.heightFtRow}>
+                <View style={s.heightFtCell}>
+                  <GlassInput
+                    s={s} theme={theme}
+                    style={s.heightFtInput}
+                    placeholder="5"
+                    placeholderTextColor={theme.text.muted}
+                    keyboardType="number-pad"
+                    maxLength={1}
+                    value={heightFeet}
+                    onChangeText={(v: string) => setHeightFeet(v.replace(/[^0-9]/g, ''))}
+                    returnKeyType="next"
+                  />
+                  <Text style={s.heightFtUnit}>ft</Text>
+                </View>
+                <View style={s.heightFtCell}>
+                  <GlassInput
+                    s={s} theme={theme}
+                    style={s.heightFtInput}
+                    placeholder="11"
+                    placeholderTextColor={theme.text.muted}
+                    keyboardType="number-pad"
+                    maxLength={2}
+                    value={heightInches}
+                    onChangeText={handleInchesChange}
+                    returnKeyType="done"
+                    onSubmitEditing={Keyboard.dismiss}
+                  />
+                  <Text style={s.heightFtUnit}>in</Text>
+                </View>
+              </View>
+            )}
+          </FadeSlideIn>
 
-          <Text style={s.label}>Biological Sex</Text>
-          <View style={s.sexRow}>
-            {['Male', 'Female', 'Prefer not to say'].map((opt) => (
-              <TouchableOpacity key={opt} style={[s.sexBtn, biologicalSex === opt && s.sexBtnOn]} onPress={() => setBiologicalSex(opt)}>
-                <Text style={[s.sexBtnTxt, biologicalSex === opt && s.sexBtnTxtOn]}>{opt}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <FadeSlideIn delay={360}>
+            <Text style={s.label}>Biological Sex</Text>
+            <View style={s.sexRow}>
+              {['Male', 'Female', 'Prefer not to say'].map((opt) => (
+                <TouchableOpacity
+                  key={opt}
+                  style={[s.sexBtn, biologicalSex === opt && s.sexBtnOn]}
+                  onPress={() => handleSexPress(opt)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Biological sex: ${opt}`}
+                >
+                  <Text style={[s.sexBtnTxt, biologicalSex === opt && s.sexBtnTxtOn]}>{opt}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </FadeSlideIn>
 
-          <TouchableOpacity style={[s.cta, !valid && s.ctaDim]} onPress={onNext} disabled={!valid} activeOpacity={0.85}>
-            <Text style={s.ctaText}>Continue</Text>
-          </TouchableOpacity>
+          <FadeSlideIn delay={460}>
+            <PrimaryCTA label="Continue" onPress={onNext} disabled={!valid} s={s} theme={theme} />
+          </FadeSlideIn>
         </ScrollView>
       </KeyboardAvoidingView>
     </TouchableWithoutFeedback>
@@ -1244,36 +1325,65 @@ function S8Body({
 
 function S9Calories({ tdeeData, finalTarget, primaryGoal, fatLossRate, onNext, s, theme }: any) {
   const goalLabel = primaryGoal === 'Lose Fat' && fatLossRate ? fatLossRate : primaryGoal;
+  // Animate the hero number from 0 to finalTarget on mount. ~700ms gives the
+  // feeling of the body "calculating" without dragging.
+  const reduced = useReducedMotion();
+  const [displayCal, setDisplayCal] = useState<number>(reduced ? finalTarget : 0);
+  useEffect(() => {
+    if (reduced) {
+      setDisplayCal(finalTarget);
+      return;
+    }
+    const start = Date.now();
+    const dur = 700;
+    let raf: number;
+    const tick = () => {
+      const t = Math.min(1, (Date.now() - start) / dur);
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - t, 3);
+      setDisplayCal(Math.round(finalTarget * eased));
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [finalTarget, reduced]);
+
   return (
     <KeyboardAvoidingView style={s.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-        <Text style={s.stepLabel}>08 / {TOTAL}</Text>
-        <Text style={s.title}>Your daily calorie target.</Text>
-        <Text style={s.subtitle}>Calculated using the Mifflin St Jeor formula.</Text>
+        <FadeSlideIn delay={0}>
+          <Text style={s.stepLabel}>08 / {TOTAL}</Text>
+          <Text style={s.title}>Your daily calorie target.</Text>
+          <Text style={s.subtitle}>Calculated using the Mifflin St Jeor formula.</Text>
+        </FadeSlideIn>
 
-        <View style={s.calHero}>
-          <Text style={s.calNum}>{finalTarget}</Text>
-          <Text style={s.calUnit}>kcal / day</Text>
-        </View>
+        <FadeSlideIn delay={150}>
+          <View style={s.calHero}>
+            <Text style={s.calNum}>{displayCal}</Text>
+            <Text style={s.calUnit}>kcal / day</Text>
+          </View>
+        </FadeSlideIn>
 
         {tdeeData && (
-          <View style={s.breakCard}>
-            <BRow label="Base Metabolic Rate" value={`${tdeeData.bmr} kcal`} theme={theme} />
-            <BRow label="Activity multiplier" value={`× ${tdeeData.multiplier.toFixed(3)}`} theme={theme} />
-            {tdeeData.goalMult !== 1 && (
-              <BRow
-                label={`${goalLabel} adjustment`}
-                value={`× ${tdeeData.goalMult.toFixed(2)} (${tdeeData.goalAdj > 0 ? '+' : ''}${tdeeData.goalAdj} kcal)`}
-                color={tdeeData.goalAdj > 0 ? theme.status.success : theme.status.danger}
-                theme={theme}
-              />
-            )}
-          </View>
+          <FadeSlideIn delay={350}>
+            <View style={s.breakCard}>
+              <BRow label="Base Metabolic Rate" value={`${tdeeData.bmr} kcal`} theme={theme} />
+              <BRow label="Activity multiplier" value={`× ${tdeeData.multiplier.toFixed(3)}`} theme={theme} />
+              {tdeeData.goalMult !== 1 && (
+                <BRow
+                  label={`${goalLabel} adjustment`}
+                  value={`× ${tdeeData.goalMult.toFixed(2)} (${tdeeData.goalAdj > 0 ? '+' : ''}${tdeeData.goalAdj} kcal)`}
+                  color={tdeeData.goalAdj > 0 ? theme.status.success : theme.status.danger}
+                  theme={theme}
+                />
+              )}
+            </View>
+          </FadeSlideIn>
         )}
 
-        <TouchableOpacity style={s.cta} onPress={onNext} activeOpacity={0.85}>
-          <Text style={s.ctaText}>Use {finalTarget} kcal / day</Text>
-        </TouchableOpacity>
+        <FadeSlideIn delay={500}>
+          <PrimaryCTA label={`Use ${finalTarget} kcal / day`} onPress={onNext} s={s} theme={theme} />
+        </FadeSlideIn>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -1298,27 +1408,44 @@ function S10Connections({ s, theme, onNext }: any) {
     { label: 'Whoop', icon: 'pulse-outline', connected: !!user?.whoop_connected },
     { label: 'Oura Ring', icon: 'bed-outline', connected: !!user?.oura_connected },
   ];
+  const handlePress = (label: string) => {
+    tap('light');
+    Alert.alert('Connect later', `Connect ${label} from your Profile after setup.`);
+  };
   return (
     <ScrollView contentContainerStyle={s.content}>
-      <Text style={s.stepLabel}>09 / {TOTAL}</Text>
-      <Text style={s.title}>Connect your existing apps.</Text>
-      <Text style={s.subtitle}>ORYX gets smarter with more data. Connect later from Profile.</Text>
+      <FadeSlideIn delay={0}>
+        <Text style={s.stepLabel}>09 / {TOTAL}</Text>
+        <Text style={s.title}>Connect your existing apps.</Text>
+        <Text style={s.subtitle}>ORYX gets smarter with more data. Connect later from Profile.</Text>
+      </FadeSlideIn>
       <View style={s.tileGrid}>
-        {APPS.map(({ label, icon, connected }) => (
-          <TouchableOpacity key={label}
-            style={[s.tile, connected && s.tileOn]}
-            onPress={() => Alert.alert('Connect later', `Connect ${label} from your Profile after setup.`)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name={icon as any} size={22} color={connected ? theme.accent : theme.text.secondary} />
-            <Text style={[s.tileLabel, connected && s.tileLabelOn]}>{label}</Text>
-            {connected && <Ionicons name="checkmark-circle" size={14} color={theme.status.success} style={{ position: 'absolute', top: 8, right: 8 }} />}
-          </TouchableOpacity>
+        {APPS.map(({ label, icon, connected }, i) => (
+          <FadeSlideIn key={label} delay={200 + i * 50}>
+            <TouchableOpacity
+              style={[s.tile, connected && s.tileOn]}
+              onPress={() => handlePress(label)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`${label}${connected ? ' (connected)' : ''}`}
+            >
+              <Ionicons name={icon as any} size={22} color={connected ? theme.accentInk : theme.text.secondary} />
+              <Text style={[s.tileLabel, connected && s.tileLabelOn]}>{label}</Text>
+              {connected && (
+                <Ionicons
+                  name="checkmark-circle"
+                  size={14}
+                  color={theme.status.success}
+                  style={{ position: 'absolute', top: 8, right: 8 }}
+                />
+              )}
+            </TouchableOpacity>
+          </FadeSlideIn>
         ))}
       </View>
-      <TouchableOpacity style={s.cta} onPress={onNext} activeOpacity={0.85}>
-        <Text style={s.ctaText}>Continue</Text>
-      </TouchableOpacity>
+      <FadeSlideIn delay={420}>
+        <PrimaryCTA label="Continue" onPress={onNext} s={s} theme={theme} />
+      </FadeSlideIn>
     </ScrollView>
   );
 }
@@ -1328,26 +1455,37 @@ function S10Connections({ s, theme, onNext }: any) {
 function S11Time({ trainingTime, setTrainingTime, onNext, s, theme }: any) {
   return (
     <ScrollView contentContainerStyle={s.content}>
-      <Text style={s.stepLabel}>10 / {TOTAL}</Text>
-      <Text style={s.title}>When do you usually train?</Text>
-      <Text style={s.subtitle}>Used for workout reminders and nutrition timing suggestions.</Text>
+      <FadeSlideIn delay={0}>
+        <Text style={s.stepLabel}>10 / {TOTAL}</Text>
+        <Text style={s.title}>When do you usually train?</Text>
+        <Text style={s.subtitle}>Used for workout reminders and nutrition timing suggestions.</Text>
+      </FadeSlideIn>
       <View style={s.list}>
-        {TRAINING_TIMES.map(({ label, sub }) => {
+        {TRAINING_TIMES.map(({ label, sub }, i) => {
           const sel = trainingTime === label;
+          const dim = !!trainingTime && !sel;
           return (
-            <TouchableOpacity key={label} style={[s.row, sel && s.rowOn]} onPress={() => setTrainingTime(label)} activeOpacity={0.8}>
-              <View style={{ flex: 1 }}>
-                <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
-                <Text style={[s.rowSub, sel && s.rowSubOn]}>{sub}</Text>
-              </View>
-              {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
-            </TouchableOpacity>
+            <FadeSlideIn key={label} delay={200 + i * 50}>
+              <GoalRow
+                selected={sel}
+                dim={dim}
+                onPress={() => setTrainingTime(label)}
+                s={s}
+                theme={theme}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.rowText, sel && s.rowTextOn]}>{label}</Text>
+                  <Text style={[s.rowSub, sel && s.rowSubOn]}>{sub}</Text>
+                </View>
+                {sel && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
+              </GoalRow>
+            </FadeSlideIn>
           );
         })}
       </View>
-      <TouchableOpacity style={[s.cta, !trainingTime && s.ctaDim]} onPress={onNext} activeOpacity={0.85}>
-        <Text style={s.ctaText}>Continue</Text>
-      </TouchableOpacity>
+      <FadeSlideIn delay={500}>
+        <PrimaryCTA label="Continue" onPress={onNext} disabled={!trainingTime} s={s} theme={theme} />
+      </FadeSlideIn>
     </ScrollView>
   );
 }
@@ -1357,41 +1495,66 @@ function S11Time({ trainingTime, setTrainingTime, onNext, s, theme }: any) {
 function S12Done({ displayName, sportTags, primaryGoal, finalCalories, saving, error, onFinish, s, theme }: any) {
   const name = displayName.trim() || 'Athlete';
   const sport = sportTags.length > 0 ? sportTags.join(', ') : 'your training';
+
+  // Pulse the checkmark icon on mount — single-shot, success-feel.
+  const reduced = useReducedMotion();
+  const iconScale = useSharedValue(reduced ? 1 : 0.6);
+  const iconOpacity = useSharedValue(reduced ? 1 : 0);
+  useEffect(() => {
+    if (reduced) return;
+    iconOpacity.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.cubic) });
+    iconScale.value = withSequence(
+      withSpring(1.08, { damping: 14, stiffness: 220, mass: 0.7 }),
+      withSpring(1, { damping: 18, stiffness: 220 }),
+    );
+    // Success haptic the moment the screen lands.
+    tap('success');
+  }, [reduced, iconOpacity, iconScale]);
+  const iconStyle = useAnimatedStyle(() => ({
+    opacity: iconOpacity.value,
+    transform: [{ scale: iconScale.value }],
+  }));
+
+  const handleFinish = () => {
+    tap('medium');
+    onFinish();
+  };
+
   return (
     <ScrollView contentContainerStyle={[s.content, { alignItems: 'center' }]}>
-      <View style={s.doneIcon}>
+      <Reanimated.View style={[s.doneIcon, iconStyle]}>
         <Ionicons name="checkmark-circle" size={64} color={theme.accent} />
-      </View>
-      <Text style={s.doneTitle}>{name}, ORYX is ready.</Text>
-      <Text style={s.doneSub}>
-        We will track your {sport}, monitor your recovery, and tell you exactly why your body performs the way it does.
-      </Text>
+      </Reanimated.View>
+      <FadeSlideIn delay={150}>
+        <Text style={s.doneTitle}>{name}, ORYX is ready.</Text>
+      </FadeSlideIn>
+      <FadeSlideIn delay={220}>
+        <Text style={s.doneSub}>
+          We will track your {sport}, monitor your recovery, and tell you exactly why your body performs the way it does.
+        </Text>
+      </FadeSlideIn>
 
-      <View style={s.summaryCard}>
-        <SRow icon="trophy-outline" label="Goal" value={primaryGoal || 'Not set'} theme={theme} />
-        <View style={s.summaryDiv} />
-        <SRow icon="flame-outline" label="Calorie target" value={`${finalCalories} kcal / day`} theme={theme} />
-        <View style={s.summaryDiv} />
-        <SRow icon="link-outline" label="Integrations" value="Connect from Profile" theme={theme} />
-      </View>
+      <FadeSlideIn delay={300} style={{ width: '100%' }}>
+        <View style={s.summaryCard}>
+          <SRow icon="trophy-outline" label="Goal" value={primaryGoal || 'Not set'} theme={theme} />
+          <View style={s.summaryDiv} />
+          <SRow icon="flame-outline" label="Calorie target" value={`${finalCalories} kcal / day`} theme={theme} />
+          <View style={s.summaryDiv} />
+          <SRow icon="link-outline" label="Integrations" value="Connect from Profile" theme={theme} />
+        </View>
+      </FadeSlideIn>
 
       {error && (
-        <View style={[s.errorBox, { marginTop: 16 }]}>
-          <Text style={s.errorText}>{error}</Text>
-        </View>
+        <FadeSlideIn delay={0} style={{ width: '100%' }}>
+          <View style={[s.errorBox, { marginTop: 16 }]}>
+            <Text style={s.errorText}>{error}</Text>
+          </View>
+        </FadeSlideIn>
       )}
 
-      <TouchableOpacity
-        style={[s.cta, { marginTop: 24, width: '100%' }, saving && s.ctaDim]}
-        onPress={onFinish}
-        disabled={saving}
-        activeOpacity={0.85}
-      >
-        {saving
-          ? <ActivityIndicator color={theme.accentInk} size="small" />
-          : <Text style={s.ctaText}>Enter ORYX</Text>
-        }
-      </TouchableOpacity>
+      <FadeSlideIn delay={420} style={{ width: '100%', marginTop: 24 }}>
+        <PrimaryCTA label="Enter ORYX" onPress={handleFinish} saving={saving} disabled={saving} s={s} theme={theme} />
+      </FadeSlideIn>
     </ScrollView>
   );
 }
@@ -1514,12 +1677,13 @@ function styles(t: ThemeColors) {
       width: 22,
     },
 
-    // Body stats helpers
+    // Body stats helpers — glass-pill micro-controls; selected state inverts
+    // to a high-contrast text-primary fill so the choice reads instantly.
     unitRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     unitToggle: { flexDirection: 'row', gap: 6 },
     unitBtn: {
       paddingHorizontal: 12, paddingVertical: 5, borderRadius: R.xs,
-      backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border,
+      backgroundColor: t.glass.pill, borderWidth: 1, borderColor: t.glass.border,
     },
     unitBtnOn: { backgroundColor: t.text.primary, borderColor: t.text.primary },
     unitBtnTxt: { fontSize: 12, fontFamily: TY.sans.semibold, color: t.text.muted },
@@ -1527,28 +1691,34 @@ function styles(t: ThemeColors) {
     sexRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
     sexBtn: {
       flex: 1, paddingVertical: 12, borderRadius: R.sm,
-      backgroundColor: t.bg.elevated, borderWidth: 1, borderColor: t.border, alignItems: 'center',
+      backgroundColor: t.glass.card, borderWidth: 1, borderColor: t.glass.border, alignItems: 'center',
     },
     sexBtnOn: { backgroundColor: t.text.primary, borderColor: t.text.primary },
     sexBtnTxt: { fontSize: 13, fontFamily: TY.sans.semibold, color: t.text.secondary },
     sexBtnTxtOn: { color: t.bg.primary },
 
-    // Calorie screen
+    // Calorie screen — hero number gets the same tabular treatment as the
+    // home readiness display so digits don't wobble while the count-up
+    // animation runs.
     calHero: { alignItems: 'center', marginBottom: 20 },
-    calNum: { fontSize: 64, fontFamily: TY.sans.bold, color: t.text.primary, lineHeight: 72 },
+    calNum: {
+      fontSize: 64, fontFamily: TY.sans.bold, color: t.text.primary,
+      lineHeight: 72, ...TY.tabular,
+    },
     calUnit: { fontSize: 16, color: t.text.muted, marginTop: 4 },
     breakCard: {
-      backgroundColor: t.bg.elevated, borderRadius: R.sm, padding: 16,
-      borderWidth: 1, borderColor: t.border, marginBottom: 16,
+      backgroundColor: t.glass.card, borderRadius: R.md, padding: 16,
+      borderWidth: 1, borderColor: t.glass.border, marginBottom: 16,
     },
     // Done screen
     doneIcon: { marginTop: 16, marginBottom: 16, alignItems: 'center' },
     doneTitle: { fontSize: 26, fontFamily: TY.sans.bold, color: t.text.primary, textAlign: 'center', marginBottom: 12 },
     doneSub: { fontSize: 15, color: t.text.muted, textAlign: 'center', lineHeight: 22, marginBottom: 24 },
     summaryCard: {
-      backgroundColor: t.bg.elevated, borderRadius: R.md, borderWidth: 1, borderColor: t.border,
+      backgroundColor: t.glass.card, borderRadius: R.md,
+      borderWidth: 1, borderColor: t.glass.border,
       width: '100%', paddingHorizontal: 16,
     },
-    summaryDiv: { height: 1, backgroundColor: t.border },
+    summaryDiv: { height: 1, backgroundColor: t.divider },
   });
 }
