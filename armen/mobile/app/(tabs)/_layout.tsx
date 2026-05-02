@@ -168,6 +168,15 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="wellness"
+        options={{
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name="heart-outline" focusedName="heart" focused={focused} color={color} />
+          ),
+          tabBarLabel: ({ focused }) => <TabLabel focused={focused}>Wellness</TabLabel>,
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           tabBarIcon: ({ color, focused }) => (
@@ -176,7 +185,6 @@ export default function TabsLayout() {
           tabBarLabel: ({ focused }) => <TabLabel focused={focused}>Profile</TabLabel>,
         }}
       />
-      <Tabs.Screen name="wellness" options={{ href: null }} />
     </Tabs>
   );
 }
