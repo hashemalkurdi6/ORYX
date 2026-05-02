@@ -518,7 +518,7 @@ export default function SettingsScreen() {
             <View style={s.rowDivider} />
             <TouchableOpacity
               style={s.settingsRow}
-              onPress={() => router.push('/(auth)/forgot-password')}
+              onPress={() => router.push('/(auth)/reset-password')}
               activeOpacity={0.75}
             >
               <Ionicons name="lock-closed-outline" size={18} color={theme.text.secondary} />
