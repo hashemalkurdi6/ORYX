@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from uuid import UUID
 
 import bcrypt
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
@@ -152,7 +152,12 @@ async def get_current_user(
 
 
 @router.post("/signup", response_model=Token, status_code=status.HTTP_201_CREATED)
-async def signup(payload: UserCreate, request: Request, db: AsyncSession = Depends(get_db)):
+async def signup(
+    payload: UserCreate,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
     from app.services.rate_limit import check_rate_limit, client_ip
     await check_rate_limit(db, f"signup:{client_ip(request)}", limit=5, window_seconds=3600)
 
@@ -213,11 +218,13 @@ async def signup(payload: UserCreate, request: Request, db: AsyncSession = Depen
             await calculate_macro_targets(user.id, db)
         except Exception:
             logger.exception("Initial macro target calc failed for user %s", user.id)
-    # Send email verification (fire-and-forget — never blocks signup)
+    # Send welcome+verify email via FastAPI BackgroundTasks. Token + sent_at
+    # are recorded synchronously so the user row is consistent before signup
+    # returns; only the Resend network call is deferred.
     try:
-        await _send_email_verification_for(user, db)
+        await _send_welcome_verify_for(user, db, background_tasks)
     except Exception:
-        logger.exception("Failed to dispatch verification email for user %s", user.id)
+        logger.exception("Failed to enqueue welcome+verify email for user %s", user.id)
     token = create_access_token(user.id)
     return Token(access_token=token)
 
@@ -254,12 +261,35 @@ def _create_email_verify_token(user_id: UUID) -> str:
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-async def _send_email_verification_for(user: User, db: AsyncSession) -> str:
-    """Generate + dispatch a verification token. Returns the token (for dev echoing)."""
-    from app.services.email_service import send_email_verification
+def _derive_first_name(full_name: str | None) -> str | None:
+    """First whitespace-delimited token of full_name, or None."""
+    if not full_name:
+        return None
+    parts = full_name.strip().split()
+    return parts[0] if parts else None
+
+
+async def _send_welcome_verify_for(
+    user: User,
+    db: AsyncSession,
+    background_tasks: BackgroundTasks,
+) -> str:
+    """Generate verify token, mark sent_at, enqueue the welcome+verify email.
+
+    Returns the token (for dev-mode echoing in /resend-verification).
+    The Resend call runs in a BackgroundTask so the response isn't blocked
+    on email-provider latency. Caller should still wrap in try/except so an
+    enqueue failure doesn't propagate as a 500.
+    """
+    from app.services.email_service import send_welcome_verify_email
     token = _create_email_verify_token(user.id)
     verify_url = f"{settings.EMAIL_VERIFY_URL_BASE}?token={token}"
-    send_email_verification(user.email, verify_url)
+    background_tasks.add_task(
+        send_welcome_verify_email,
+        user.email,
+        verify_url,
+        _derive_first_name(user.full_name),
+    )
     user.email_verification_sent_at = datetime.utcnow()
     await db.flush()
     return token
@@ -293,17 +323,23 @@ async def verify_email(payload: VerifyEmailRequest, db: AsyncSession = Depends(g
 @router.post("/resend-verification")
 async def resend_verification(
     request: Request,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Re-issue an email verification token for the signed-in user."""
+    """Re-issue an email verification token for the signed-in user.
+
+    Reuses the same welcome+verify email shape as signup. The "Welcome to ORYX"
+    framing still fits since the user is pre-verified and may have lost the
+    original. One template, no drift.
+    """
     from app.services.rate_limit import check_rate_limit, client_ip
     await check_rate_limit(db, f"resend-verify:{client_ip(request)}", limit=5, window_seconds=600)
 
     if current_user.email_verified:
         return {"message": "Email already verified."}
     is_prod = settings.ENV.lower() in ("prod", "production")
-    token = await _send_email_verification_for(current_user, db)
+    token = await _send_welcome_verify_for(current_user, db, background_tasks)
     response: dict = {"message": "Verification email sent."}
     if not is_prod:
         # Dev/TestFlight convenience: echo the token so testers without inbox access can verify.
