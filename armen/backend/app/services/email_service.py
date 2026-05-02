@@ -35,7 +35,7 @@ def _mask_email(email: str) -> str:
 
 
 # Reply-to / contact line.
-# TODO(launch-blocker): once founder@oryxfit.com forwarding to Hashem's inbox
+# TODO(launch-blocker): once founder@oryxfitapp.com forwarding to Hashem's inbox
 # is verified working, swap _CONTACT_LINE back to the "just reply to this email"
 # version below. Until then we direct users to compose a fresh email so we
 # don't promise replies that vanish into a deliverability void.
@@ -44,7 +44,7 @@ def _mask_email(email: str) -> str:
 #       "It comes straight to me."
 #   )
 _CONTACT_LINE = (
-    "If you hit any issues or have feedback, email founder@oryxfit.com."
+    "If you hit any issues or have feedback, email founder@oryxfitapp.com."
 )
 
 

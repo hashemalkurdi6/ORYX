@@ -8,7 +8,7 @@
 ## What's at stake
 
 Commit `4aeed4b` shipped the code that sends a combined welcome + email-
-verification message on every signup, fired from `founder@oryxfit.com` via
+verification message on every signup, fired from `founder@oryxfitapp.com` via
 Resend's transactional API.
 
 **The code is live and won't error.** But without the production env vars
@@ -25,14 +25,14 @@ hear from you.
 | Env var | Required value | Why |
 |---|---|---|
 | `RESEND_API_KEY` | Your live Resend API key | Without it the send call short-circuits to `return False` |
-| `RESEND_FROM_EMAIL` | `Hashem from ORYX <founder@oryxfit.com>` | Sender identity for both welcome+verify and password reset. Default is still `ORYX <noreply@oryx.app>` which is the wrong domain |
+| `RESEND_FROM_EMAIL` | `Hashem from ORYX <founder@oryxfitapp.com>` | Sender identity for both welcome+verify and password reset. Default is still `ORYX <noreply@oryx.app>` which is the wrong domain |
 | `EMAIL_VERIFY_URL_BASE` | `https://oryx.app/verify-email` (or wherever your verify landing page lives in prod) | Already defaulted, but worth confirming the prod value matches the actual landing page |
 
 ## Two prerequisite steps before flipping the env vars
 
-1. **Verify `oryxfit.com` in Resend.** Add the domain in Resend's dashboard, then add the SPF (TXT), DKIM (3 CNAMEs), and recommended DMARC (TXT) records to your DNS provider. Resend marks the domain verified usually within 15 minutes of DNS propagation. **Do not flip `RESEND_FROM_EMAIL` to `founder@oryxfit.com` until Resend reports the domain verified — sends will hard-fail otherwise.**
+1. **Verify `oryxfitapp.com` in Resend.** Add the domain in Resend's dashboard, then add the SPF (TXT), DKIM (3 CNAMEs), and recommended DMARC (TXT) records to your DNS provider. Resend marks the domain verified usually within 15 minutes of DNS propagation. **Do not flip `RESEND_FROM_EMAIL` to `founder@oryxfitapp.com` until Resend reports the domain verified — sends will hard-fail otherwise.**
 
-2. **Set up `founder@oryxfit.com` mailbox or forwarding.** Right now the welcome email reads *"If you hit any issues or have feedback, email founder@oryxfit.com."* — a fallback because forwarding wasn't live at ship time. Once you have it forwarding to your real inbox, edit `_CONTACT_LINE` in `armen/backend/app/services/email_service.py` to swap back to the warmer *"just reply to this email. It comes straight to me."* version (the original copy is preserved as a comment right above the active assignment).
+2. **Set up `founder@oryxfitapp.com` mailbox or forwarding.** Right now the welcome email reads *"If you hit any issues or have feedback, email founder@oryxfitapp.com."* — a fallback because forwarding wasn't live at ship time. Once you have it forwarding to your real inbox, edit `_CONTACT_LINE` in `armen/backend/app/services/email_service.py` to swap back to the warmer *"just reply to this email. It comes straight to me."* version (the original copy is preserved as a comment right above the active assignment).
 
 ## How to verify it's working in prod
 

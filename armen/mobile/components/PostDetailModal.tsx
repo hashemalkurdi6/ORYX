@@ -528,7 +528,7 @@ export default function PostDetailModal({
   const handleShareVia = useCallback(async () => {
     if (!post) return;
     try {
-      await Share.share({ message: `Check this out on ORYX: https://app.oryxfit.com/post/${post.id}` });
+      await Share.share({ message: `Check this out on ORYX: https://app.oryxfitapp.com/post/${post.id}` });
     } catch {
       // user cancelled
     }
@@ -538,7 +538,7 @@ export default function PostDetailModal({
     if (!post) return;
     setMenuVisible(false);
     try {
-      await Share.share({ message: `https://app.oryxfit.com/post/${post.id}` });
+      await Share.share({ message: `https://app.oryxfitapp.com/post/${post.id}` });
     } catch {
       // user cancelled
     }

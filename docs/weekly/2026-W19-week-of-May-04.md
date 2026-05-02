@@ -47,7 +47,7 @@ By Friday EOD: auth, onboarding, password reset, weight tracking, wearable conne
 
 - [ ] **NEW — Welcome email on signup** (Day 14 PM or Day 15, ~2 hours)
   Owner: backend
-  Added 2026-05-02 after CEO review of standalone spec. Reuses existing Resend integration (`email_service.py`, `password_reset.html` pattern). Sends from `founder@oryxfit.com` immediately after successful signup as a FastAPI `BackgroundTasks` (non-blocking — signup latency unaffected). Personal founder-voice copy. Domain `oryxfit.com` must be verified in Resend before enabling — flag if DNS records not yet set up. Test script at `backend/scripts/test_welcome_email.py`. See full spec in CEO review session 2026-05-02.
+  Added 2026-05-02 after CEO review of standalone spec. Reuses existing Resend integration (`email_service.py`, `password_reset.html` pattern). Sends from `founder@oryxfitapp.com` immediately after successful signup as a FastAPI `BackgroundTasks` (non-blocking — signup latency unaffected). Personal founder-voice copy. Domain `oryxfitapp.com` must be verified in Resend before enabling — flag if DNS records not yet set up. Test script at `backend/scripts/test_welcome_email.py`. See full spec in CEO review session 2026-05-02.
 
 ---
 
