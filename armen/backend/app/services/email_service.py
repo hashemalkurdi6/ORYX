@@ -53,15 +53,26 @@ def send_welcome_verify_email(
     verify_url: str,
     first_name: str | None = None,
 ) -> bool:
-    """Send the combined welcome + email-verification message.
+    """Send the welcome message. Personal founder voice, no CTA.
 
-    Replaces the old send_email_verification (which crudely string-swapped the
-    password-reset template). Personal founder voice, single CTA = verify link.
+    NOTE on the misleading name: this function used to send a combined
+    welcome + verify-email message with a "Confirm my email" CTA. The verify
+    CTA was deferred to Phase 2 — see
+    docs/coordination/2026-05-02-verify-email-deferred.md for the full
+    rationale and restoration steps. Function name kept as-is to avoid
+    rename churn now and again when the CTA returns.
+
+    `verify_url` param is still accepted (callers in auth.py still compute
+    and pass it) but is intentionally unused by the current template. This
+    is forward-compatible scaffolding so restoring the CTA in Phase 2 is a
+    template-only change.
+
     Non-blocking failure: returns False, logs, never raises.
     """
+    _ = verify_url  # accepted for forward-compat, unused until Phase 2 CTA restoration
     if not settings.RESEND_API_KEY:
         logger.warning(
-            "RESEND_API_KEY not configured; skipping welcome+verify email to %s",
+            "RESEND_API_KEY not configured; skipping welcome email to %s",
             _mask_email(to_email),
         )
         return False
@@ -69,7 +80,7 @@ def send_welcome_verify_email(
     try:
         import resend
     except ImportError:
-        logger.error("resend SDK not installed; cannot send welcome+verify email")
+        logger.error("resend SDK not installed; cannot send welcome email")
         return False
 
     # Sanitize first_name before substituting into HTML (user-supplied via
@@ -89,7 +100,6 @@ def send_welcome_verify_email(
     html_body = _render(
         _load_template("welcome_verify.html"),
         greeting=greeting_html,
-        verify_url=verify_url,
         contact_line=_CONTACT_LINE,
     )
 
@@ -103,11 +113,7 @@ def send_welcome_verify_email(
         "ORYX is the app I wished existed. It connects your fitness data and "
         "uses AI to actually explain what's happening with your body in plain "
         "English.\n\n"
-        "First step: confirm this is your email. Takes one second.\n\n"
-        f"  {verify_url}\n\n"
-        "Link expires in 24 hours. Didn't sign up for ORYX? You can safely "
-        "ignore this. Nothing happens.\n\n"
-        "Once you're in, here's what'll get you the most out of it from day one:\n\n"
+        "Here's where to start:\n\n"
         "  - Finish your onboarding (about 5 minutes)\n"
         "  - Connect Apple Health so we can read your sleep, heart rate, and activity\n"
         "  - Log your first workout\n\n"
@@ -121,7 +127,7 @@ def send_welcome_verify_email(
         resend.Emails.send({
             "from": settings.RESEND_FROM_EMAIL,
             "to": [to_email],
-            "subject": "Welcome to ORYX. Confirm your email to get started.",
+            "subject": "Welcome to ORYX.",
             "html": html_body,
             "text": text_body,
         })
@@ -133,7 +139,7 @@ def send_welcome_verify_email(
         return True
     except Exception as e:
         logger.exception(
-            "Failed to send welcome+verify email to %s: %s",
+            "Failed to send welcome email to %s: %s",
             _mask_email(to_email),
             e,
         )
