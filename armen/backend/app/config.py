@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     # Email (Resend)
     RESEND_API_KEY: str = ""
     RESEND_FROM_EMAIL: str = "ORYX <noreply@oryx.app>"
-    PASSWORD_RESET_URL_BASE: str = "https://oryx.app/reset"
+    PASSWORD_RESET_URL_BASE: str = "oryx://reset-password"
     EMAIL_VERIFY_URL_BASE: str = "https://oryx.app/verify-email"
     ENV: str = "dev"
     # Fernet key (base64) used to encrypt OAuth tokens (Strava/Whoop/Oura) at rest.

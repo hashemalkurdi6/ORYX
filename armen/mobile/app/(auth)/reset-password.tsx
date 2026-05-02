@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,16 +10,22 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { forgotPassword, resetPassword } from '@/services/api';
 import { useAuthStore } from '@/services/authStore';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ThemeColors, type as TY, radius as R, space as SP } from '@/services/theme';
 
-export default function ForgotPasswordScreen() {
+export default function ResetPasswordScreen() {
   const { theme } = useTheme();
   const s = createStyles(theme);
   const setAuth = useAuthStore((state) => state.setAuth);
+
+  // Deep-link entry: oryx://reset-password?token=<jwt> arrives here with
+  // `token` populated as a search param. Pre-fill the token state and
+  // jump past the email-request stage so the user lands on new-password
+  // input directly. See docs/decisions/2026-05-02-deep-link-password-reset.md.
+  const params = useLocalSearchParams<{ token?: string }>();
 
   const [stage, setStage] = useState<'request' | 'reset'>('request');
   const [email, setEmail] = useState('');
@@ -28,6 +34,14 @@ export default function ForgotPasswordScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+
+  useEffect(() => {
+    const incoming = typeof params.token === 'string' ? params.token.trim() : '';
+    if (incoming) {
+      setToken(incoming);
+      setStage('reset');
+    }
+  }, [params.token]);
 
   const handleRequest = async () => {
     if (!email.trim()) {
