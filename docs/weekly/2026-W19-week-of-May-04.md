@@ -33,9 +33,9 @@ By Friday EOD: auth, onboarding, password reset, weight tracking, wearable conne
   Owner: mobile (backend confirmed sufficient)
   `app/weight.tsx` was already substantially built (pre-2026-04-20); spec audit found one real gap and one missing stat. Fixed: goal-alignment card now gates on `recent14Logged >= 14` from a parallel `range=1m` history fetch (was using all-time `summary.data_confidence` — sparse loggers read as "on track" with no recent data); `total_logs` now surfaced on streak card. All other spec items (range selector, dual-line trend chart, log sheet, reminder, streak) verified PASS.
 
-- [ ] **Item 2.3 — Password reset deep-link polish** (Day 14, ~2-3 hours)
+- [x] **Item 2.3 — Password reset deep-link polish** ✅ Sat May 2 (pulled forward from Day 14)
   Owner: mobile + backend (config flip only)
-  ~85% already shipped in `c43f394`. Remaining: (a) decide deep-link vs current manual-paste token UX (see open decision below), (b) if deep-link: add `Linking.addEventListener` in `armen/mobile/app/(auth)/forgot-password.tsx` and flip `PASSWORD_RESET_URL_BASE` to `oryx://reset-password`, (c) end-to-end smoke test, (d) ADR for deep-link decision.
+  Decision: deep-link via `oryx://reset-password?token=...` custom URL scheme. Captured in ADR `docs/decisions/2026-05-02-deep-link-password-reset.md`. The earlier "manual paste" framing was incomplete — `https://oryx.app/reset` pointed at no landing page (no backend deployed, domain migrated to `oryxfitapp.com`), so the choice was deep-link vs defer-to-Phase-2. Defer rejected because App Store reviewers test forgot-password and a broken reset risks build rejection. Implementation: env var flip + mobile screen rename (`forgot-password.tsx` → `reset-password.tsx`) + `useLocalSearchParams` hook to pre-populate the token. Pulled forward to today; Day 14 budget freed.
 
 - [ ] **Items 2.4 + 2.5 — Wearable OAuth fixes + Apple Health CTA** (Days 11–13 ← pulled forward from Day 13/15)
   Owner: backend (OAuth callback fixes) + mobile (Apple Health CTA on Home)
@@ -53,18 +53,18 @@ By Friday EOD: auth, onboarding, password reset, weight tracking, wearable conne
 
 ## Open decisions
 
-- **2.3 deep-link vs manual-paste:** backend currently sends `https://oryx.app/reset?token=` (web URL); user manually pastes token into mobile app. Working as-is. Deep-link (`oryx://reset-password?token=`) is the better UX (~2 hr work) but web link is App-Store-acceptable. **Decide by Wed May 6 morning** so Day 14 work is scoped. Recommendation: ship deep-link — UX gap is visible, and the implementation is small.
+- ~~2.3 deep-link vs manual-paste~~ **RESOLVED 2026-05-02** — see ADR `docs/decisions/2026-05-02-deep-link-password-reset.md`. Decision: deep-link via `oryx://reset-password?token=...`. Implementation shipped same day.
 
-## Day-by-day (revised after Sat morning closeout)
+## Day-by-day (revised after Sat afternoon closeout)
 
 | Day | Date | Work |
 |---|---|---|
-| ~~10~~ | ~~Sat May 2~~ | ✅ 2.2 + 2.1 shipped (this was a weekend bonus before W19 started) |
+| ~~10~~ | ~~Sat May 2~~ | ✅ 2.2 + 2.1 + welcome email + 2.3 deep-link all shipped (Saturday became a 4-item closeout) |
 | 11 | Mon May 4 | 2.4 Whoop readiness integration starts (backend) |
 | 12 | Tue May 5 | 2.4 Oura readiness integration (backend) |
-| 13 | Wed May 6 | 1.4 tz-aware query sweep starts (backend); deep-link decision locked AM |
-| 14 | Thu May 7 | 1.4 sweep continues; 2.3 deep-link impl + ADR (mobile + 1 backend config flip) |
-| 15 | Fri May 8 | Buffer / smoke test / EOD review |
+| 13 | Wed May 6 | 1.4 tz-aware query sweep starts (backend) |
+| 14 | Thu May 7 | 1.4 sweep continues — Day 14 frees up entirely (was 2.3 deep-link + 1.4) |
+| 15 | Fri May 8 | Buffer / smoke test / EOD review. Optional: pull in audit item 2.8 (privacy feed/stories enforcement) if 1.4 finishes early. |
 
 ---
 
