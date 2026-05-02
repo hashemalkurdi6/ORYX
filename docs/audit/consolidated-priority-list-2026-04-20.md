@@ -62,8 +62,8 @@ Features the spec explicitly requires where code is either absent, orphaned, or 
 
 | # | Issue | Area | Status (2026-05-02) |
 |---|---|---|---|
-| 2.1 | **Weight tracking standalone screen doesn't exist.** Home's weight card calls `router.push('/weight')` → dead route. Full spec (trend graph, range selector, goal card, streak, morning reminder) unimplemented. | Activity | Closed (audit stale at write-time — `app/weight.tsx` already shipped before 2026-04-20) |
-| 2.2 | **Wellness tab invisible** (`_layout.tsx` sets `href: null`). No Hooper trend charts, no HRV trends, no sleep trends, no recovery history visible to users. Entire tab hidden. <br>_Scope note: 2.2 = make tab accessible (remove `href: null`, render with empty states). Tier 4 defers the **trend charts within the tab** (HRV/Sleep/Recovery widgets) to v1.1. Different scope levels — no conflict._ | Home/Wellness | Open (Week 3 — minimal "tab visible + empty states" version) |
+| 2.1 | **Weight tracking standalone screen doesn't exist.** Home's weight card calls `router.push('/weight')` → dead route. Full spec (trend graph, range selector, goal card, streak, morning reminder) unimplemented. | Activity | Closed 2026-05-02 (`dadd82d`) — `app/weight.tsx` shipped before 2026-04-20; W19 verification closed the goal-alignment 14-of-last-14 gap (was using all-time `data_confidence`) and surfaced `total_logs` in the streak card. All other spec rows verified pass. |
+| 2.2 | **Wellness tab invisible** (`_layout.tsx` sets `href: null`). No Hooper trend charts, no HRV trends, no sleep trends, no recovery history visible to users. Entire tab hidden. <br>_Scope note: 2.2 = make tab accessible (remove `href: null`, render with empty states). Tier 4 defers the **trend charts within the tab** (HRV/Sleep/Recovery widgets) to v1.1. Different scope levels — no conflict._ | Home/Wellness | Closed 2026-05-02 (`82772f5`) — `href: null` removed, heart-icon tab entry added between activity and profile. Wellness screen already had explicit empty states + `data_availability`-gated trend cards. |
 | 2.3 | **Password Reset** — stubbed front-to-back (no endpoint, no UI). Table stakes for launch. | Social/Backend | Closed (audit stale at write-time — verified end-to-end pre-existing; 7c63390 added a fallback fix) |
 | 2.4 | **Whoop + Oura OAuth callbacks require JWT** — browser redirects always 401. Users cannot connect either. Must copy Strava's state-based pattern. **AND** Whoop/Oura data isn't fed into readiness score even when connected. | Backend | Partial — OAuth callbacks closed 2026-04-21 (86878ed); Whoop/Oura readiness component integration still open |
 | 2.5 | **Apple Health connect CTA on Home is a no-op** (empty `TouchableOpacity`). The "connect your wearables" story is broken across all three providers. | Home | Closed 2026-04-21 (86878ed — navigates to /settings when vitals missing) |
@@ -220,9 +220,12 @@ Alternate if you'd rather fix the most-visible-broken user experience first: swa
 
   Still-open items (genuine multi-hour/day work, not closed in-session):
   - 1.5 migrate `_USER_COLUMN_MIGRATIONS` to versioned Alembic files (mechanical but risky without a live DB to test against)
-  - 2.2 Wellness tab visibility (conflicts with Tier 4 deferral of wellness trend charts)
   - Full Whoop/Oura readiness component integration (deferred half of 2.4 — needs weight design)
   - Light-mode sweep (Tier 3 — 193 hex in activity.tsx + similar in wellness/nutrition)
   - Tier 4 defers untouched by design.
+
+- [x] **2026-05-02 session — W19 mobile spec-gap closeout (2.1 + 2.2)**
+  - **2.2 Wellness tab visible** — removed `href: null` on the wellness `<Tabs.Screen>` in `armen/mobile/app/(tabs)/_layout.tsx` and added a heart-icon entry between activity and profile (commit `82772f5`). The wellness screen already had a full empty state (line 541-549) and gates trend cards on `data_availability` flags from `/wellness/trends`, so no further empty-state work was needed.
+  - **2.1 Weight screen verification** — went line-by-line against the W19 spec checklist (range selector, trend graph, stats row, goal alignment, log CTA, morning reminder, streak, pull-to-refresh). 7 of 8 rows passed; the goal-alignment card was using `summary.data_confidence` (backend-gated on all-time `total_logs >= 14`) instead of the spec-required 14-of-last-14-days rule (commit `dadd82d`). Fix: parallel `getWeightHistory(365, '1m')` fetch + `recent14Logged` memo counting distinct YYYY-MM-DD strings in the trailing 14-day window. Card now gates on `recent14Logged >= 14` with a "log N more days" prompt below threshold. Also surfaced `total_logs` in the streak card (small spec stat the previous build was missing).
 
 End of consolidated list.
