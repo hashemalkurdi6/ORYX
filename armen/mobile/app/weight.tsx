@@ -6,8 +6,9 @@
  *   - Time range selector (7D / 1M / 3M / 6M / 1Y / All)
  *   - Trend line chart (raw daily + rolling average)
  *   - Stats row (Current / Change / Weekly avg / Rate per week)
- *   - Goal alignment card (requires data_confidence >= limited)
- *   - Current + longest logging streak
+ *   - Goal alignment card (requires 14 logs in the last 14 calendar days
+ *     — independent of the range chip, computed from a parallel range=1m fetch)
+ *   - Current + longest logging streak + total logs
  *   - Log Weight CTA (reuses WeightLogSheet)
  */
 
@@ -88,6 +89,9 @@ export default function WeightScreen() {
 
   const [range, setRange] = useState<RangeKey>('1m');
   const [history, setHistory] = useState<WeightHistory | null>(null);
+  // Parallel 1-month history pinned to the goal-alignment 14-of-14 window so
+  // it doesn't drift when the user flips the range chip.
+  const [monthHistory, setMonthHistory] = useState<WeightHistory | null>(null);
   const [summary, setSummary] = useState<WeightSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -96,12 +100,19 @@ export default function WeightScreen() {
   const unit: 'kg' | 'lbs' = summary?.display_unit ?? history?.display_unit ?? 'kg';
 
   const load = useCallback(async (r: RangeKey) => {
-    const [h, sm] = await Promise.all([
+    // When the user is already on '1m' we don't need a duplicate call.
+    const monthFetch =
+      r === '1m'
+        ? Promise.resolve(null as WeightHistory | null)
+        : getWeightHistory(365, '1m').catch(() => null);
+    const [h, sm, mh] = await Promise.all([
       getWeightHistory(365, r).catch(() => null),
       getWeightSummary().catch(() => null),
+      monthFetch,
     ]);
     setHistory(h);
     setSummary(sm);
+    setMonthHistory(r === '1m' ? h : mh);
   }, []);
 
   useEffect(() => {
@@ -231,6 +242,33 @@ export default function WeightScreen() {
       ratePerWeekKg,
     };
   }, [history, summary]);
+
+  // ── Goal-alignment window: 14 distinct calendar days in the last 14 ───────
+  // Spec requires the goal alignment card to gate on a strict
+  // 14-of-last-14-days rule, NOT on summary.data_confidence (which counts
+  // all-time logs and would let a sparse logger flip "on track" prematurely).
+  const recent14Logged = useMemo(() => {
+    const entries = monthHistory?.entries ?? [];
+    if (entries.length === 0) return 0;
+    // Build set of YYYY-MM-DD strings for the last 14 calendar days.
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const windowDays = new Set<string>();
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      windowDays.add(d.toISOString().slice(0, 10));
+    }
+    let hits = 0;
+    const seen = new Set<string>();
+    for (const e of entries) {
+      if (windowDays.has(e.date) && !seen.has(e.date)) {
+        seen.add(e.date);
+        hits++;
+      }
+    }
+    return hits;
+  }, [monthHistory]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -387,7 +425,12 @@ export default function WeightScreen() {
           </View>
 
           {/* Goal alignment */}
-          <GoalAlignmentCard theme={theme} summary={summary} unit={unit} />
+          <GoalAlignmentCard
+            theme={theme}
+            summary={summary}
+            unit={unit}
+            recent14Logged={recent14Logged}
+          />
 
           {/* Streak */}
           <View style={s.card}>
@@ -404,6 +447,7 @@ export default function WeightScreen() {
             </View>
             <Text style={s.streakSub}>
               {summary?.days_logged_this_month ?? 0} days logged this month
+              {summary?.total_logs != null ? ` · ${summary.total_logs} all time` : ''}
             </Text>
           </View>
 
@@ -532,22 +576,29 @@ function GoalAlignmentCard({
   theme,
   summary,
   unit,
+  recent14Logged,
 }: {
   theme: ThemeColors;
   summary: WeightSummary | null;
   unit: 'kg' | 'lbs';
+  recent14Logged: number;
 }) {
   const s = useMemo(() => createStyles(theme), [theme]);
   if (!summary) return null;
 
-  if (summary.data_confidence === 'insufficient' || summary.data_confidence === 'early') {
-    const need = summary.data_confidence === 'insufficient' ? 3 : 7;
+  // Spec gate: 14 distinct calendar days logged in the last 14 days.
+  // Prefer this over summary.data_confidence (all-time-gated) so a user with
+  // 30 sparse logs across 2 years doesn't read as "on track" prematurely.
+  const READING_THRESHOLD = 14;
+  if (recent14Logged < READING_THRESHOLD) {
+    const remaining = READING_THRESHOLD - recent14Logged;
     return (
       <View style={s.card}>
         <Text style={s.cardLabel}>GOAL ALIGNMENT</Text>
         <Text style={s.goalMuted}>
-          Log at least {need} entries for a confident read on your weight trend.
-          You have {summary.total_logs}.
+          Log {remaining} more day{remaining === 1 ? '' : 's'} in the next two weeks for a
+          confident read on your trend. You&apos;re at {recent14Logged}/14 in the last
+          14 days.
         </Text>
       </View>
     );
@@ -579,8 +630,7 @@ function GoalAlignmentCard({
         </Text>
       </View>
       <Text style={s.goalMuted}>
-        Trend is {rateText} {unit} per week over the last 28 days
-        {summary.data_confidence === 'limited' ? ' (still gathering data).' : '.'}
+        Trend is {rateText} {unit} per week over the last 28 days.
       </Text>
     </View>
   );
